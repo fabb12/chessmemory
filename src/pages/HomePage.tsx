@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { buttonClass } from '../components/ui/Button';
 import { Card, PageTitle } from '../components/ui/Card';
+import { InstallCard } from '../components/layout/InstallCard';
 import { Icon } from '../components/ui/Icon';
 import type { Profile } from '../db/schema';
 import { isDue } from '../features/memory/scheduler';
@@ -108,6 +109,8 @@ export function HomePage({ profile }: { profile: Profile }) {
           </p>
         </Card>
       </div>
+
+      <InstallCard />
 
       <p className="text-sm text-muted">{t.level.notElo}</p>
     </div>

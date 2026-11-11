@@ -298,6 +298,12 @@ export const it = {
     },
     conceptsMastered: 'Consolidato significa: ricordo stabile e idea riconosciuta anche in una posizione diversa.',
   },
+  install: {
+    title: 'Installa ChessMemoryBen',
+    text: 'Aggiungi l’app al tuo dispositivo: si apre con un tocco, a schermo intero e anche senza internet.',
+    button: 'Installa l’app',
+    ios: 'Su iPhone e iPad: tocca il pulsante Condividi (il quadrato con la freccia) e poi “Aggiungi alla schermata Home”.',
+  },
   profile: {
     title: 'Profilo',
     levelSection: 'Livello',
