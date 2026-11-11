@@ -28,9 +28,9 @@ export interface ChessBoardProps {
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
-const ARROW_COLORS = { teach: '#1f7a4f', bad: '#b3402f' } as const;
-const LIGHT = '#ecdcbb';
-const DARK = '#b08560';
+const ARROW_COLORS = { teach: '#1a73d9', bad: '#b3402f' } as const;
+const LIGHT = '#e3f0fc';
+const DARK = '#5b9bd8';
 
 const TONE_BG = {
   neutral: 'rgba(246, 214, 92, 0.55)',
@@ -160,12 +160,12 @@ export function ChessBoard({
       if (target) {
         layers.push(
           target.isCapture
-            ? 'radial-gradient(circle, transparent 0 62%, rgba(20,60,40,0.55) 63% 78%, transparent 79%)'
-            : 'radial-gradient(circle, rgba(20,60,40,0.5) 0 19%, transparent 20%)',
+            ? 'radial-gradient(circle, transparent 0 62%, rgba(10,40,90,0.5) 63% 78%, transparent 79%)'
+            : 'radial-gradient(circle, rgba(10,40,90,0.45) 0 19%, transparent 20%)',
         );
       }
       if (layers.length > 0) style.backgroundImage = layers.join(', ');
-      if (square === selected) style.boxShadow = 'inset 0 0 0 4px rgba(31,122,79,0.95)';
+      if (square === selected) style.boxShadow = 'inset 0 0 0 4px rgba(26,115,217,0.95)';
       else if (square === hintSquare) style.boxShadow = 'inset 0 0 0 4px #e0a100, inset 0 0 0 7px rgba(255,255,255,0.7)';
       return style;
     },
@@ -182,9 +182,9 @@ export function ChessBoard({
     animationDurationInMs: 260,
     lightSquareStyle: { backgroundColor: LIGHT },
     darkSquareStyle: { backgroundColor: DARK },
-    lightSquareNotationStyle: { color: '#6b4a2f', fontWeight: 600 },
-    darkSquareNotationStyle: { color: '#f6ead0', fontWeight: 600 },
-    boardStyle: { borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 28px rgb(0 0 0 / 0.25), 0 0 0 6px #8a6440' },
+    lightSquareNotationStyle: { color: '#2f5f94', fontWeight: 600 },
+    darkSquareNotationStyle: { color: '#eaf4ff', fontWeight: 600 },
+    boardStyle: { borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 28px rgb(0 0 0 / 0.25), 0 0 0 6px #2f6cae' },
     arrows: (arrows ?? []).map((a) => ({
       startSquare: a.from,
       endSquare: a.to,
