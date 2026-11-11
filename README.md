@@ -1,0 +1,156 @@
+# ChessMemory AI
+
+**La palestra della memoria scacchistica.** Una Progressive Web App per scacchisti principianti e intermedi: allenamenti adattivi di circa cinque minuti al giorno per **ricordare** le mosse, **capire** perché funzionano e **riconoscere** la stessa idea in posizioni nuove.
+
+L'app è interamente client-side: nessun server, nessun account, nessuna chiave API. I progressi restano sul dispositivo (IndexedDB) e l'app funziona offline dopo il primo caricamento.
+
+> Nota sul nome: in questa versione non c'è alcun modello di intelligenza artificiale. Difficoltà, ripassi e consigli sono calcolati da regole locali documentate e dall'algoritmo di ripetizione dilazionata FSRS. L'app non promette miglioramenti garantiti.
+
+## Funzionalità
+
+- **MemoryMirror**, quattro fasi per ogni concetto:
+  - **Osserva** – posizione, freccia, animazione della mossa e spiegazione (pezzo, obiettivo, principio, attenzione a).
+  - **Ricorda** – l'utente gioca la mossa (tocco, trascinamento o tastiera). Dopo un errore: indizio strategico → indicazione del pezzo → soluzione spiegata, mai subito.
+  - **Spiega** – domanda a risposta multipla sul principio, con testi curati nel dataset.
+  - **Riconosci** – stessa idea in una posizione diversa; l'esito è registrato separatamente.
+- **Libreria didattica**: 21 concetti e 42 esercizi (aperture, tattica, strategia, calcolo delle varianti), difficoltà 1–5, con alternative accettate esplicite.
+- **Difficoltà adattiva**: livello dichiarato, valutazione iniziale di 5 posizioni, poi il livello sale o scende in base a correttezza e indizi usati (mai in base al tempo).
+- **Ripetizione dilazionata** con `ts-fsrs` (FSRS): una scheda per concetto, cronologia delle revisioni, ripassi di oggi in Home.
+- **Allenamento quotidiano**: ripassi in scadenza + esercizi mirati sulle debolezze + almeno un concetto nuovo, entro un budget indicativo di 5 minuti. Sessione ripristinabile se interrotta.
+- **Memory DNA**: per ciascuna delle quattro aree percentuale di successo osservata, esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
+- **Profilo**: storico, tema chiaro/scuro, orientamento della scacchiera, esportazione/importazione JSON validata, ripristino con conferma esplicita.
+- **PWA**: installabile, service worker con precache completo, indicatore offline.
+- **Accessibilità**: navigazione da tastiera (anche sulla scacchiera), stati comunicati con testo e icone oltre che con il colore, layout da 320 px al desktop.
+
+## Requisiti
+
+- Node.js **24** (vedi `.nvmrc`; funziona anche con Node ≥ 22.12)
+- npm 10 o successivo
+
+## Comandi
+
+```bash
+npm install        # installa le dipendenze
+npm run dev        # sviluppo locale su http://localhost:5173
+npm run build      # controllo TypeScript + build di produzione in dist/
+npm run preview    # serve la build su http://localhost:4173/chessmemory-ai/
+npm run test       # test unitari e dei componenti (Vitest + React Testing Library)
+npm run test:e2e   # build + test end-to-end (Playwright)
+npm run typecheck  # solo controllo TypeScript
+npm run validate:data  # solo i test sul dataset
+```
+
+Per i test end-to-end serve Chromium: `npx playwright install chromium` (una volta). In alternativa si può indicare un Chromium già presente con `PLAYWRIGHT_CHROMIUM_PATH=/percorso/chromium`.
+
+## Pubblicazione su GitHub Pages
+
+Il workflow `.github/workflows/deploy.yml` esegue test e build e pubblica `dist/` a ogni push sul **ramo predefinito** del repository.
+
+1. Carica il progetto su GitHub.
+2. Vai in **Settings → Pages** e in *Build and deployment → Source* scegli **GitHub Actions** (passaggio manuale, da fare una sola volta).
+3. Fai un push sul ramo predefinito, oppure avvia il workflow *Deploy su GitHub Pages* da **Actions → Run workflow**.
+4. Il sito sarà disponibile su `https://<utente>.github.io/<nome-repository>/`.
+
+Dettagli:
+
+- **Base URL**: il workflow imposta `BASE_PATH=/<nome-repository>/` usando il nome reale del repository, quindi funziona con qualunque nome. Senza variabile, `npm run build` usa `/chessmemory-ai/`. Per un dominio personalizzato o un sito utente: `BASE_PATH=/ npm run build`.
+- **Rotte**: l'app usa `HashRouter` (`…/#/allenati`), quindi ricaricare o condividere un indirizzo funziona senza regole di riscrittura lato server.
+- Il workflow `ci.yml` esegue typecheck, test, build ed E2E a ogni push e pull request.
+
+## Installare la PWA
+
+- **Android (Chrome)**: apri il sito, menu ⋮ → *Installa app* (o *Aggiungi a schermata Home*).
+- **iPhone / iPad (Safari)**: apri il sito, tocca *Condividi* → *Aggiungi alla schermata Home*.
+- **Desktop (Chrome / Edge)**: icona di installazione nella barra degli indirizzi.
+
+Dopo la prima apertura completa l'app funziona anche senza connessione.
+
+## I dati dell'utente
+
+- Salvati solo nel browser, in IndexedDB (Dexie). Nessun dato personale: il profilo contiene un identificativo casuale locale.
+- **Cancellando i dati di navigazione i progressi vengono persi.** Dal Profilo si può esportare un backup JSON e reimportarlo; il file importato viene validato campo per campo prima di essere salvato.
+- `localStorage` contiene solo una copia della preferenza di tema, usata per evitare il lampo di colore all'avvio.
+
+## Architettura
+
+```
+src/
+  app/            App, routing (HashRouter), gate dell'onboarding
+  components/
+    chess/        ChessBoard (react-chessboard), dialogo di promozione
+    training/     PhaseStepper, ObservePhase, MoveTask, QuestionCard, ConceptRunner, SessionSummary
+    dashboard/    CategoryCard, TrendChart
+    layout/ ui/   AppShell, navigazione, componenti di base
+  pages/          Onboarding, Home, Allenati, Strategie, Concetto, Memory DNA, Profilo
+  features/
+    learning/     evaluateMove, moveTask (scala degli aiuti), sessionBuilder
+    memory/       scheduler (ts-fsrs), rating (regole di valutazione)
+    adaptation/   difficulty (livello adattivo e valutazione iniziale)
+    onboarding/   scelta degli esercizi di valutazione
+    progress/     stats (Memory DNA), streak
+  data/exercises/ concetti ed esercizi (dataset)
+  db/             schema e database Dexie
+  services/       progress (scritture), backup (export/import/reset)
+  hooks/ i18n/ utils/ types/ styles/
+tests/
+  unit/ components/ e2e/
+```
+
+Interfaccia, logica didattica, regole degli scacchi (`chess.js`, unica fonte di verità), adattamento, ripassi, persistenza e dataset sono moduli separati e testati singolarmente. I testi dell'interfaccia sono in `src/i18n/it.ts`: per una nuova lingua basta un dizionario con la stessa forma.
+
+### Regole documentate
+
+**Valutazione FSRS** (`src/features/memory/rating.ts`) – il tempo di risposta è registrato ma non entra nella valutazione.
+
+| Valutazione | Condizione |
+|---|---|
+| Again | Ricorda fallita (soluzione mostrata) |
+| Hard | Ricorda riuscita con indizi o errori, oppure Spiega errata, oppure Riconosci fallita |
+| Good | Ricorda pulita, Spiega corretta, Riconosci riuscita (anche con aiuti) o assente |
+| Easy | Come Good, in un ripasso, con Riconosci pulita |
+
+FSRS è configurato con intervalli in giorni (`enable_short_term: false`), senza fuzz, ritenzione richiesta 0,9 (`src/features/memory/scheduler.ts`). Un concetto è **consolidato** solo con stabilità ≥ 7 giorni *e* ultima prova di riconoscimento riuscita.
+
+**Difficoltà adattiva** (`src/features/adaptation/difficulty.ts`, soglie in `DEFAULT_ADAPTATION_CONFIG`): si sale con media ≥ 0,80 sugli ultimi 5 concetti; si scende con media ≤ 0,30 sugli ultimi 3; dopo ogni cambio servono almeno 4 nuovi risultati. Il livello è didattico, **non** un rating Elo.
+
+**Aiuti** (`src/features/learning/moveTask.ts`): difficoltà 1–2 → due indizi strategici + pezzo; 3–4 → un indizio + pezzo; 5 → un solo indizio.
+
+**Sessione** (`src/features/learning/sessionBuilder.ts`): budget 300 s, 50 s per ripasso, 90 s per concetto nuovo, massimo 2 concetti nuovi e 2 esercizi mirati.
+
+**Sequenza giornaliera** (`src/features/progress/streak.ts`): saltare un solo giorno non azzera la sequenza.
+
+### Verifica del dataset
+
+`tests/unit/dataset.test.ts` controlla per ogni esercizio: FEN valido, colore al tratto, legalità di mosse, risposte e alternative, esito dichiarato (matto, cattura, arrocco), risposte forzate nei matti in due, completezza dei testi, collegamento di trasferimento allo stesso concetto, più verifiche tematiche (forchette, inchiodature, colonne aperte, avamposti, conteggio di attaccanti e difensori…). Le posizioni tattiche e di calcolo sono state inoltre confrontate una tantum con Stockfish: la soluzione coincide sempre con la prima scelta del motore. Nelle posizioni di apertura e strategia esistono più mosse di valore simile: lì l'esercizio chiede di applicare il principio indicato e accetta le alternative elencate.
+
+## Versioni installate
+
+| Pacchetto | Versione |
+|---|---|
+| react / react-dom | 19.3.1 |
+| react-router-dom | 7.18.5 |
+| typescript | 7.0.2 |
+| vite | 8.3.8 |
+| tailwindcss / @tailwindcss/vite | 4.3.5 |
+| chess.js | 1.4.0 |
+| react-chessboard | 5.12.1 |
+| dexie / dexie-react-hooks | 4.4.7 / 4.4.0 |
+| ts-fsrs | 5.4.2 |
+| vite-plugin-pwa | 2.0.0 |
+| vitest | 5.1.0 |
+| @testing-library/react | 16.3.3 |
+| @playwright/test | 1.65.0 |
+
+Le versioni esatte sono fissate in `package-lock.json`.
+
+## Limitazioni note
+
+- I dati non sono sincronizzati tra dispositivi: l'unico trasferimento è l'esportazione/importazione manuale.
+- La libreria contiene 21 concetti: una volta studiati tutti, gli allenamenti sono fatti di soli ripassi.
+- La valutazione delle mosse si basa sul dataset curato (mossa preferita + alternative), non su un motore: una mossa buona ma non elencata viene segnalata come «non è l'idea dell'esercizio».
+- Interfaccia e contenuti sono solo in italiano.
+- `npm audit` segnala vulnerabilità moderate in dipendenze usate solo in fase di build (catena di `vite-plugin-pwa`/workbox); non finiscono nel bundle servito agli utenti.
+
+## Sviluppi futuri (non implementati)
+
+L'architettura è predisposta, ma **nessuna di queste funzioni è presente nell'app**: analisi PGN di partite reali, importazione da Lichess, analisi con Stockfish WebAssembly, spiegazioni generate da un modello tramite backend sicuro, sincronizzazione cloud, riconoscimento di scacchiere reali con la fotocamera e frecce in realtà aumentata (solo per studio e allenamento, non per assistenza durante partite in corso), allenamenti generati dagli errori di partita.

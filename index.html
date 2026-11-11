@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="ChessMemory AI — palestra della memoria scacchistica: allenamenti adattivi di 5 minuti al giorno." />
+    <meta name="theme-color" content="#2f6b4f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ChessMemory" />
+    <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <title>ChessMemory AI</title>
+    <script>
+      // Applica il tema prima del primo paint per evitare il lampo chiaro/scuro.
+      try {
+        var t = localStorage.getItem('cm-theme');
+        var dark = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>ChessMemory AI richiede JavaScript per funzionare.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
