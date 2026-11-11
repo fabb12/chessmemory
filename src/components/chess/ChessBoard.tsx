@@ -184,7 +184,7 @@ export function ChessBoard({
     darkSquareStyle: { backgroundColor: DARK },
     lightSquareNotationStyle: { color: '#6b4a2f', fontWeight: 600 },
     darkSquareNotationStyle: { color: '#f6ead0', fontWeight: 600 },
-    boardStyle: { borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 10px rgb(0 0 0 / 0.18)' },
+    boardStyle: { borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 28px rgb(0 0 0 / 0.25), 0 0 0 6px #8a6440' },
     arrows: (arrows ?? []).map((a) => ({
       startSquare: a.from,
       endSquare: a.to,
@@ -226,7 +226,7 @@ export function ChessBoard({
   return (
     <div
       ref={containerRef}
-      className="relative mx-auto w-full max-w-[min(100%,30rem)] touch-manipulation select-none"
+      className="relative mx-auto w-full max-w-[min(100%,max(24rem,calc(100dvh-17rem)))] touch-manipulation select-none"
       data-testid="chessboard"
       data-fen={fen}
       data-interactive={interactive ? 'true' : 'false'}

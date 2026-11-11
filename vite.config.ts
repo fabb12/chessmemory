@@ -31,8 +31,8 @@ export default defineConfig(({ command, isPreview }) => {
         registerType: 'autoUpdate',
         includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon.png'],
         manifest: {
-          name: 'ChessMemory AI',
-          short_name: 'ChessMemory',
+          name: 'ChessMemoryBen',
+          short_name: 'ChessMemoryBen',
           description:
             'Palestra della memoria scacchistica: allenamenti adattivi di 5 minuti con ripetizione dilazionata.',
           lang: 'it',
@@ -40,7 +40,7 @@ export default defineConfig(({ command, isPreview }) => {
           start_url: '.',
           scope: '.',
           display: 'standalone',
-          orientation: 'portrait',
+          orientation: 'any',
           background_color: '#f6f3ec',
           theme_color: '#2f6b4f',
           categories: ['education', 'games'],

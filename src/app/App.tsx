@@ -7,11 +7,10 @@ import { t } from '../i18n';
 import { ConceptPage } from '../pages/ConceptPage';
 import { HomePage } from '../pages/HomePage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
-import { OnboardingPage } from '../pages/OnboardingPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
 import { TrainPage } from '../pages/TrainPage';
-import { ensureProfile } from '../services/progress';
+import { completePlacement, ensureProfile } from '../services/progress';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -49,18 +48,19 @@ export function App() {
     if (profile === null && !storageFailed) ensureProfile().catch(() => setStorageFailed(true));
   }, [profile, storageFailed]);
 
-  if (!profile) {
+  // Nessuna valutazione iniziale: l'app è pensata anche per i bambini, si parte
+  // dal livello più semplice e la difficoltà si adatta ai risultati.
+  const needsStart = profile ? !profile.placementDone : false;
+  useEffect(() => {
+    if (needsStart) {
+      completePlacement({ declaredLevel: 'beginner', level: 1, answers: [] }).catch(() => setStorageFailed(true));
+    }
+  }, [needsStart]);
+
+  if (!profile || !profile.placementDone) {
     return (
       <AppShell bare banner={storageFailed ? <StorageBanner /> : undefined}>
         {!storageFailed && <p className="text-muted">{t.app.loading}</p>}
-      </AppShell>
-    );
-  }
-
-  if (!profile.placementDone) {
-    return (
-      <AppShell bare>
-        <OnboardingPage />
       </AppShell>
     );
   }
