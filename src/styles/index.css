@@ -4,18 +4,18 @@
 
 /* Palette ispirata agli scacchi: bianco, grafite, verde e legno naturale. */
 :root {
-  --bg: #f6f3ec;
+  --bg: #eaf4fd;
   --surface: #ffffff;
-  --surface-2: #efeadf;
-  --fg: #22262a;
-  --muted: #5a6168;
-  --line: #d9d2c3;
-  --accent: #2f6b4f;
-  --accent-strong: #24543e;
-  --accent-soft: #e2efe7;
+  --surface-2: #dcebf9;
+  --fg: #14263a;
+  --muted: #4a6078;
+  --line: #c3d9ee;
+  --accent: #1a73d9;
+  --accent-strong: #0f55a8;
+  --accent-soft: #dcecfd;
   --on-accent: #ffffff;
-  --wood: #b08560;
-  --wood-light: #ecdcbb;
+  --wood: #5aa3e8;
+  --wood-light: #dcecfb;
   --ok: #1f6b45;
   --ok-soft: #e0f1e7;
   --bad: #a63a2b;
@@ -26,18 +26,18 @@
 }
 
 .dark {
-  --bg: #15181b;
-  --surface: #1e2327;
-  --surface-2: #272d32;
-  --fg: #eef0ee;
-  --muted: #a7afb5;
-  --line: #394047;
-  --accent: #5fb58c;
-  --accent-strong: #7cc8a2;
-  --accent-soft: #1f3a2e;
-  --on-accent: #0f1a14;
-  --wood: #a47a56;
-  --wood-light: #dccaa6;
+  --bg: #0d1a2a;
+  --surface: #152638;
+  --surface-2: #1d3249;
+  --fg: #eaf3fc;
+  --muted: #a3b8cc;
+  --line: #2c455f;
+  --accent: #5db0ff;
+  --accent-strong: #93ccff;
+  --accent-soft: #17395c;
+  --on-accent: #06182b;
+  --wood: #4a8fd1;
+  --wood-light: #c9def4;
   --ok: #7cd0a3;
   --ok-soft: #1b3528;
   --bad: #f0958a;
