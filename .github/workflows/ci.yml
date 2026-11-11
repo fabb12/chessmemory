@@ -17,9 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -37,7 +37,9 @@ jobs:
         run: npm run build
 
       - name: Installa Chromium per Playwright
-        run: npx playwright install --with-deps chromium
+        # Solo il browser: le librerie di sistema sono già presenti sui runner GitHub
+        # (evita il download di pacchetti apt, che può fallire per problemi di rete).
+        run: npx playwright install chromium
 
       - name: Test end-to-end
         run: npx playwright test
