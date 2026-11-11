@@ -71,7 +71,7 @@ export function ObservePhase({ exercise, concept, orientation, onNext }: Observe
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 md:items-start" data-testid="observe-phase" data-exercise-id={exercise.id}>
+    <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] md:items-start lg:gap-8" data-testid="observe-phase" data-exercise-id={exercise.id}>
       <div>
         <ChessBoard
           fen={frame?.fen ?? exercise.fen}

@@ -1,4 +1,4 @@
-# ChessMemory AI
+# ChessMemoryBen
 
 **La palestra della memoria scacchistica.** Una Progressive Web App per scacchisti principianti e intermedi: allenamenti adattivi di circa cinque minuti al giorno per **ricordare** le mosse, **capire** perché funzionano e **riconoscere** la stessa idea in posizioni nuove.
 

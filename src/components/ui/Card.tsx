@@ -5,7 +5,7 @@ export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   const background = /(^|\s)bg-/.test(className ?? '') ? '' : 'bg-surface';
   return (
     <div
-      className={`rounded-2xl border border-line ${background} p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] sm:p-5 ${className ?? ''}`}
+      className={`rounded-3xl border border-line ${background} p-4 shadow-[0_4px_18px_rgb(0_0_0/0.06)] sm:p-6 ${className ?? ''}`}
       {...rest}
     />
   );

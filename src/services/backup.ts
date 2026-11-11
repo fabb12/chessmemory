@@ -253,7 +253,7 @@ function parseSession(v: unknown, i: number): SessionRecord {
 /** Controlla e normalizza un backup. Lancia BackupValidationError se non è valido. */
 export function validateBackup(raw: unknown): BackupData {
   const file = obj(raw, 'file');
-  if (file.app !== BACKUP_APP) fail('il file non è un backup di ChessMemory AI');
+  if (file.app !== BACKUP_APP) fail('il file non è un backup di ChessMemoryBen');
   if (file.version !== BACKUP_VERSION) fail('versione del backup non supportata');
   const data = obj(file.data, 'data');
 

@@ -33,7 +33,7 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
       </a>
 
       <header className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-4">
+        <div className="mx-auto flex h-14 w-full max-w-[96rem] items-center gap-3 px-4">
           <Logo />
           {!online && (
             <span
@@ -78,7 +78,7 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
 
       {banner}
 
-      <main id="contenuto" tabIndex={-1} className={`mx-auto w-full max-w-5xl flex-1 px-4 py-5 outline-none ${bare ? '' : 'pb-28 md:pb-10'}`}>
+      <main id="contenuto" tabIndex={-1} className={`mx-auto w-full max-w-[96rem] flex-1 px-4 py-5 outline-none ${bare ? '' : 'pb-28 md:pb-10'}`}>
         {children}
       </main>
 

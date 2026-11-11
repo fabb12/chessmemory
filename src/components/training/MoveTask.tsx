@@ -164,7 +164,7 @@ export function MoveTask({
 
   return (
     <div
-      className="grid gap-4 md:grid-cols-2 md:items-start"
+      className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)] md:items-start lg:gap-8"
       data-testid={testId}
       data-exercise-id={exercise.id}
       data-step={state.stepIndex}

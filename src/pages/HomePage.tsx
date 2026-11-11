@@ -27,7 +27,7 @@ export function HomePage({ profile }: { profile: Profile }) {
   const minutes = plan ? Math.max(1, Math.round(plan.estimatedSeconds / 60)) : 5;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-5xl space-y-5">
       <header>
         <PageTitle>{t.home.greeting(new Date(now).getHours())}</PageTitle>
         <p className="mt-1 text-muted">{t.home.subtitle}</p>
@@ -36,7 +36,7 @@ export function HomePage({ profile }: { profile: Profile }) {
       <Card className="border-accent/40 bg-accent-soft" data-testid="daily-card">
         {hasActive && active ? (
           <>
-            <h2 className="font-display text-xl font-semibold">{t.home.dailyTitle}</h2>
+            <h2 className="font-display text-2xl font-semibold">{t.home.dailyTitle}</h2>
             <p className="mt-1">{t.home.resumeText(active.results.length, active.items.length)}</p>
             <Link to="/allenati" className={`${buttonClass('primary', 'lg', true)} mt-4`} data-testid="resume-training">
               <Icon name="play" />

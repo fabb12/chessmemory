@@ -83,7 +83,7 @@ export function ProfilePage({ profile }: { profile: Profile }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `chessmemory-backup-${backup.exportedAt.slice(0, 10)}.json`;
+      a.download = `chessmemoryben-backup-${backup.exportedAt.slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();

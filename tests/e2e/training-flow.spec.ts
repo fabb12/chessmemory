@@ -66,26 +66,16 @@ async function answerQuestion(page: Page) {
 
 async function completeOnboarding(page: Page) {
   await page.goto('./');
-  await page.getByTestId('onboarding-start').click();
-  await page.locator('[data-level="beginner"]').click();
-  await page.getByTestId('level-continue').click();
-  await page.getByTestId('placement-start').click();
-  for (let i = 1; i <= 5; i++) {
-    await expect(page.getByTestId('placement-progress')).toContainText(`Posizione ${i} di 5`);
-    await solveTask(page, 'placement-task', { mistakeFirst: i === 2 });
-  }
-  await expect(page.getByTestId('onboarding-result')).toBeVisible();
+  await expect(page.getByTestId('daily-card')).toBeVisible();
 }
 
 test.describe('flusso completo di allenamento', () => {
-  test('onboarding, allenamento, risultati e progressi salvati dopo la riapertura', async ({ page, context }) => {
+  test('avvio senza valutazione, allenamento, risultati e progressi salvati dopo la riapertura', async ({ page, context }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
     // 1–3. Apertura, livello principiante e valutazione iniziale
     await completeOnboarding(page);
-    await expect(page.getByTestId('placement-level')).toContainText(/Livello [1-3]/);
-    await page.getByTestId('onboarding-finish').click();
 
     // Home
     await expect(page.getByTestId('daily-card')).toBeVisible();
@@ -186,7 +176,6 @@ test.describe('flusso completo di allenamento', () => {
     const noOverflow = () =>
       page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
     expect(await noOverflow()).toBe(true);
-    await page.getByTestId('onboarding-finish').click();
     await expect(page.getByTestId('daily-card')).toBeVisible();
     expect(await noOverflow()).toBe(true);
 

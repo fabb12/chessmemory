@@ -7,7 +7,7 @@ import type { Category, DeclaredLevel, Difficulty, SessionItemKind } from '../ty
  */
 export const it = {
   app: {
-    name: 'ChessMemory AI',
+    name: 'ChessMemoryBen',
     tagline: 'La palestra della memoria scacchistica',
     loading: 'Caricamento…',
     offline: 'Sei offline: l’allenamento funziona comunque.',
@@ -84,7 +84,7 @@ export const it = {
     unsure: 'Preferisco che sia l’app a capirlo.',
   } satisfies Record<DeclaredLevel, string>,
   onboarding: {
-    welcomeTitle: 'Benvenuto in ChessMemory AI',
+    welcomeTitle: 'Benvenuto in ChessMemoryBen',
     welcomeText:
       'Un allenatore personale per ricordare le mosse, capire le idee e riconoscerle in posizioni nuove. Cinque minuti al giorno.',
     pillars: [
