@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
 import pkg from './package.json' with { type: 'json' };
 
 /**
@@ -14,6 +15,27 @@ import pkg from './package.json' with { type: 'json' };
  */
 const DEFAULT_PAGES_BASE = '/chessmemory-ai/';
 
+/**
+ * Versione mostrata nell'app: "<versione package.json>+<build>.<commit>".
+ * Su GitHub Actions il numero di build cresce a ogni deploy, così ogni push
+ * produce una versione diversa anche senza toccare package.json.
+ */
+function appVersion(): string {
+  const run = process.env.GITHUB_RUN_NUMBER;
+  let sha = process.env.GITHUB_SHA?.slice(0, 7);
+  if (!sha) {
+    try {
+      sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim();
+    } catch {
+      sha = undefined;
+    }
+  }
+  const build = [run, sha].filter(Boolean).join('.');
+  return build ? `${pkg.version}+${build}` : pkg.version;
+}
+
 export default defineConfig(({ command, isPreview }) => {
   // `vite preview` serve la build di produzione, quindi usa la stessa base.
   const production = command === 'build' || isPreview === true;
@@ -21,7 +43,7 @@ export default defineConfig(({ command, isPreview }) => {
 
   return {
     base,
-    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+    define: { __APP_VERSION__: JSON.stringify(appVersion()) },
     // Bundle principale unico (circa 200 kB gzip); la libreria Supabase è caricata a parte, solo se configurata.
     build: { chunkSizeWarningLimit: 800 },
     plugins: [
