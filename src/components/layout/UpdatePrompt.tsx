@@ -7,7 +7,22 @@ export function UpdatePrompt() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW({ immediate: true });
+  } = useRegisterSW({
+    immediate: true,
+    // Il browser controlla il service worker solo al caricamento: se l'app resta aperta
+    // (PWA installata) un nuovo deploy non verrebbe mai notato. Controlliamo ogni ora
+    // e quando l'app torna in primo piano.
+    onRegisteredSW(_url, registration) {
+      if (!registration) return;
+      const check = () => {
+        if (navigator.onLine) void registration.update().catch(() => {});
+      };
+      setInterval(check, 60 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+    },
+  });
 
   if (!needRefresh) return null;
   return (
