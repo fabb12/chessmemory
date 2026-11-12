@@ -12,6 +12,7 @@ import {
 } from '../../features/mistakes/position';
 import type { Side } from '../../types';
 import { Icon } from '../ui/Icon';
+import { BoardCoordinates } from './BoardCoordinates';
 
 type Tool = PieceCode | 'erase' | 'move';
 
@@ -115,8 +116,7 @@ export function BoardEditor({ value, onChange, orientation, onFlip }: BoardEdito
     showAnimations: false,
     lightSquareStyle: { backgroundColor: LIGHT },
     darkSquareStyle: { backgroundColor: DARK },
-    lightSquareNotationStyle: { color: '#4a5f82', fontWeight: 600 },
-    darkSquareNotationStyle: { color: '#f1f4fa', fontWeight: 600 },
+    showNotation: false,
     boardStyle: {
       borderRadius: 12,
       overflow: 'hidden',
@@ -164,7 +164,9 @@ export function BoardEditor({ value, onChange, orientation, onFlip }: BoardEdito
         role="group"
         aria-label={t.mistakes.editor.label}
       >
-        <Chessboard options={options} />
+        <BoardCoordinates orientation={orientation}>
+          <Chessboard options={options} />
+        </BoardCoordinates>
       </div>
 
       <fieldset>
