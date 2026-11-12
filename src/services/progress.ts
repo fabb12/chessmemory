@@ -169,6 +169,7 @@ export async function recordConceptResult(
           attempts: result.recall.attempts,
           hintsUsed: result.recall.hintsUsed,
           responseMs: result.recall.responseMs,
+          wrongMoves: result.recall.wrongMoves ?? [],
         },
         {
           ...common,
@@ -189,6 +190,7 @@ export async function recordConceptResult(
           attempts: result.transfer.attempts,
           hintsUsed: result.transfer.hintsUsed,
           responseMs: result.transfer.responseMs,
+          wrongMoves: result.transfer.wrongMoves ?? [],
         });
       }
       await database.attempts.bulkAdd(rows);

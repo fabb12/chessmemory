@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CategoryCard } from '../components/dashboard/CategoryCard';
+import { ErrorHeatmap } from '../components/dashboard/ErrorHeatmap';
 import { Card, PageTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { findConcept } from '../data/exercises';
@@ -55,6 +56,8 @@ export function MemoryDnaPage() {
         </h2>
         <p className="mt-1">{insightText(view.insight, targeted)}</p>
       </Card>
+
+      <ErrorHeatmap attempts={attempts ?? []} />
 
       <div className="grid gap-4 md:grid-cols-2">
         {view.stats.map((s) => (
