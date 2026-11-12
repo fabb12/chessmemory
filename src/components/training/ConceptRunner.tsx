@@ -80,6 +80,7 @@ export function ConceptRunner({ item, orientationPref, onComplete }: ConceptRunn
         {phase === 'explain' && recall && (
           <QuestionCard
             exercise={exercise}
+            orientation={resolveOrientation(orientationPref, exercise.sideToMove)}
             onComplete={(result) => {
               setExplain(result);
               if (transferExercise) setPhase('recognize');
