@@ -1,4 +1,4 @@
-import type { Exercise, MoveTaskResult, Uci } from '../../types';
+import type { Exercise, MoveTaskResult, Uci, WrongMove } from '../../types';
 import { parseUci } from '../../utils/chess';
 import { isAccepted, type MoveVerdict } from './evaluateMove';
 
@@ -42,6 +42,8 @@ export interface MoveTaskState {
   status: MoveTaskStatus;
   attempts: number;
   wrongAttempts: number;
+  /** Elenco delle mosse errate, per la mappa degli errori. */
+  wrongMoves: WrongMove[];
   /** Numero di aiuti già rivelati (indice nella scala degli aiuti). */
   hintsShown: number;
   /** Ultima mossa errata, mostrata finché non viene annullata. */
@@ -61,6 +63,7 @@ export function initialMoveTaskState(): MoveTaskState {
     status: 'awaiting',
     attempts: 0,
     wrongAttempts: 0,
+    wrongMoves: [],
     hintsShown: 0,
     usedAlternative: false,
   };
@@ -94,6 +97,7 @@ export function moveTaskReducer(
         ...state,
         attempts,
         wrongAttempts: state.wrongAttempts + 1,
+        wrongMoves: [...state.wrongMoves, { move: action.uci, step: state.stepIndex }],
         hintsShown: hasMoreHints ? state.hintsShown + 1 : state.hintsShown,
         status: hasMoreHints ? 'wrong' : 'failed',
         wrongMove: action.uci,
@@ -136,6 +140,7 @@ export function toResult(state: MoveTaskState, exerciseId: string, responseMs: n
     mistakes: state.wrongAttempts,
     hintsUsed: state.hintsShown,
     responseMs,
+    wrongMoves: state.wrongMoves,
   };
 }
 
