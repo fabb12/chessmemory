@@ -41,8 +41,8 @@ export default defineConfig(({ command, isPreview }) => {
           scope: '.',
           display: 'standalone',
           orientation: 'any',
-          background_color: '#eaf4fd',
-          theme_color: '#1a73d9',
+          background_color: '#f3f5fa',
+          theme_color: '#0a1430',
           categories: ['education', 'games'],
           icons: [
             { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

@@ -33,8 +33,8 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
         {t.app.skipToContent}
       </a>
 
-      <header className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-14 w-full max-w-[96rem] items-center gap-3 px-4">
+      <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/75 backdrop-blur-xl backdrop-saturate-150 pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-3 px-4">
           <Logo />
           {!online && (
             <span
@@ -49,15 +49,17 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
           )}
           {!bare && (
             <nav aria-label={t.nav.label} className="ml-auto hidden md:block">
-              <ul className="flex items-center gap-1">
+              <ul className="flex items-center gap-1 rounded-2xl border border-line/80 bg-surface/70 p-1 shadow-sm">
                 {NAV.map((item) => (
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
                       end={item.end}
                       className={({ isActive }) =>
-                        `inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors ${
-                          isActive ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-surface-2 hover:text-fg'
+                        `inline-flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
+                          isActive
+                            ? 'cm-btn-primary bg-accent text-on-accent'
+                            : 'text-muted hover:bg-surface-2 hover:text-fg'
                         }`
                       }
                     >
@@ -83,14 +85,14 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
         {children}
       </main>
 
-      <p className={`pt-0 text-center text-[0.7rem] text-muted ${bare ? '' : 'pb-24 md:pb-4'}`} data-testid="app-version">
+      <p className={`pt-2 text-center text-[0.7rem] tracking-wide text-muted/80 ${bare ? '' : 'pb-24 md:pb-4'}`} data-testid="app-version">
         {t.app.versionLabel(__APP_VERSION__)}
       </p>
 
       {!bare && (
         <nav
           aria-label={t.nav.label}
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/97 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-surface/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_-12px_rgb(10_20_48/0.25)] backdrop-blur-xl backdrop-saturate-150 md:hidden"
         >
           <ul className="mx-auto grid max-w-xl grid-cols-6">
             {NAV.map((item) => (
@@ -106,10 +108,10 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
                 >
                   {({ isActive }) => (
                     <>
-                      <span className={`rounded-full px-2.5 py-1 ${isActive ? 'bg-accent-soft' : ''}`}>
+                      <span className={`rounded-full px-2.5 py-1 transition-all ${isActive ? 'cm-btn-primary bg-accent text-on-accent' : ''}`}>
                         <Icon name={item.icon} size={22} />
                       </span>
-                      <span className={isActive ? 'underline decoration-2 underline-offset-2' : ''}>{item.label}</span>
+                      <span className={isActive ? 'text-fg' : ''}>{item.label}</span>
                     </>
                   )}
                 </NavLink>

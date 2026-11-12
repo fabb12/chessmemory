@@ -120,7 +120,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
     const concept = findConcept(interstitial.conceptId);
     return (
       <div className="mx-auto max-w-md pt-6 text-center" data-testid="concept-done">
-        <span className="mx-auto mb-3 flex size-14 animate-pop items-center justify-center rounded-full bg-ok-soft text-ok">
+        <span className="mx-auto mb-4 flex size-16 animate-pop items-center justify-center rounded-full bg-ok-soft text-ok shadow-[0_0_0_8px_color-mix(in_srgb,var(--ok)_12%,transparent)]">
           <Icon name="check" size={30} />
         </span>
         <h1 className="font-display text-2xl font-semibold">{t.train.conceptDone}</h1>
@@ -180,7 +180,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
               aria-valuenow={index}
             >
               <div
-                className="h-full rounded-full bg-accent transition-[width] duration-300"
+                className="cm-bar h-full rounded-full bg-accent transition-[width] duration-500"
                 style={{ width: `${(index / active.items.length) * 100}%` }}
               />
             </div>
@@ -231,7 +231,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
     <div className="mx-auto max-w-2xl space-y-4">
       <header>
         <PageTitle>{t.train.introTitle}</PageTitle>
-        <p className="mt-1 text-muted">{t.train.introText}</p>
+        <p className="mt-1.5 text-lg text-muted">{t.train.introText}</p>
       </header>
       <Card>
         {!plan ? (
@@ -249,9 +249,9 @@ export function TrainPage({ profile }: { profile: Profile }) {
               {plan.items.map((item) => {
                 const concept = findConcept(item.conceptId);
                 return (
-                  <li key={item.conceptId} className="flex items-center justify-between gap-3 py-2">
+                  <li key={item.conceptId} className="flex items-center justify-between gap-3 py-3">
                     <span className="font-medium">{concept?.title}</span>
-                    <span className="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-sm">
+                    <span className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-strong">
                       {t.train.kind[item.kind]}
                     </span>
                   </li>

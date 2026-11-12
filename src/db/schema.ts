@@ -7,6 +7,7 @@ import type {
   SessionItem,
   SessionItemKind,
   ThemePreference,
+  WrongMove,
 } from '../types';
 import type { AdaptiveState } from '../features/adaptation/difficulty';
 import type { LearningState, StoredCard, StoredReviewLog } from '../features/memory/scheduler';
@@ -66,6 +67,8 @@ export interface AttemptRecord {
   attempts: number;
   hintsUsed: number;
   responseMs: number;
+  /** Mosse errate (solo RICORDA/RICONOSCI; assente nei dati più vecchi). */
+  wrongMoves?: WrongMove[];
   answeredAt: number;
   /** Prossimo ripasso programmato per il concetto (null nella valutazione iniziale). */
   nextReviewAt: number | null;

@@ -16,8 +16,9 @@ import { Icon } from '../ui/Icon';
 type Tool = PieceCode | 'erase' | 'move';
 
 const FILES = 'abcdefgh';
-const LIGHT = '#e3f0fc';
-const DARK = '#5b9bd8';
+// Stessi colori di ChessBoard.
+const LIGHT = '#e9edf5';
+const DARK = '#7389ad';
 
 function pieceLabel(code: PieceCode): string {
   const type = code[1]?.toLowerCase() as keyof typeof t.pieceLabels;
@@ -114,9 +115,13 @@ export function BoardEditor({ value, onChange, orientation, onFlip }: BoardEdito
     showAnimations: false,
     lightSquareStyle: { backgroundColor: LIGHT },
     darkSquareStyle: { backgroundColor: DARK },
-    lightSquareNotationStyle: { color: '#2f5f94', fontWeight: 600 },
-    darkSquareNotationStyle: { color: '#eaf4ff', fontWeight: 600 },
-    boardStyle: { borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 28px rgb(0 0 0 / 0.25), 0 0 0 6px #2f6cae' },
+    lightSquareNotationStyle: { color: '#4a5f82', fontWeight: 600 },
+    darkSquareNotationStyle: { color: '#f1f4fa', fontWeight: 600 },
+    boardStyle: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 0 0 6px #0f1d42, 0 0 0 7px rgba(227,181,83,0.55), 0 24px 48px -12px rgb(6 11 22 / 0.55)',
+    },
     onPieceDrop: ({ sourceSquare, targetSquare }) => {
       if (!targetSquare || sourceSquare === targetSquare) return false;
       const placement = { ...value.placement };

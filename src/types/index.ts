@@ -90,6 +90,13 @@ export interface MoveTaskResult {
   mistakes: number;
   hintsUsed: number;
   responseMs: number;
+  /** Mosse errate giocate, con il passo della soluzione in cui sono avvenute. */
+  wrongMoves?: WrongMove[];
+}
+
+export interface WrongMove {
+  move: Uci;
+  step: number;
 }
 
 export interface QuestionResult {

@@ -91,13 +91,13 @@ export function ObservePhase({ exercise, concept, orientation, onNext }: Observe
         <p className="text-sm text-muted">{t.observe.intro}</p>
         <dl className="mt-3 space-y-3">
           {facts.map((fact) => (
-            <div key={fact.label} className="rounded-xl border border-line bg-surface p-3">
+            <div key={fact.label} className="cm-card rounded-2xl border border-l-4 border-line border-l-accent bg-surface p-3.5">
               <dt className="text-xs font-bold uppercase tracking-wide text-accent-strong">{fact.label}</dt>
               <dd className="mt-0.5">{fact.text}</dd>
             </div>
           ))}
           {moves.length > 1 && (
-            <div className="rounded-xl border border-line bg-surface p-3">
+            <div className="cm-card rounded-2xl border border-l-4 border-line border-l-gold bg-surface p-3.5">
               <dt className="text-xs font-bold uppercase tracking-wide text-accent-strong">{t.observe.line}</dt>
               <dd className="mt-0.5 font-semibold tabular-nums">{formatLine(moves)}</dd>
             </div>

@@ -1,49 +1,62 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/fraunces';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Palette ispirata agli scacchi: bianco, grafite, verde e legno naturale. */
+/*
+ * Palette «club di scacchi»: inchiostro notte, blu reale e ottone.
+ * Superfici pulite, profondità data da ombre stratificate e bordi sottili.
+ */
 :root {
-  --bg: #eaf4fd;
+  --bg: #f3f5fa;
   --surface: #ffffff;
-  --surface-2: #dcebf9;
-  --fg: #14263a;
-  --muted: #4a6078;
-  --line: #c3d9ee;
-  --accent: #1a73d9;
-  --accent-strong: #0f55a8;
-  --accent-soft: #dcecfd;
+  --surface-2: #edf1f8;
+  --fg: #0b1526;
+  --muted: #536380;
+  --line: #dde4ef;
+  --accent: #2557e9;
+  --accent-strong: #1638b3;
+  --accent-soft: #e7eeff;
   --on-accent: #ffffff;
-  --wood: #5aa3e8;
-  --wood-light: #dcecfb;
-  --ok: #1f6b45;
-  --ok-soft: #e0f1e7;
-  --bad: #a63a2b;
-  --bad-soft: #f8e5e1;
+  --wood: #b7862a;
+  --wood-light: #f7eed9;
+  --ok: #157048;
+  --ok-soft: #e1f4ea;
+  --bad: #b03a2e;
+  --bad-soft: #fbe8e5;
   --warn: #8a5a0b;
-  --warn-soft: #f7ecd2;
+  --warn-soft: #faf0d9;
+  --ink: #0a1430;
+  --ink-2: #16285c;
+  --gold: #e3b553;
+  --shadow-color: 222 47% 20%;
   color-scheme: light;
 }
 
 .dark {
-  --bg: #0d1a2a;
-  --surface: #152638;
-  --surface-2: #1d3249;
-  --fg: #eaf3fc;
-  --muted: #a3b8cc;
-  --line: #2c455f;
-  --accent: #5db0ff;
-  --accent-strong: #93ccff;
-  --accent-soft: #17395c;
-  --on-accent: #06182b;
-  --wood: #4a8fd1;
-  --wood-light: #c9def4;
-  --ok: #7cd0a3;
-  --ok-soft: #1b3528;
-  --bad: #f0958a;
-  --bad-soft: #40211d;
-  --warn: #e8c06a;
-  --warn-soft: #3b3018;
+  --bg: #060b16;
+  --surface: #0e1627;
+  --surface-2: #152137;
+  --fg: #eef2fa;
+  --muted: #9aa8c2;
+  --line: #213049;
+  --accent: #6f94ff;
+  --accent-strong: #a9c0ff;
+  --accent-soft: #162447;
+  --on-accent: #050d24;
+  --wood: #e3b553;
+  --wood-light: #3a2e14;
+  --ok: #6fd3a0;
+  --ok-soft: #12301f;
+  --bad: #f2968b;
+  --bad-soft: #3d1c19;
+  --warn: #ebc56f;
+  --warn-soft: #372c14;
+  --ink: #0b1733;
+  --ink-2: #1b2f6b;
+  --gold: #e8bf62;
+  --shadow-color: 222 70% 2%;
   color-scheme: dark;
 }
 
@@ -66,13 +79,15 @@
   --color-bad-soft: var(--bad-soft);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
-  --animate-rise: rise 0.28s ease-out both;
-  --animate-pop: pop 0.3s ease-out both;
+  --color-ink: var(--ink);
+  --color-gold: var(--gold);
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 0.35s ease-out both;
 
   @keyframes rise {
-    from { opacity: 0; transform: translateY(6px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
   @keyframes pop {
@@ -87,7 +102,7 @@ html {
   background: var(--bg);
 }
 
-/* Sfondo morbido e colorato, adatto anche ai più piccoli */
+/* Sfondo: alone blu in alto e una trama a scacchiera appena percettibile. */
 body::before {
   content: '';
   position: fixed;
@@ -95,8 +110,22 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60rem 30rem at 0% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    radial-gradient(50rem 28rem at 100% 0%, color-mix(in srgb, var(--wood) 20%, transparent), transparent 70%);
+    radial-gradient(70rem 32rem at 50% -14rem, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
+    radial-gradient(40rem 24rem at 100% 10%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 70%);
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(45deg, color-mix(in srgb, var(--fg) 3%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--fg) 3%, transparent) 75%),
+    linear-gradient(45deg, color-mix(in srgb, var(--fg) 3%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--fg) 3%, transparent) 75%);
+  background-size: 64px 64px;
+  background-position: 0 0, 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent 22rem);
 }
 
 body {
@@ -105,10 +134,113 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
   line-height: 1.55;
   font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+}
+
+.font-display {
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+}
+
+/* ── Componenti grafici condivisi ─────────────────────────────── */
+
+/* Scheda: bordo sottile, ombra a più livelli, riflesso in alto. */
+.cm-card {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, white 70%, transparent) inset,
+    0 1px 2px hsl(var(--shadow-color) / 0.06),
+    0 6px 24px -8px hsl(var(--shadow-color) / 0.14);
+}
+.dark .cm-card {
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.04) inset,
+    0 10px 30px -10px hsl(var(--shadow-color) / 0.8);
+}
+.cm-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cm-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 2px hsl(var(--shadow-color) / 0.06),
+    0 16px 36px -12px hsl(var(--shadow-color) / 0.28);
+}
+
+/* Pulsante principale: gradiente blu reale con bagliore. */
+.cm-btn-primary {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white), var(--accent) 55%, color-mix(in srgb, var(--accent) 80%, black));
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.25) inset,
+    0 8px 20px -6px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.cm-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.25) inset,
+    0 12px 28px -6px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+/* Pannello di copertina: notte profonda, bagliore blu e scacchiera in filigrana. */
+.cm-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #f4f7ff;
+  background:
+    radial-gradient(36rem 20rem at 100% 0%, rgb(111 148 255 / 0.45), transparent 65%),
+    radial-gradient(30rem 16rem at 10% 130%, rgb(64 110 255 / 0.28), transparent 70%),
+    linear-gradient(135deg, var(--ink) 0%, var(--ink-2) 100%);
+  border-color: rgb(255 255 255 / 0.08);
+  box-shadow: 0 24px 60px -24px rgb(10 20 48 / 0.55);
+}
+.cm-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 0.06) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 0.06) 75%),
+    linear-gradient(45deg, rgb(255 255 255 / 0.06) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 0.06) 75%);
+  background-size: 48px 48px;
+  background-position: 0 0, 24px 24px;
+  mask-image: linear-gradient(115deg, transparent 35%, black 100%);
+}
+.cm-hero .text-muted {
+  color: rgb(214 224 250 / 0.78);
+}
+.cm-hero .cm-btn-primary {
+  background-image: linear-gradient(180deg, #fff, #e8eeff);
+  color: #0a1430;
+  box-shadow: 0 10px 30px -8px rgb(111 148 255 / 0.7);
+}
+
+/* Titoli con sfumatura sottile. */
+.cm-title {
+  background-image: linear-gradient(120deg, var(--fg) 30%, var(--accent) 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Gettone dell'icona nelle statistiche (nel layer components: le utility possono ricolorarlo). */
+@layer components {
+  .cm-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+}
+
+/* Barra di avanzamento con gradiente. */
+.cm-bar {
+  background-image: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #7fd4ff));
 }
 
 h1, h2, h3 {
@@ -123,7 +255,7 @@ h1, h2, h3 {
 
 /* Case della scacchiera navigabili da tastiera */
 .cm-square:focus-visible {
-  outline: 4px solid #1d4ed8;
+  outline: 4px solid #2557e9;
   outline-offset: -4px;
   border-radius: 0;
   z-index: 5;
@@ -133,5 +265,30 @@ h1, h2, h3 {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mappa degli errori: le case si accendono in diagonale, le più calde pulsano. */
+@keyframes heat-in {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes heat-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgb(255 255 255 / 0); }
+  50% { box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.75); }
+}
+.heat-board .heat-cell {
+  animation: heat-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  animation-delay: var(--heat-delay, 0ms);
+}
+.heat-board .heat-cell.heat-hot {
+  animation:
+    heat-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both var(--heat-delay, 0ms),
+    heat-pulse 2.2s ease-in-out 0.9s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heat-board .heat-cell,
+  .heat-board .heat-cell.heat-hot {
+    animation: none;
   }
 }

@@ -11,8 +11,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-on-accent hover:bg-accent-strong shadow-md active:translate-y-px',
-  secondary: 'bg-surface text-fg border border-line hover:bg-surface-2',
+  primary: 'cm-btn-primary bg-accent text-on-accent active:translate-y-px',
+  secondary: 'bg-surface text-fg border border-line shadow-sm hover:border-accent/40 hover:bg-surface-2 active:translate-y-px',
   ghost: 'text-fg hover:bg-surface-2',
   danger: 'bg-bad text-bg hover:opacity-90',
 };
@@ -25,7 +25,7 @@ const SIZES: Record<Size, string> = {
 
 export function buttonClass(variant: Variant = 'primary', size: Size = 'md', block = false): string {
   return [
-    'inline-flex items-center justify-center gap-2 rounded-2xl font-bold transition-all',
+    'inline-flex items-center justify-center gap-2 rounded-2xl font-semibold tracking-[-0.005em] transition-all duration-200',
     'disabled:cursor-not-allowed disabled:opacity-50 select-none',
     VARIANTS[variant],
     SIZES[size],

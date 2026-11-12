@@ -11,7 +11,7 @@ import {
   type SessionRecord,
   type StoredCard,
 } from '../db/schema';
-import { CATEGORIES } from '../types';
+import { CATEGORIES, type WrongMove } from '../types';
 import { isUci, isValidFen } from '../utils/chess';
 import { MAX_LINE_PLIES, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH } from './mistakes';
 import { createProfile } from './progress';
@@ -222,6 +222,17 @@ function parseCard(v: unknown, i: number, where = `cards[${i}]`, ownerId?: strin
   };
 }
 
+function parseWrongMoves(v: unknown, w: string): WrongMove[] {
+  return arr(v, w)
+    .slice(0, 100)
+    .map((m, i) => {
+      const o = obj(m, `${w}[${i}]`);
+      const move = str(o.move, `${w}[${i}].move`, 5);
+      if (!isUci(move)) fail(`${w}[${i}].move: mossa non valida`);
+      return { move, step: int(o.step, `${w}[${i}].step`, 0, 50) };
+    });
+}
+
 function parseAttempt(v: unknown, i: number): AttemptRecord {
   const w = `attempts[${i}]`;
   const a = obj(v, w);
@@ -236,6 +247,7 @@ function parseAttempt(v: unknown, i: number): AttemptRecord {
     attempts: int(a.attempts, `${w}.attempts`, 0, 1000),
     hintsUsed: int(a.hintsUsed, `${w}.hintsUsed`, 0, 100),
     responseMs: num(a.responseMs, `${w}.responseMs`, 0, 86_400_000),
+    ...(a.wrongMoves === undefined ? {} : { wrongMoves: parseWrongMoves(a.wrongMoves, `${w}.wrongMoves`) }),
     answeredAt: time(a.answeredAt, `${w}.answeredAt`),
     nextReviewAt: nullable(a.nextReviewAt, (t) => time(t, `${w}.nextReviewAt`)),
     rating: nullable(a.rating, (r) => int(r, `${w}.rating`, 1, 4)),
