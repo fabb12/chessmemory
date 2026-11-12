@@ -78,9 +78,13 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
 
       {banner}
 
-      <main id="contenuto" tabIndex={-1} className={`mx-auto w-full max-w-[96rem] flex-1 px-4 py-5 outline-none ${bare ? '' : 'pb-28 md:pb-10'}`}>
+      <main id="contenuto" tabIndex={-1} className={`mx-auto w-full max-w-[96rem] flex-1 px-4 py-5 outline-none ${bare ? '' : 'pb-4'}`}>
         {children}
       </main>
+
+      <p className={`pt-0 text-center text-[0.7rem] text-muted ${bare ? '' : 'pb-24 md:pb-4'}`} data-testid="app-version">
+        {t.app.versionLabel(__APP_VERSION__)}
+      </p>
 
       {!bare && (
         <nav

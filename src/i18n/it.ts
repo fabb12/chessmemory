@@ -12,6 +12,13 @@ export const it = {
     loading: 'Caricamento…',
     offline: 'Sei offline: l’allenamento funziona comunque.',
     offlineShort: 'Offline',
+    versionLabel: (v: string) => `Versione ${v}`,
+    update: {
+      title: 'È disponibile un aggiornamento',
+      text: 'Vuoi aggiornare ora alla nuova versione? I tuoi progressi restano salvati.',
+      accept: 'Aggiorna',
+      later: 'Più tardi',
+    },
     storageError:
       'Non è stato possibile accedere all’archivio locale del browser. I progressi potrebbero non essere salvati (succede, ad esempio, in navigazione privata).',
     skipToContent: 'Vai al contenuto',
