@@ -4,6 +4,7 @@ import type { Exercise, QuestionResult } from "../../types";
 import { ChessBoard } from "../chess/ChessBoard";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
+import { SpeakButton } from '../ui/SpeakButton';
 
 interface QuestionCardProps {
   exercise: Exercise;
@@ -142,6 +143,7 @@ export function QuestionCard({
                 </p>
               )}
               <p className="mt-2">{exercise.explanation}</p>
+              <SpeakButton className="mt-2" text={exercise.explanation} auto />
             </div>
           )}
         </div>

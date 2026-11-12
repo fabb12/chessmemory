@@ -4,6 +4,7 @@ import { ObservePhase } from '../components/training/ObservePhase';
 import { buttonClass } from '../components/ui/Button';
 import { Card, PageTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
+import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { findConcept, getConceptExercises } from '../data/exercises';
 import { useCards, useNow } from '../hooks/useData';
@@ -110,6 +111,7 @@ export function ConceptPage({ profile }: { profile: Profile }) {
               <strong>{t.task.explanation}. </strong>
               {exercise.explanation}
             </p>
+            <SpeakButton className="mt-2" text={exercise.explanation} />
           </div>
         </section>
       )}

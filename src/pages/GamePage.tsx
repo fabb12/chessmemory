@@ -4,6 +4,7 @@ import { ChessBoard } from '../components/chess/ChessBoard';
 import { buttonClass } from '../components/ui/Button';
 import { Card, PageTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
+import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { findGame } from '../data/games';
 import { parseGame } from '../features/games/pgn';
@@ -123,9 +124,20 @@ export function GamePage({ profile }: { profile: Profile }) {
 
         <div className="space-y-4">
           <Card aria-live="polite" data-testid="game-comment">
-            <h2 className="text-sm font-semibold text-muted tabular-nums">
-              {current ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}` : t.games.commentTitle}
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-muted tabular-nums">
+                {current ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}` : t.games.commentTitle}
+              </h2>
+              <SpeakButton
+                text={
+                  current
+                    ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}. ${current.comment ?? ''}`
+                    : game.summary
+                }
+                auto={Boolean(current?.comment)}
+                delay={450}
+              />
+            </div>
             <p className="mt-1.5">{current ? (current.comment ?? t.games.noComment) : game.summary}</p>
             {!current && <p className="mt-2 text-sm text-muted">{t.games.startPosition}</p>}
             {index === total && (

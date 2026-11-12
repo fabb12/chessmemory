@@ -5,6 +5,8 @@ import { Button } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Icon } from '../components/ui/Icon';
+import { VoiceSettings } from '../components/ui/VoiceSettings';
+import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
 import type { Profile } from '../db/schema';
 import { MAX_PLAYER_NAME } from '../features/account/cloud';
 import type { AnalysisDepth } from '../features/engine/engine';
@@ -213,6 +215,20 @@ export function ProfilePage({ profile }: { profile: Profile }) {
               {t.profile.playerNameHelp}
             </p>
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t.voice.settingsTitle}</SectionTitle>
+        <div className="mt-3">
+          <VoiceSettings />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t.analyze.key.title}</SectionTitle>
+        <div className="mt-3">
+          <ApiKeyForm />
         </div>
       </Card>
 

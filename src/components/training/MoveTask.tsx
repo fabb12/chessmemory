@@ -18,6 +18,7 @@ import {
 import { ChessBoard, type BoardArrow } from '../chess/ChessBoard';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { SpeakButton } from '../ui/SpeakButton';
 
 interface MoveTaskProps {
   exercise: Exercise;
@@ -243,6 +244,7 @@ export function MoveTask({
                 <p className="mt-1 text-sm">{t.task.alternativeText(sanToLocal(bestSan))}</p>
               )}
               {explainOnSuccess && <p className="mt-2">{exercise.explanation}</p>}
+              {explainOnSuccess && <SpeakButton className="mt-2" text={exercise.explanation} auto />}
             </div>
           )}
 
@@ -254,6 +256,7 @@ export function MoveTask({
               </p>
               <p className="mt-1 font-semibold">{t.task.failedText(remainingLine)}</p>
               <p className="mt-2">{exercise.explanation}</p>
+              <SpeakButton className="mt-2" text={`${t.task.failedText(remainingLine)} ${exercise.explanation}`} auto />
             </div>
           )}
         </div>
