@@ -39,7 +39,8 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const now = useNow();
   const active = useActiveSession();
   const sessions = useSessions();
-  const plan = useTrainingPlan(now);
+  const [chosenLevel, setChosenLevel] = useState<Difficulty | null>(null);
+  const plan = useTrainingPlan(now, chosenLevel);
 
   const [interstitial, setInterstitial] = useState<Interstitial | null>(null);
   const [finished, setFinished] = useState<{ record: SessionRecord; levelBefore: Difficulty } | null>(null);
@@ -234,6 +235,34 @@ export function TrainPage({ profile }: { profile: Profile }) {
         <p className="mt-1.5 text-lg text-muted">{t.train.introText}</p>
       </header>
       <Card>
+        <fieldset data-testid="level-picker">
+          <legend className="font-semibold">{t.train.chooseLevel}</legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {([null, 1, 2, 3, 4, 5] as const).map((lv) => {
+              const on = chosenLevel === lv;
+              return (
+                <button
+                  key={lv ?? 'auto'}
+                  type="button"
+                  aria-pressed={on}
+                  data-testid={`level-${lv ?? 'auto'}`}
+                  onClick={() => setChosenLevel(lv)}
+                  className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+                    on ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-ink'
+                  }`}
+                >
+                  {lv === null ? t.train.levelAuto : lv}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            {chosenLevel === null
+              ? t.train.levelAutoHelp(profile.adaptive.level)
+              : `${t.level.of5(chosenLevel)} · ${t.level.names[chosenLevel]}`}
+          </p>
+        </fieldset>
+        <hr className="my-4 border-line" />
         {!plan ? (
           <p>{t.app.loading}</p>
         ) : plan.items.length === 0 ? (

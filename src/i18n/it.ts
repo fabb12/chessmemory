@@ -211,6 +211,9 @@ export const it = {
   train: {
     title: 'Allenati',
     introTitle: 'Il tuo allenamento',
+    chooseLevel: 'Difficoltà',
+    levelAuto: 'Automatica',
+    levelAutoHelp: (n: Difficulty) => `Consigliata: livello ${n}, si adatta ai tuoi risultati.`,
     introText: 'Una sessione breve con ripassi, esercizi mirati e almeno un’idea nuova.',
     empty: 'Nessun esercizio disponibile in questo momento.',
     itemProgress: (i: number, n: number) => `Concetto ${i} di ${n}`,
