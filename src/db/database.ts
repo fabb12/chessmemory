@@ -2,11 +2,14 @@ import Dexie, { type Table } from 'dexie';
 import type {
   ActiveSession,
   AttemptRecord,
+  MistakeRecord,
+  PhotoRecord,
   Profile,
   ReviewLogRecord,
   SessionRecord,
   StoredCard,
 } from './schema';
+import { DEFAULT_SETTINGS } from './schema';
 
 export const DB_NAME = 'chessmemory-ai';
 
@@ -21,6 +24,8 @@ export class ChessMemoryDB extends Dexie {
   reviewLogs!: Table<ReviewLogRecord, number>;
   sessions!: Table<SessionRecord, string>;
   activeSession!: Table<ActiveSession, string>;
+  mistakes!: Table<MistakeRecord, string>;
+  photos!: Table<PhotoRecord, string>;
 
   constructor(name: string = DB_NAME) {
     super(name);
@@ -32,6 +37,20 @@ export class ChessMemoryDB extends Dexie {
       sessions: 'id, finishedAt',
       activeSession: 'id',
     });
+    // v2: errori delle partite, foto della scacchiera e nuove preferenze.
+    this.version(2)
+      .stores({
+        mistakes: 'id, createdAt, card.due',
+        photos: 'id',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('profile')
+          .toCollection()
+          .modify((profile: Profile) => {
+            profile.settings = { ...DEFAULT_SETTINGS, ...profile.settings };
+          });
+      });
   }
 }
 

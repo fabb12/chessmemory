@@ -1,14 +1,19 @@
 import { findConcept, findExercise } from '../data/exercises';
 import { db, type ChessMemoryDB } from '../db/database';
 import {
+  DEFAULT_SETTINGS,
   PROFILE_ID,
   type AttemptRecord,
+  type MistakeRecord,
+  type PhotoRecord,
   type Profile,
   type ReviewLogRecord,
   type SessionRecord,
   type StoredCard,
 } from '../db/schema';
 import { CATEGORIES } from '../types';
+import { isUci, isValidFen } from '../utils/chess';
+import { MAX_LINE_PLIES, MAX_NOTE_LENGTH, MAX_TITLE_LENGTH } from './mistakes';
 import { createProfile } from './progress';
 
 /**
@@ -17,9 +22,13 @@ import { createProfile } from './progress';
  * controllato e copiato esplicitamente prima di essere salvato.
  */
 export const BACKUP_APP = 'chessmemory-ai';
-export const BACKUP_VERSION = 1;
-/** Limite di sicurezza sulla dimensione del file importato. */
-export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+export const BACKUP_VERSION = 2;
+/** Versioni leggibili: la 1 non contiene gli errori delle partite. */
+const SUPPORTED_VERSIONS = [1, 2];
+/** Limite di sicurezza sulla dimensione del file importato (comprese le foto). */
+export const MAX_BACKUP_BYTES = 40 * 1024 * 1024;
+/** Dimensione massima di una singola foto (data URL). */
+export const MAX_PHOTO_CHARS = 4 * 1024 * 1024;
 const MAX_ROWS = 50_000;
 
 export interface BackupData {
@@ -28,6 +37,9 @@ export interface BackupData {
   attempts: AttemptRecord[];
   reviewLogs: ReviewLogRecord[];
   sessions: SessionRecord[];
+  mistakes: MistakeRecord[];
+  /** null se il backup non contiene le foto (ad esempio il salvataggio nel cloud). */
+  photos: PhotoRecord[] | null;
 }
 
 export interface BackupFile {
@@ -44,20 +56,27 @@ export class BackupValidationError extends Error {
   }
 }
 
-export async function exportBackup(database: ChessMemoryDB = db, now = Date.now()): Promise<BackupFile> {
+export async function exportBackup(
+  database: ChessMemoryDB = db,
+  now = Date.now(),
+  options: { includePhotos?: boolean } = {},
+): Promise<BackupFile> {
   const profile = await database.profile.get(PROFILE_ID);
   if (!profile) throw new Error('Nessun profilo da esportare');
-  const [cards, attempts, reviewLogs, sessions] = await Promise.all([
+  const includePhotos = options.includePhotos ?? true;
+  const [cards, attempts, reviewLogs, sessions, mistakes, photos] = await Promise.all([
     database.cards.toArray(),
     database.attempts.toArray(),
     database.reviewLogs.toArray(),
     database.sessions.toArray(),
+    database.mistakes.toArray(),
+    includePhotos ? database.photos.toArray() : Promise.resolve(null),
   ]);
   return {
     app: BACKUP_APP,
     version: BACKUP_VERSION,
     exportedAt: new Date(now).toISOString(),
-    data: { profile, cards, attempts, reviewLogs, sessions },
+    data: { profile, cards, attempts, reviewLogs, sessions, mistakes, photos },
   };
 }
 
@@ -121,6 +140,29 @@ const KINDS = ['review', 'weakness', 'new'] as const;
 const ACTIVITIES = ['recall', 'explain', 'transfer', 'placement'] as const;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function text(v: unknown, where: string, max: number): string {
+  if (v === undefined || v === null) return '';
+  if (typeof v !== 'string' || v.length > max) fail(`${where}: testo non valido`);
+  return v;
+}
+
+function parseSettings(settings: Obj): Profile['settings'] {
+  return {
+    theme: oneOf(settings.theme, ['system', 'light', 'dark'] as const, 'profile.settings.theme'),
+    boardOrientation: oneOf(
+      settings.boardOrientation,
+      ['auto', 'white', 'black'] as const,
+      'profile.settings.boardOrientation',
+    ),
+    // Assenti nei backup della versione 1: si usano i valori predefiniti.
+    analysisDepth:
+      settings.analysisDepth === undefined
+        ? DEFAULT_SETTINGS.analysisDepth
+        : oneOf(settings.analysisDepth, ['quick', 'deep'] as const, 'profile.settings.analysisDepth'),
+    playerName: text(settings.playerName, 'profile.settings.playerName', 60),
+  };
+}
+
 function parseProfile(v: unknown): Profile {
   const p = obj(v, 'profile');
   const adaptive = obj(p.adaptive, 'profile.adaptive');
@@ -146,14 +188,7 @@ function parseProfile(v: unknown): Profile {
       resultsSinceChange: int(adaptive.resultsSinceChange, 'profile.adaptive.resultsSinceChange', 0, 1e6),
       lastChange: nullable(adaptive.lastChange, (c) => oneOf(c, ['up', 'down'] as const, 'profile.adaptive.lastChange')),
     },
-    settings: {
-      theme: oneOf(settings.theme, ['system', 'light', 'dark'] as const, 'profile.settings.theme'),
-      boardOrientation: oneOf(
-        settings.boardOrientation,
-        ['auto', 'white', 'black'] as const,
-        'profile.settings.boardOrientation',
-      ),
-    },
+    settings: parseSettings(settings),
     streak: {
       current: int(streak.current, 'profile.streak.current', 0, 1e5),
       best: int(streak.best, 'profile.streak.best', 0, 1e5),
@@ -164,12 +199,12 @@ function parseProfile(v: unknown): Profile {
   };
 }
 
-function parseCard(v: unknown, i: number): StoredCard {
-  const w = `cards[${i}]`;
+function parseCard(v: unknown, i: number, where = `cards[${i}]`, ownerId?: string): StoredCard {
+  const w = where;
   const c = obj(v, w);
   const lastReview = nullable(c.lastReview, (t) => time(t, `${w}.lastReview`));
   return {
-    conceptId: conceptId(c.conceptId, `${w}.conceptId`),
+    conceptId: ownerId ?? conceptId(c.conceptId, `${w}.conceptId`),
     due: time(c.due, `${w}.due`),
     stability: num(c.stability, `${w}.stability`, 0, 1e5),
     difficulty: num(c.difficulty, `${w}.difficulty`, 0, 10),
@@ -250,17 +285,93 @@ function parseSession(v: unknown, i: number): SessionRecord {
   };
 }
 
+const SEVERITIES = ['inaccuracy', 'mistake', 'blunder'] as const;
+const SOURCES = ['photo', 'pgn', 'manual'] as const;
+const RESULTS = ['clean', 'assisted', 'failed'] as const;
+
+function fen(v: unknown, where: string): string {
+  const s = str(v, where, 100);
+  if (!isValidFen(s)) fail(`${where}: posizione non valida`);
+  return s;
+}
+function uci(v: unknown, where: string): string {
+  const s = str(v, where, 5);
+  if (!isUci(s)) fail(`${where}: mossa non valida`);
+  return s;
+}
+
+function parseMistake(v: unknown, i: number): MistakeRecord {
+  const w = `mistakes[${i}]`;
+  const m = obj(v, w);
+  const id = str(m.id, `${w}.id`, 80);
+  const engine = nullable(m.engine, (e) => {
+    const o = obj(e, `${w}.engine`);
+    return {
+      depth: int(o.depth, `${w}.engine.depth`, 0, 100),
+      bestCp: num(o.bestCp, `${w}.engine.bestCp`, -1e6, 1e6),
+      playedCp: nullable(o.playedCp, (c) => num(c, `${w}.engine.playedCp`, -1e6, 1e6)),
+    };
+  });
+  return {
+    id,
+    title: text(m.title, `${w}.title`, MAX_TITLE_LENGTH) || 'Errore',
+    createdAt: time(m.createdAt, `${w}.createdAt`),
+    updatedAt: time(m.updatedAt, `${w}.updatedAt`),
+    fen: fen(m.fen, `${w}.fen`),
+    playedMove: nullable(m.playedMove, (x) => uci(x, `${w}.playedMove`)),
+    bestMove: uci(m.bestMove, `${w}.bestMove`),
+    alternatives: arr(m.alternatives ?? [], `${w}.alternatives`)
+      .slice(0, 10)
+      .map((x, j) => uci(x, `${w}.alternatives[${j}]`)),
+    line: arr(m.line, `${w}.line`)
+      .slice(0, MAX_LINE_PLIES)
+      .map((x, j) => uci(x, `${w}.line[${j}]`)),
+    whatWentWrong: text(m.whatWentWrong, `${w}.whatWentWrong`, MAX_NOTE_LENGTH),
+    howToContinue: text(m.howToContinue, `${w}.howToContinue`, MAX_NOTE_LENGTH),
+    conceptId: nullable(m.conceptId, (c) => conceptId(c, `${w}.conceptId`)),
+    source: oneOf(m.source, SOURCES, `${w}.source`),
+    photoId: nullable(m.photoId, (p) => str(p, `${w}.photoId`, 80)),
+    gameInfo: nullable(m.gameInfo, (g) => str(g, `${w}.gameInfo`, 200)),
+    moveNumber: nullable(m.moveNumber, (n) => int(n, `${w}.moveNumber`, 1, 10_000)),
+    severity: nullable(m.severity, (s) => oneOf(s, SEVERITIES, `${w}.severity`)),
+    engine,
+    card: parseCard(m.card, i, `${w}.card`, id),
+    reviewCount: int(m.reviewCount, `${w}.reviewCount`, 0, 1e6),
+    lastResult: nullable(m.lastResult, (r) => oneOf(r, RESULTS, `${w}.lastResult`)),
+  };
+}
+
+function parsePhoto(v: unknown, i: number): PhotoRecord {
+  const w = `photos[${i}]`;
+  const p = obj(v, w);
+  const dataUrl = str(p.dataUrl, `${w}.dataUrl`, MAX_PHOTO_CHARS);
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) fail(`${w}.dataUrl: immagine non valida`);
+  return {
+    id: str(p.id, `${w}.id`, 80),
+    dataUrl,
+    width: int(p.width, `${w}.width`, 1, 20_000),
+    height: int(p.height, `${w}.height`, 1, 20_000),
+    createdAt: time(p.createdAt, `${w}.createdAt`),
+  };
+}
+
 /** Controlla e normalizza un backup. Lancia BackupValidationError se non è valido. */
 export function validateBackup(raw: unknown): BackupData {
   const file = obj(raw, 'file');
   if (file.app !== BACKUP_APP) fail('il file non è un backup di ChessMemoryBen');
-  if (file.version !== BACKUP_VERSION) fail('versione del backup non supportata');
+  if (typeof file.version !== 'number' || !SUPPORTED_VERSIONS.includes(file.version)) {
+    fail('versione del backup non supportata');
+  }
   const data = obj(file.data, 'data');
 
-  const cards = arr(data.cards, 'cards').map(parseCard);
+  const cards = arr(data.cards, 'cards').map((c, i) => parseCard(c, i));
   if (new Set(cards.map((c) => c.conceptId)).size !== cards.length) fail('cards: concetti duplicati');
   const sessions = arr(data.sessions, 'sessions').map(parseSession);
   if (new Set(sessions.map((s) => s.id)).size !== sessions.length) fail('sessions: identificativi duplicati');
+  const mistakes = data.mistakes === undefined ? [] : arr(data.mistakes, 'mistakes').map(parseMistake);
+  if (new Set(mistakes.map((m) => m.id)).size !== mistakes.length) fail('mistakes: identificativi duplicati');
+  const photos =
+    data.photos === undefined || data.photos === null ? null : arr(data.photos, 'photos').map(parsePhoto);
 
   return {
     profile: parseProfile(data.profile),
@@ -268,6 +379,8 @@ export function validateBackup(raw: unknown): BackupData {
     attempts: arr(data.attempts, 'attempts').map(parseAttempt),
     reviewLogs: arr(data.reviewLogs, 'reviewLogs').map(parseReviewLog),
     sessions,
+    mistakes,
+    photos,
   };
 }
 
@@ -291,19 +404,37 @@ const ALL_TABLES = (database: ChessMemoryDB) => [
   database.activeSession,
 ];
 
-/** Sostituisce tutti i progressi con quelli del backup (già validato). */
+/**
+ * Sostituisce tutti i progressi con quelli del backup (già validato).
+ * Se il backup non contiene le foto, quelle già presenti sul dispositivo restano.
+ */
 export async function importBackup(data: BackupData, database: ChessMemoryDB = db): Promise<void> {
-  await database.transaction('rw', ALL_TABLES(database), async () => {
+  const tables = [...ALL_TABLES(database), database.mistakes, database.photos];
+  await database.transaction('rw', tables, async () => {
     await Promise.all(ALL_TABLES(database).map((t) => t.clear()));
+    await database.mistakes.clear();
     await database.profile.put(data.profile);
     await database.cards.bulkPut(data.cards);
     await database.attempts.bulkAdd(data.attempts);
     await database.reviewLogs.bulkAdd(data.reviewLogs);
     await database.sessions.bulkPut(data.sessions);
+    await database.mistakes.bulkPut(data.mistakes);
+    if (data.photos) {
+      await database.photos.clear();
+      await database.photos.bulkPut(data.photos);
+    } else {
+      // Foto locali senza più un errore collegato: si eliminano.
+      const used = new Set(data.mistakes.map((m) => m.photoId).filter(Boolean));
+      const orphans = (await database.photos.toCollection().primaryKeys()).filter((id) => !used.has(id));
+      await database.photos.bulkDelete(orphans);
+    }
   });
 }
 
-/** Cancella tutti i progressi (le preferenze di tema vengono mantenute). */
+/**
+ * Cancella tutti i progressi di allenamento. Le preferenze e gli errori
+ * salvati dalle partite (con foto e note) vengono mantenuti.
+ */
 export async function resetProgress(database: ChessMemoryDB = db): Promise<void> {
   await database.transaction('rw', ALL_TABLES(database), async () => {
     const previous = await database.profile.get(PROFILE_ID);

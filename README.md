@@ -2,7 +2,7 @@
 
 **La palestra della memoria scacchistica.** Una Progressive Web App per scacchisti principianti e intermedi: allenamenti adattivi di circa cinque minuti al giorno per **ricordare** le mosse, **capire** perché funzionano e **riconoscere** la stessa idea in posizioni nuove.
 
-L'app è interamente client-side: nessun server, nessun account, nessuna chiave API. I progressi restano sul dispositivo (IndexedDB) e l'app funziona offline dopo il primo caricamento.
+L'app funziona interamente sul dispositivo: i progressi restano in IndexedDB e tutto funziona offline dopo il primo caricamento, compresa l'analisi con Stockfish. Gli **account** sono facoltativi: se si collega un progetto Supabase, le preferenze vengono salvate nell'account e i progressi si possono copiare nel cloud.
 
 > Nota sul nome: in questa versione non c'è alcun modello di intelligenza artificiale. Difficoltà, ripassi e consigli sono calcolati da regole locali documentate e dall'algoritmo di ripetizione dilazionata FSRS. L'app non promette miglioramenti garantiti.
 
@@ -18,7 +18,15 @@ L'app è interamente client-side: nessun server, nessun account, nessuna chiave 
 - **Ripetizione dilazionata** con `ts-fsrs` (FSRS): una scheda per concetto, cronologia delle revisioni, ripassi di oggi in Home.
 - **Allenamento quotidiano**: ripassi in scadenza + esercizi mirati sulle debolezze + almeno un concetto nuovo, entro un budget indicativo di 5 minuti. Sessione ripristinabile se interrotta.
 - **Memory DNA**: per ciascuna delle quattro aree percentuale di successo osservata, esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
-- **Profilo**: storico, tema chiaro/scuro, orientamento della scacchiera, esportazione/importazione JSON validata, ripristino con conferma esplicita.
+- **I miei errori**: gli errori delle partite reali diventano schede di ripasso personali.
+  - **Foto della scacchiera**: si scatta una foto (fotocamera posteriore o galleria), la foto resta accanto all'editor della posizione e si dispongono i pezzi guardandola. La foto viene ridotta e compressa (JPEG, lato massimo 1280 px) e salvata solo sul dispositivo. *Il riconoscimento automatico dei pezzi non c'è: la posizione si ricostruisce a mano.*
+  - **Da una partita**: PGN incollato oppure ultime partite pubbliche da Lichess o Chess.com (solo nome utente, nessuna chiave). Il motore analizza le mosse del giocatore e propone gli errori (imprecisione / errore / errore grave, calcolati sul calo delle probabilità di vittoria, con la stessa curva di Lichess).
+  - **Posizione manuale**: editor dei pezzi o FEN.
+  - Per ogni errore: mossa giocata, mossa giusta e continuazione (dal motore oppure giocata a mano), mosse alternative di valore simile, note «cosa ho sbagliato» e «come avrei dovuto proseguire», idea collegata della libreria.
+  - **Ripasso** con FSRS: si deve ritrovare la mossa giusta nella posizione; la nota «cosa ho sbagliato» è il primo indizio. Dopo la risposta si rivedono la continuazione mossa per mossa e le note. Ripassare gli errori conta per la sequenza giornaliera.
+  - **Stockfish 19** (WebAssembly, versione *lite* a thread singolo, circa 1,9 MB) gira in un Web Worker, offline. Profondità «rapida» (12) o «approfondita» (18) nelle preferenze.
+- **Account (Supabase, facoltativi)**: registrazione e accesso con email e password, password dimenticata, sincronizzazione automatica delle preferenze (tema, orientamento, profondità di analisi, nome nelle partite), salvataggio e ripristino dei progressi nel cloud (le foto restano sul dispositivo).
+- **Profilo**: account, storico, tema chiaro/scuro, orientamento della scacchiera, esportazione/importazione JSON validata, ripristino con conferma esplicita.
 - **PWA**: installabile, service worker con precache completo, indicatore offline.
 - **Accessibilità**: navigazione da tastiera (anche sulla scacchiera), stati comunicati con testo e icone oltre che con il colore, layout da 320 px al desktop.
 
@@ -57,6 +65,21 @@ Dettagli:
 - **Rotte**: l'app usa `HashRouter` (`…/#/allenati`), quindi ricaricare o condividere un indirizzo funziona senza regole di riscrittura lato server.
 - Il workflow `ci.yml` esegue typecheck, test, build ed E2E a ogni push e pull request.
 
+## Account con Supabase (facoltativo)
+
+Senza configurazione l'app funziona come prima, solo in locale, e il Profilo spiega che gli account non sono attivi.
+
+1. Crea un progetto su [supabase.com](https://supabase.com).
+2. In **SQL Editor** esegui `supabase/migrations/20261112000000_accounts.sql` (crea le tabelle `user_preferences` e `user_progress`, con Row Level Security: ogni utente legge e scrive solo le proprie righe).
+3. In **Authentication → URL Configuration** imposta come *Site URL* l'indirizzo dell'app (es. `https://<utente>.github.io/<nome-repository>/`) e aggiungilo agli *Redirect URLs* (anche `http://localhost:5173/` per lo sviluppo). I link delle email (conferma, nuova password) tornano a questo indirizzo con il flusso PKCE (`?code=…`), che non interferisce con le rotte `#/…`.
+4. Copia *Project URL* e chiave *anon / publishable* (Project Settings → API):
+   - in locale: copia `.env.example` in `.env.local` e compila i due valori;
+   - per GitHub Pages: **Settings → Secrets and variables → Actions → Variables** del repository, variabili `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (lette dal workflow di deploy).
+
+La chiave *anon* è pubblica per definizione: finisce nel bundle. La protezione dei dati è affidata alle regole RLS. Non usare mai la chiave *service_role* nell'app.
+
+La libreria `@supabase/supabase-js` è caricata solo se gli account sono configurati (import dinamico).
+
 ## Installare la PWA
 
 - **Android (Chrome)**: apri il sito, menu ⋮ → *Installa app* (o *Aggiungi a schermata Home*).
@@ -69,7 +92,9 @@ Dopo la prima apertura completa l'app funziona anche senza connessione.
 
 - Salvati solo nel browser, in IndexedDB (Dexie). Nessun dato personale: il profilo contiene un identificativo casuale locale.
 - **Cancellando i dati di navigazione i progressi vengono persi.** Dal Profilo si può esportare un backup JSON e reimportarlo; il file importato viene validato campo per campo prima di essere salvato.
-- `localStorage` contiene solo una copia della preferenza di tema, usata per evitare il lampo di colore all'avvio.
+- `localStorage` contiene una copia della preferenza di tema, usata per evitare il lampo di colore all'avvio, e, se si accede a un account, la sessione di Supabase (`cm-auth`).
+- Il backup JSON (versione 2) comprende anche gli errori salvati e le loro foto; i backup della versione 1 restano importabili. Il salvataggio nel cloud non comprende le foto.
+- «Ripristina i progressi» cancella livello, ripassi e statistiche, ma non le preferenze né gli errori salvati.
 
 ## Architettura
 
@@ -90,7 +115,13 @@ src/
     progress/     stats (Memory DNA), streak
   data/exercises/ concetti ed esercizi (dataset)
   db/             schema e database Dexie
-  services/       progress (scritture), backup (export/import/reset)
+  services/       progress (scritture), backup (export/import/reset), mistakes (errori delle partite),
+                  gameImport (Lichess / Chess.com), supabase (client facoltativo)
+  features/engine/   Stockfish in un Web Worker, lettura dell'output UCI, classificazione degli errori
+  features/mistakes/ PGN e ricerca degli errori, editor della posizione (FEN)
+  features/account/  AccountProvider (sessione e sincronizzazione), tabelle Supabase
+supabase/migrations/ tabelle e regole RLS per gli account
+scripts/copy-engine.mjs  copia Stockfish da node_modules a public/engine (postinstall)
   hooks/ i18n/ utils/ types/ styles/
 tests/
   unit/ components/ e2e/
@@ -123,6 +154,10 @@ FSRS è configurato con intervalli in giorni (`enable_short_term: false`), senza
 
 `tests/unit/dataset.test.ts` controlla per ogni esercizio: FEN valido, colore al tratto, legalità di mosse, risposte e alternative, esito dichiarato (matto, cattura, arrocco), risposte forzate nei matti in due, completezza dei testi, collegamento di trasferimento allo stesso concetto, più verifiche tematiche (forchette, inchiodature, colonne aperte, avamposti, conteggio di attaccanti e difensori…). Le posizioni tattiche e di calcolo sono state inoltre confrontate una tantum con Stockfish: la soluzione coincide sempre con la prima scelta del motore. Nelle posizioni di apertura e strategia esistono più mosse di valore simile: lì l'esercizio chiede di applicare il principio indicato e accetta le alternative elencate.
 
+## Licenza del motore
+
+Stockfish è distribuito con licenza GPL v3: il file della licenza è pubblicato accanto al motore (`engine/COPYING-stockfish.txt`) e il codice sorgente è disponibile su [github.com/official-stockfish/Stockfish](https://github.com/official-stockfish/Stockfish) e [github.com/nmrugg/stockfish.js](https://github.com/nmrugg/stockfish.js).
+
 ## Versioni installate
 
 | Pacchetto | Versione |
@@ -136,6 +171,8 @@ FSRS è configurato con intervalli in giorni (`enable_short_term: false`), senza
 | react-chessboard | 5.12.1 |
 | dexie / dexie-react-hooks | 4.4.7 / 4.4.0 |
 | ts-fsrs | 5.4.2 |
+| @supabase/supabase-js | 2.119.0 |
+| stockfish (Stockfish.js 19, GPL-3.0) | 19.0.1 |
 | vite-plugin-pwa | 2.0.0 |
 | vitest | 5.1.0 |
 | @testing-library/react | 16.3.3 |
@@ -145,7 +182,9 @@ Le versioni esatte sono fissate in `package-lock.json`.
 
 ## Limitazioni note
 
-- I dati non sono sincronizzati tra dispositivi: l'unico trasferimento è l'esportazione/importazione manuale.
+- Senza account i dati non sono sincronizzati tra dispositivi. Con l'account le preferenze si sincronizzano da sole; i progressi si salvano e ripristinano nel cloud con un comando esplicito (l'ultimo salvataggio sostituisce il precedente, non c'è unione automatica). Le foto degli errori non vanno nel cloud.
+- Le foto della scacchiera non vengono riconosciute automaticamente: la posizione si dispone a mano accanto alla foto.
+- Stockfish *lite* è molto più forte di qualunque giocatore umano, ma più debole della versione completa; le analisi sono a profondità fissa.
 - La libreria contiene 21 concetti: una volta studiati tutti, gli allenamenti sono fatti di soli ripassi.
 - La valutazione delle mosse si basa sul dataset curato (mossa preferita + alternative), non su un motore: una mossa buona ma non elencata viene segnalata come «non è l'idea dell'esercizio».
 - Interfaccia e contenuti sono solo in italiano.
@@ -153,4 +192,4 @@ Le versioni esatte sono fissate in `package-lock.json`.
 
 ## Sviluppi futuri (non implementati)
 
-L'architettura è predisposta, ma **nessuna di queste funzioni è presente nell'app**: analisi PGN di partite reali, importazione da Lichess, analisi con Stockfish WebAssembly, spiegazioni generate da un modello tramite backend sicuro, sincronizzazione cloud, riconoscimento di scacchiere reali con la fotocamera e frecce in realtà aumentata (solo per studio e allenamento, non per assistenza durante partite in corso), allenamenti generati dagli errori di partita.
+**Nessuna di queste funzioni è presente nell'app**: riconoscimento automatico dei pezzi dalla foto, foto degli errori nel cloud (Supabase Storage), sincronizzazione continua dei progressi tra dispositivi, spiegazioni generate da un modello tramite backend sicuro. Foto e motore sono pensati solo per lo studio dopo la partita, non per assistenza durante partite in corso.

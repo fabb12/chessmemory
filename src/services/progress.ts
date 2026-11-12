@@ -2,6 +2,7 @@ import { getConcept } from '../data/exercises';
 import { db, type ChessMemoryDB } from '../db/database';
 import {
   ACTIVE_SESSION_ID,
+  DEFAULT_SETTINGS,
   PROFILE_ID,
   type ActiveSession,
   type AttemptRecord,
@@ -31,7 +32,7 @@ export function createProfile(now: number): Profile {
     declaredLevel: null,
     placementDone: false,
     adaptive: initialAdaptiveState(1),
-    settings: { theme: 'system', boardOrientation: 'auto' },
+    settings: { ...DEFAULT_SETTINGS },
     streak: initialStreak(),
     lastCategory: null,
     createdAt: now,

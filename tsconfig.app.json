@@ -18,5 +18,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "tests/unit", "tests/components", "tests/setup.ts"]
+  "include": ["src", "tests/unit", "tests/components", "tests/setup.ts", "tests/fakeSupabase.ts", "tests/node-module.d.ts"]
 }

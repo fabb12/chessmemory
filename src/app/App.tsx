@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
+import { AccountProvider } from '../features/account/AccountProvider';
 import { useProfile } from '../hooks/useData';
 import { useTheme } from '../hooks/useTheme';
 import { t } from '../i18n';
 import { ConceptPage } from '../pages/ConceptPage';
 import { HomePage } from '../pages/HomePage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
+import { MistakeDetailPage } from '../pages/MistakeDetailPage';
+import { MistakeNewPage } from '../pages/MistakeNewPage';
+import { MistakeReviewPage } from '../pages/MistakeReviewPage';
+import { MistakesPage } from '../pages/MistakesPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
 import { TrainPage } from '../pages/TrainPage';
@@ -68,17 +73,23 @@ export function App() {
   return (
     <HashRouter>
       <ScrollToTop />
-      <AppShell>
-        <Routes>
-          <Route path="/" element={<HomePage profile={profile} />} />
-          <Route path="/allenati" element={<TrainPage profile={profile} />} />
-          <Route path="/strategie" element={<StrategiesPage />} />
-          <Route path="/strategie/:id" element={<ConceptPage profile={profile} />} />
-          <Route path="/memory-dna" element={<MemoryDnaPage />} />
-          <Route path="/profilo" element={<ProfilePage profile={profile} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppShell>
+      <AccountProvider settings={profile.settings}>
+        <AppShell>
+          <Routes>
+            <Route path="/" element={<HomePage profile={profile} />} />
+            <Route path="/allenati" element={<TrainPage profile={profile} />} />
+            <Route path="/strategie" element={<StrategiesPage />} />
+            <Route path="/strategie/:id" element={<ConceptPage profile={profile} />} />
+            <Route path="/memory-dna" element={<MemoryDnaPage />} />
+            <Route path="/errori" element={<MistakesPage />} />
+            <Route path="/errori/nuovo" element={<MistakeNewPage profile={profile} />} />
+            <Route path="/errori/ripasso" element={<MistakeReviewPage profile={profile} />} />
+            <Route path="/errori/:id" element={<MistakeDetailPage profile={profile} />} />
+            <Route path="/profilo" element={<ProfilePage profile={profile} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AppShell>
+      </AccountProvider>
     </HashRouter>
   );
 }

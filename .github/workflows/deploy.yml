@@ -40,6 +40,9 @@ jobs:
         env:
           # GitHub Pages serve il sito sotto /<nome-repository>/
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Account (facoltativi): Settings → Secrets and variables → Actions → Variables.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/configure-pages@v5
 
