@@ -1,5 +1,5 @@
 import { useEffect, useId } from 'react';
-import { currentSpeakingId, speak, speechSupported, stopSpeaking, useSpeakingId, useVoiceAuto } from '../../features/voice/speech';
+import { currentSpeakingId, speak, speechSupported, stopSpeaking, useSpeakingId, useVoiceAuto, useVoiceEnabled } from '../../features/voice/speech';
 import { t } from '../../i18n';
 import { Icon } from './Icon';
 
@@ -16,15 +16,16 @@ interface SpeakButtonProps {
 export function SpeakButton({ text, auto = false, delay = 300, className = '' }: SpeakButtonProps) {
   const id = useId();
   const speakingId = useSpeakingId();
+  const enabled = useVoiceEnabled();
   const autoOn = useVoiceAuto();
   const speaking = speakingId === id;
   const supported = speechSupported();
 
   useEffect(() => {
-    if (!supported || !auto || !autoOn || !text) return;
+    if (!supported || !enabled || !auto || !autoOn || !text) return;
     const timer = window.setTimeout(() => speak(text, id), delay);
     return () => window.clearTimeout(timer);
-  }, [supported, auto, autoOn, text, id, delay]);
+  }, [supported, enabled, auto, autoOn, text, id, delay]);
 
   // Uscendo dalla schermata la voce si ferma.
   useEffect(
@@ -34,7 +35,7 @@ export function SpeakButton({ text, auto = false, delay = 300, className = '' }:
     [id],
   );
 
-  if (!supported) return null;
+  if (!supported || !enabled) return null;
   return (
     <button
       type="button"

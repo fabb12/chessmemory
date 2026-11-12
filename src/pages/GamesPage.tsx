@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, PageTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
@@ -8,14 +9,33 @@ import { t } from '../i18n';
 const plyCounts = new Map(FAMOUS_GAMES.map((g) => [g.id, parseGame(g.pgn).moves.length]));
 
 export function GamesPage() {
+  const [filter, setFilter] = useState<'all' | 'carlsen'>('all');
+  const games =
+    filter === 'carlsen' ? FAMOUS_GAMES.filter((g) => `${g.white} ${g.black}`.includes('Carlsen')) : FAMOUS_GAMES;
   return (
     <div className="space-y-6">
       <header>
         <PageTitle>{t.games.title}</PageTitle>
         <p className="mt-1.5 text-lg text-muted">{t.games.intro}</p>
       </header>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t.games.filterLabel} data-testid="games-filter">
+        {(['all', 'carlsen'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={filter === f}
+            data-testid={`games-filter-${f}`}
+            onClick={() => setFilter(f)}
+            className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+              filter === f ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-fg'
+            }`}
+          >
+            {t.games.filters[f]}
+          </button>
+        ))}
+      </div>
       <ul className="grid gap-3 md:grid-cols-2">
-        {FAMOUS_GAMES.map((game) => (
+        {games.map((game) => (
           <li key={game.id}>
             <Link to={`/partite/${game.id}`} className="block h-full rounded-3xl" data-testid={`game-link-${game.id}`}>
               <Card className="cm-card-hover h-full hover:border-accent/50">

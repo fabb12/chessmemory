@@ -257,6 +257,239 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
 34.Qa1+ Kd2 35.Qb2+ Kd1 {Il re nero è arrivato fino alla prima traversa bianca.} 36.Bf1! Rd2 37.Rd7! Rxd7 38.Bxc4 bxc4 39.Qxh8 Rd3 40.Qa8 c3 41.Qa4+ Ke1
 42.f4 f5 43.Kc1 Rd2 44.Qa7 {Il Bianco ha la donna contro due pedoni passati: il Nero abbandona.}`,
   },
+  {
+    id: "carlsen-anand-2013-5",
+    title: "Carlsen–Anand, quinta partita",
+    white: "Magnus Carlsen",
+    black: "Viswanathan Anand",
+    event: "Campionato del mondo, Chennai",
+    year: 2013,
+    result: "1-0",
+    opening: "Gambetto di donna rifiutato",
+    themes: ["strategy", "endgame"],
+    summary:
+      "La prima vittoria di Carlsen nel match mondiale con Anand: senza donne, con piccoli vantaggi accumulati un po' alla volta e un finale di torri condotto fino in fondo.",
+    lessons: [
+      "Un lieve vantaggio, se si fa crescere con pazienza, può diventare un finale vinto.",
+      "Dopo il cambio delle donne contano l'attività dei pezzi e la posizione del re.",
+      "Nei finali di torre i pedoni passati, anche lontani, costringono l'avversario a restare passivo.",
+    ],
+    pgn: `1.c4 e6 2.d4 d5 3.Nc3 c6 4.e4 dxe4 5.Nxe4 {Il Bianco prende il pedone in e4: la posizione si apre subito.} Bb4+ 6.Nc3 c5 7.a3 Ba5 8.Nf3 Nf6
+9.Be3 Nc6 10.Qd3 cxd4 11.Nxd4 Ng4 12.O-O-O {Arrocco lungo: la torre in d1 si schiera sulla colonna d.} Nxe3 13.fxe3 Bc7 14.Nxc6 bxc6 15.Qxd8+ {Cambio delle donne: si va verso un finale in cui il Bianco ha i pezzi più attivi.} Bxd8 16.Be2 Ke7
+17.Bf3 Bd7 18.Ne4 Bb6 19.c5 f5 20.cxb6 fxe4 21.b7 {Il pedone arriva in b7: il Nero deve ricatturarlo con la torre.} Rab8 22.Bxe4 Rxb7 23.Rhf1 Rb5 24.Rf4 g5
+25.Rf3 h5 26.Rdf1 Be8 27.Bc2 Rc5 28.Rf6 h4 29.e4 a5 30.Kd2 Rb5 31.b3 Bh5 32.Kc3 Rc5+
+33.Kb2 Rd8 34.R1f2 Rd4 35.Rh6 Bd1 36.Bb1 Rb5 37.Kc3 c5 38.Rb2 e5 39.Rg6 a4 40.Rxg5 {La torre bianca prende il pedone g5: il Bianco guadagna materiale.} Rxb3+
+41.Rxb3 Bxb3 42.Rxe5+ Kd6 43.Rh5 Rd1 44.e5+ Kd5 45.Bh7 Rc1+ 46.Kb2 Rg1 47.Bg8+ Kc6 48.Rh6+ Kd7
+49.Bxb3 axb3 50.Kxb3 Rxg2 51.Rxh4 Ke6 52.a4 Kxe5 53.a5 Kd6 54.Rh7 Kd5 55.a6 c4+ 56.Kc3 Ra2
+57.a7 {Il pedone in a7 imprigiona la torre nera, che non può più lasciare la colonna a.} Kc5 58.h4`,
+  },
+  {
+    id: "anand-carlsen-2013-6",
+    title: "Anand–Carlsen, sesta partita",
+    white: "Viswanathan Anand",
+    black: "Magnus Carlsen",
+    event: "Campionato del mondo, Chennai",
+    year: 2013,
+    result: "0-1",
+    opening: "Spagnola, variante Berlinese con 4.d3",
+    themes: ["strategy", "endgame"],
+    summary:
+      "Una partita lunga e tesa: Carlsen difende con calma e, quando il Bianco allenta la presa, trasforma i suoi pedoni passati sul lato di re in una vittoria.",
+    lessons: [
+      "Difendersi con calma permette di sfruttare le imprecisioni dell'avversario.",
+      "Nel finale di torri l'attività della torre conta più di un pedone.",
+      "Due pedoni passati collegati sono una forza decisiva.",
+    ],
+    pgn: `1.e4 e5 2.Nf3 Nc6 3.Bb5 Nf6 4.d3 {Una continuazione tranquilla: il Bianco evita le varianti teoriche più affilate.} Bc5 5.c3 O-O 6.O-O Re8 7.Re1 a6 8.Ba4 b5
+9.Bb3 d6 10.Bg5 Be6 11.Nbd2 h6 12.Bh4 Bxb3 {Il Nero cambia l'alfiere chiaro: la lotta continua con i pezzi minori.} 13.axb3 Nb8 14.h3 Nbd7 15.Nh2 Qe7 16.Ndf1 Bb6
+17.Ne3 Qe6 18.b4 a5 19.bxa5 Bxa5 20.Nhg4 Bb6 21.Bxf6 {Il Bianco cambia l'alfiere con il cavallo in f6, riducendo le difese del re nero.} Nxf6 22.Nxf6+ Qxf6 23.Qg4 Bxe3 24.fxe3 Qe7
+25.Rf1 c5 26.Kh2 c4 27.d4 Rxa1 28.Rxa1 Qb7 29.Rd1 Qc6 30.Qf5 exd4 31.Rxd4 Re5 32.Qf3 Qc7
+33.Kh1 Qe7 34.Qg4 Kh7 35.Qf4 g6 36.Kh2 Kg7 37.Qf3 Re6 38.Qg3 Rxe4 39.Qxd6 Rxe3 40.Qxe7 {Le donne si cambiano: resta un finale di torri con pedoni su entrambe le ali.} Rxe7
+41.Rd5 Rb7 42.Rd6 f6 43.h4 Kf7 44.h5 gxh5 45.Rd5 Kg6 46.Kg3 Rb6 47.Rc5 f5 48.Kh4 Re6
+49.Rxb5 Re4+ 50.Kh3 Kg5 51.Rb8 h4 {Il Nero avanza i pedoni sul lato di re: il Bianco resta sulla difensiva.} 52.Rg8+ Kh5 53.Rf8 Rf4 54.Rc8 Rg4 55.Rf8 Rg3+ 56.Kh2 Kg5
+57.Rg8+ Kf4 58.Rc8 Ke3 59.Rxc4 f4 60.Ra4 h3 61.gxh3 Rg6 62.c4 f3 {Il pedone f nero arriva in f3: la minaccia di promuovere è decisiva.} 63.Ra3+ Ke2 64.b4 f2
+65.Ra2+ Kf3 66.Ra3+ Kf4 67.Ra8 Rg1 {Il pedone f2 sta per promuovere: Anand abbandona.}`,
+  },
+  {
+    id: "carlsen-anand-2014-6",
+    title: "Carlsen–Anand, sesta partita",
+    white: "Magnus Carlsen",
+    black: "Viswanathan Anand",
+    event: "Campionato del mondo, Soči",
+    year: 2014,
+    result: "1-0",
+    opening: "Siciliana, variante Kan",
+    themes: ["strategy", "endgame", "attack"],
+    summary:
+      "Carlsen cambia subito le donne ma tiene viva la partita: con i pedoni h avanzati e una torre in g3 mette sotto pressione il re nero e vince un pedone decisivo.",
+    lessons: [
+      "Il cambio delle donne non spegne la partita: l'attacco sul re può continuare anche senza.",
+      "Pedoni su c4 ed e4 tolgono spazio e case al Nero (il «vincolo Maróczy»).",
+      "Una torre che passa per la terza traversa può entrare nel gioco in modo inatteso.",
+    ],
+    pgn: `1.e4 c5 2.Nf3 e6 3.d4 cxd4 4.Nxd4 a6 5.c4 {Il Bianco costruisce il «vincolo Maróczy»: i pedoni c4 ed e4 controllano d5 e riducono lo spazio del Nero.} Nf6 6.Nc3 Bb4 7.Qd3 Nc6 8.Nxc6 dxc6
+9.Qxd8+ {Cambio di donne subito: Carlsen cerca un finale con piccole ma durature pressioni.} Kxd8 10.e5 Nd7 11.Bf4 Bxc3+ 12.bxc3 Kc7 13.h4 {Il pedone h avanza per guadagnare spazio sul lato di re.} b6 14.h5 h6 15.O-O-O Bb7 16.Rd3 c5
+17.Rg3 {La torre passa per la terza traversa e arriva sulla colonna g.} Rag8 18.Bd3 Nf8 19.Be3 g6 20.hxg6 {Il Bianco apre le colonne h e g per le sue torri.} Nxg6 21.Rh5 Bc6 22.Bc2 Kb7 23.Rg4 a5 24.Bd1 Rd8
+25.Bc2 Rdg8 26.Kd2 a4 27.Ke2 a3 28.f3 Rd8 29.Ke1 Rd7 30.Bc1 Ra8 31.Ke2 Ba4 32.Be4+ Bc6
+33.Bxg6 {Cambio che apre le linee e indebolisce il re nero.} fxg6 34.Rxg6 {La torre prende il pedone g6: il Bianco guadagna materiale.} Ba4 35.Rxe6 Rd1 36.Bxa3 Ra1 37.Ke3 Bc2 38.Re7+ {Con lo scacco la torre bianca vince materiale: il Nero abbandona.}`,
+  },
+  {
+    id: "carlsen-nepomniachtchi-2021-6",
+    title: "Carlsen–Nepomniachtchi, sesta partita",
+    white: "Magnus Carlsen",
+    black: "Ian Nepomniachtchi",
+    event: "Campionato del mondo, Dubai",
+    year: 2021,
+    result: "1-0",
+    opening: "Apertura Catalana",
+    themes: ["strategy", "endgame"],
+    summary:
+      "136 mosse, la partita più lunga della storia dei campionati del mondo: Carlsen sacrifica la donna per due torri e poi spinge per ore finché il Nero cede.",
+    lessons: [
+      "Un sacrificio di qualità (donna per due torri) può dare un vantaggio posizionale più che materiale.",
+      "Nei finali lunghi la pazienza e la precisione contano più della fretta di vincere.",
+      "Un cavallo ben piazzato, sostenuto dai pedoni, può valere quanto una torre.",
+    ],
+    pgn: `1.d4 Nf6 2.Nf3 d5 3.g3 {Un sistema tranquillo: l'alfiere in g2 controlla la lunga diagonale.} e6 4.Bg2 Be7 5.O-O O-O 6.b3 c5 7.dxc5 Bxc5 8.c4 dxc4
+9.Qc2 Qe7 10.Nbd2 Nc6 11.Nxc4 {Il Bianco recupera il pedone di c4.} b5 12.Nce5 Nb4 13.Qb2 Bb7 14.a3 Nc6 15.Nd3 Bb6 16.Bg5 Rfd8
+17.Bxf6 {Il Bianco rovina la struttura dei pedoni neri, che ora ha un pedone doppio.} gxf6 18.Rac1 Nd4 19.Nxd4 Bxd4 20.Qa2 Bxg2 21.Kxg2 Qb7+ 22.Kg1 Qe4 23.Qc2 a5 24.Rfd1 Kg7
+25.Rd2 Rac8 26.Qxc8 {Carlsen dà la donna per due torri: il materiale è equilibrato ma la posizione resta molto aperta.} Rxc8 27.Rxc8 Qd5 28.b4 a4 29.e3 Be5 30.h4 {Il pedone h avanza per creare un'altra debolezza sul lato di re nero.} h5 31.Kh2 Bb2 32.Rc5 Qd6
+33.Rd1 Bxa3 34.Rxb5 Qd7 35.Rc5 e5 36.Rc2 Qd5 37.Rdd2 Qb3 38.Ra2 e4 39.Nc5 Qxb4 40.Nxe4 Qb3
+41.Rac2 Bf8 42.Nc5 Qb5 43.Nd3 a3 44.Nf4 Qa5 45.Ra2 Bb4 46.Rd3 Kh6 47.Rd1 Qa4 48.Rda1 Bd6
+49.Kg1 Qb3 50.Ne2 Qd3 51.Nd4 Kh7 52.Kh2 Qe4 53.Rxa3 Qxh4+ 54.Kg1 Qe4 55.Ra4 Be5 56.Ne2 Qc2
+57.R1a2 Qb3 58.Kg2 Qd5+ 59.f3 Qd1 60.f4 Bc7 61.Kf2 Bb6 62.Ra1 Qb3 63.Re4 Kg7 64.Re8 f5
+65.Raa8 Qb4 66.Rac8 Ba5 67.Rc1 Bb6 68.Re5 Qb3 69.Re8 Qd5 70.Rcc8 Qh1 71.Rc1 Qd5 72.Rb1 Ba7
+73.Re7 Bc5 74.Re5 Qd3 75.Rb7 Qc2 76.Rb5 Ba7 77.Ra5 Bb6 78.Rab5 Ba7 79.Rxf5 {Dopo una lunghissima manovra il Bianco prende il pedone f5.} Qd3 80.Rxf7+ Kxf7
+81.Rb7+ {Con lo scacco la torre bianca prende il controllo della settima traversa e vince l'alfiere.} Kg6 82.Rxa7 Qd5 83.Ra6+ Kh7 84.Ra1 Kg6 85.Nd4 Qb7 86.Ra2 Qh1 87.Ra6+ Kf7 88.Nf3 Qb1
+89.Rd6 Kg7 90.Rd5 Qa2+ 91.Rd2 Qb1 92.Re2 Qb6 93.Rc2 Qb1 94.Nd4 Qh1 95.Rc7+ Kf6 96.Rc6+ Kf7
+97.Nf3 Qb1 98.Ng5+ Kg7 99.Ne6+ Kf7 100.Nd4 Qh1 101.Rc7+ Kf6 102.Nf3 Qb1 103.Rd7 Qb2+ 104.Rd2 Qb1
+105.Ng1 Qb4 106.Rd1 Qb3 107.Rd6+ Kg7 108.Rd4 Qb2+ 109.Ne2 Qb1 110.e4 Qh1 111.Rd7+ Kg8 112.Rd4 Qh2+
+113.Ke3 h4 114.gxh4 Qh3+ 115.Kd2 Qxh4 116.Rd3 Kf8 117.Rf3 Qd8+ 118.Ke3 Qa5 119.Kf2 Qa7+ 120.Re3 Qd7
+121.Ng3 Qd2+ 122.Kf3 Qd1+ 123.Re2 Qb3+ 124.Kg2 Qb7 125.Rd2 Qb3 126.Rd5 Ke7 127.Re5+ Kf7 128.Rf5+ Ke8
+129.e5 Qa2+ 130.Kh3 Qe6 131.Kh4 Qh6+ 132.Nh5 Qh7 133.e6 Qg6 134.Rf7 Kd8 135.f5 Qg1 136.Ng7 {Dopo quasi otto ore il Nero abbandona: è la partita più lunga di un campionato del mondo.}`,
+  },
+  {
+    id: "carlsen-topalov-2009",
+    title: "Carlsen–Topalov, Nanchino",
+    white: "Magnus Carlsen",
+    black: "Veselin Topalov",
+    event: "Pearl Spring, Nanchino",
+    year: 2009,
+    result: "1-0",
+    opening: "Difesa Est-Indiana",
+    themes: ["attack", "strategy"],
+    summary:
+      "A 18 anni Carlsen batte l'ex campione del mondo Topalov con un attacco sul lato di re condotto con i pedoni: arrocchi opposti e linee aperte contro il re avversario.",
+    lessons: [
+      "Con gli arrocchi opposti si attacca spingendo i pedoni verso il re avversario.",
+      "Aprire le colonne davanti al re nemico dà alle torri vie d'accesso decisive.",
+      "Il tempismo è tutto: chi attacca per primo con più pezzi ha spesso l'iniziativa.",
+    ],
+    pgn: `1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6 5.Nf3 O-O 6.h3 {Una mossa solida: il Bianco prepara g4 e un'espansione sul lato di re.} Na6 7.Be3 e5 8.d5 c6
+9.g4 {I pedoni bianchi avanzano contro il re nero: Carlsen attacca con decisione.} Nc5 10.Nd2 a5 11.a3 Nfd7 12.Rg1 a4 13.Qc2 Nb6 14.O-O-O {Arrocco lungo: i due re sono su ali opposte e la partita sarà una corsa all'attacco.} Bd7 15.Kb1 cxd5 16.cxd5 Rc8
+17.Bb5 Bxb5 18.Nxb5 Qd7 19.Nc3 Bf6 20.g5 {Il pedone g5 colpisce l'alfiere in f6 e tiene chiusa la posizione.} Bd8 21.h4 Na8 22.Bxc5 Rxc5 23.Qxa4 Qc8 24.Rc1 Nb6
+25.Qd1 Qh3 26.Qf3 Qd7 27.Qd3 Kg7 28.Rc2 f6 29.gxf6+ {Si apre la colonna g: il re nero è esposto.} Rxf6 30.h5 Rxf2 31.hxg6 h6 32.Nd1 Rxc2
+33.Nxf2 Rc8 34.Ng4 Bg5 35.Nf3 Nc4 36.Nxg5 hxg5 37.Ne3 Nxe3 38.Qxe3 Qa4 39.Qxg5 Qxe4+ 40.Ka1 Re8
+41.Rc1 {Il Nero abbandona: il Bianco ha troppe minacce contro il suo re.}`,
+  },
+  {
+    id: "carlsen-karjakin-2016-10",
+    title: "Carlsen–Karjakin, decima partita",
+    white: "Magnus Carlsen",
+    black: "Sergey Karjakin",
+    event: "Campionato del mondo, New York",
+    year: 2016,
+    result: "1-0",
+    opening: "Spagnola, variante Berlinese con 4.d3",
+    themes: ["strategy", "endgame"],
+    summary:
+      "Dopo la sconfitta nell'ottava partita, Carlsen riporta il match in parità con una vittoria da maestro: pressione continua in un finale con poco materiale.",
+    lessons: [
+      "Un finale quasi pari può essere vinto se si mettono continuamente problemi all'avversario.",
+      "Spostare il gioco da un lato all'altro della scacchiera sovraccarica le difese dell'avversario.",
+      "Una rottura di pedoni al momento giusto (b4–b5) apre il gioco a favore di chi ha i pezzi più attivi.",
+    ],
+    pgn: `1.e4 e5 2.Nf3 Nc6 3.Bb5 Nf6 4.d3 {Una variante tranquilla della Spagnola: Carlsen preferisce una lotta lunga.} Bc5 5.c3 O-O 6.Bg5 {Il Bianco inchioda il cavallo in f6 sulla donna.} h6 7.Bh4 Be7 8.O-O d6
+9.Nbd2 Nh5 {Il cavallo nero va in h5 per cambiare l'alfiere g5.} 10.Bxe7 Qxe7 11.Nc4 Nf4 12.Ne3 Qf6 13.g3 Nh3+ 14.Kh1 Ne7 15.Bc4 c6 16.Bb3 Ng6
+17.Qe2 a5 18.a4 Be6 19.Bxe6 fxe6 20.Nd2 d5 21.Qh5 Ng5 22.h4 Nf3 23.Nxf3 Qxf3+ 24.Qxf3 {Cambio delle donne: il finale è equilibrato ma più comodo per il Bianco.} Rxf3
+25.Kg2 Rf7 26.Rfe1 h5 27.Nf1 Kf8 28.Nd2 Ke7 29.Re2 Kd6 30.Nf3 Raf8 31.Ng5 Re7 32.Rae1 Rfe8
+33.Nf3 Nh8 34.d4 {Il Bianco apre il centro con d4 per sfruttare l'attività dei suoi pezzi.} exd4 35.Nxd4 g6 36.Re3 Nf7 37.e5+ {Il pedone in e5 guadagna spazio e limita il cavallo nero.} Kd7 38.Rf3 Nh6 39.Rf6 Rg7 40.b4 axb4
+41.cxb4 Ng8 42.Rf3 Nh6 43.a5 Nf5 44.Nb3 Kc7 45.Nc5 Kb8 46.Rb1 Ka7 47.Rd3 Rc7 48.Ra3 Nd4
+49.Rd1 Nf5 50.Kh3 Nh6 51.f3 Rf7 52.Rd4 Nf5 53.Rd2 Rh7 54.Rb3 Ree7 55.Rdd3 Rh8 56.Rb1 Rhh7
+57.b5 {Rottura di pedoni sul lato di donna: si aprono le linee per le torri.} cxb5 58.Rxb5 d4 59.Rb6 Rc7 60.Nxe6 {Il cavallo prende il pedone e6: comincia la fase decisiva.} Rc3 61.Nf4 Rhc7 62.Nd5 Rxd3 63.Nxc7 Kb8 64.Nb5 Kc8
+65.Rxg6 {La torre bianca prende il pedone g6.} Rxf3 66.Kg2 Rb3 67.Nd6+ Nxd6 68.Rxd6 Re3 69.e6 Kc7 70.Rxd4 Rxe6 71.Rd5 Rh6 72.Kf3 Kb8
+73.Kf4 Ka7 74.Kg5 Rh8 75.Kf6 {Il Nero abbandona: il re bianco entra nella posizione nera.}`,
+  },
+  {
+    id: "carlsen-nakamura-2013",
+    title: "Carlsen–Nakamura, Wijk aan Zee",
+    white: "Magnus Carlsen",
+    black: "Hikaru Nakamura",
+    event: "Tata Steel, Wijk aan Zee",
+    year: 2013,
+    result: "1-0",
+    opening: "Siciliana, variante Kalashnikov",
+    themes: ["attack", "sacrifice"],
+    summary:
+      "Carlsen risponde con precisione all'aggressiva difesa di Nakamura e, in sole 31 mosse, travolge il re nero con i pedoni f e g e un sacrificio d'alfiere.",
+    lessons: [
+      "Un attacco sul re funziona meglio quando pedoni e pezzi collaborano.",
+      "Un sacrificio d'alfiere può scardinare la copertura del re e dare un vantaggio decisivo.",
+      "Contro un attacco prematuro conviene mantenere la calma e rispondere con precisione.",
+    ],
+    pgn: `1.e4 c5 2.Nf3 Nc6 3.d4 cxd4 4.Nxd4 e5 {La Siciliana Kalashnikov: il Nero spinge subito e5, indebolendo però la casa d5.} 5.Nb5 d6 6.g3 {Una scelta solida: l'alfiere in g2 controllerà la lunga diagonale.} h5 {Il Nero ha già avviato un'azione sul lato di re: il Bianco deve rispondere con precisione.} 7.N1c3 a6 8.Na3 b5
+9.Nd5 Nge7 10.Bg2 Bg4 11.f3 Be6 12.c3 h4 13.Nc2 Bxd5 14.exd5 {Il pedone bianco in d5 limita i cavalli neri.} Na5 15.f4 {Il Bianco apre il gioco sul lato di re e contrattacca subito.} Nf5 16.g4 h3
+17.Be4 Nh4 18.O-O g6 19.Kh1 Bg7 20.f5 {Rompe la catena di pedoni: l'attacco sul re nero è iniziato.} gxf5 21.gxf5 Ng2 22.f6 {Il pedone f6 è una spina: il Nero non riesce più a difendere bene il suo re.} Bf8 23.Qf3 Qc7 24.Nb4 Nb7
+25.Nc6 Nc5 26.Bf5 Nd7 27.Bg5 Rg8 28.Qh5 {La donna si unisce all'attacco.} Nb6 29.Be6 {Sacrificio d'alfiere: il Bianco scardina la difesa del re nero.} Rxg5 30.Qxg5 fxe6 31.dxe6 {Il Nero abbandona: la posizione è senza speranza.}`,
+  },
+  {
+    id: "spassky-fischer-3",
+    title: "Spassky–Fischer, terza partita",
+    white: "Boris Spassky",
+    black: "Bobby Fischer",
+    event: "Campionato del mondo, Reykjavík",
+    year: 1972,
+    result: "0-1",
+    opening: "Difesa Benoni",
+    themes: ["strategy", "attack"],
+    summary:
+      "La prima vittoria di Fischer contro Spassky: un cavallo sul bordo, in h5, e un gioco sul lato di re che mette in difficoltà il campione del mondo.",
+    lessons: [
+      "Un cavallo sul bordo può essere strano ma efficace se serve a un piano chiaro.",
+      "Pedoni doppiati sono accettabili se in cambio si ottengono pezzi attivi.",
+      "Un vantaggio di spazio si sfrutta spingendo e creando minacce, non rimanendo fermi.",
+    ],
+    pgn: `1.d4 Nf6 2.c4 e6 3.Nf3 c5 4.d5 {Il Benoni moderno: il Nero rinuncia al centro in cambio di spazio e attività sul lato di donna.} exd5 5.cxd5 d6 6.Nc3 g6 7.Nd2 Nbd7 8.e4 Bg7
+9.Be2 O-O 10.O-O Re8 11.Qc2 Nh5 {Una mossa sorprendente: il cavallo va in h5 per cambiare l'alfiere bianco.} 12.Bxh5 gxh5 {Il Nero accetta i pedoni doppiati in cambio di pezzi attivi e dell'attacco sul re.} 13.Nc4 Ne5 14.Ne3 Qh4 {La donna nera sfrutta la linea aperta: pressione sul re bianco.} 15.Bd2 Ng4 16.Nxg4 hxg4
+17.Bf4 Qf6 18.g3 Bd7 19.a4 b6 20.Rfe1 a6 21.Re2 b5 22.Rae1 Qg6 23.b3 Re7 24.Qd3 Rb8
+25.axb5 axb5 26.b4 c4 27.Qd2 Rbe8 28.Re3 h5 29.R3e2 Kh7 30.Re3 Kg8 31.R3e2 Bxc3 32.Qxc3 Rxe4
+33.Rxe4 Rxe4 34.Rxe4 Qxe4 35.Bh6 Qg6 36.Bc1 Qb1 37.Kf1 Bf5 38.Ke2 Qe4+ 39.Qe3 Qc2+ 40.Qd2 Qb3
+41.Qd4 Bd3+ {Scacco decisivo: il Bianco perde materiale e Spassky abbandona.}`,
+  },
+  {
+    id: "karpov-kasparov-1985-24",
+    title: "Karpov–Kasparov, ventiquattresima partita",
+    white: "Anatoly Karpov",
+    black: "Garry Kasparov",
+    event: "Campionato del mondo, Mosca",
+    year: 1985,
+    result: "0-1",
+    opening: "Siciliana, variante Scheveningen",
+    themes: ["attack", "strategy", "sacrifice"],
+    summary:
+      "L'ultima partita del match: con il Nero Kasparov vince e, a 22 anni, diventa il più giovane campione del mondo della storia.",
+    lessons: [
+      "Il Nero può contrattaccare al centro mentre il Bianco attacca sul lato di re.",
+      "Un alfiere sulla lunga diagonale può decidere una partita da lontano.",
+      "Un attacco con pedoni (g4–g5) indebolisce anche il proprio re.",
+    ],
+    pgn: `1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Be2 e6 7.O-O Be7 8.f4 {Il Bianco prepara un attacco sul lato di re con i pedoni.} O-O
+9.Kh1 Qc7 10.a4 Nc6 11.Be3 Re8 12.Bf3 Rb8 13.Qd2 Bd7 14.Nb3 b6 15.g4 {Karpov attacca sul lato di re con i pedoni.} Bc8 16.g5 {Il pedone g5 caccia il cavallo, ma indebolisce il re bianco.} Nd7
+17.Qf2 Bf8 18.Bg2 Bb7 19.Rad1 g6 20.Bc1 Rbc8 21.Rd3 Nb4 {Il cavallo nero minaccia la torre in d3 e la casa c2.} 22.Rh3 Bg7 23.Be3 Re7 24.Kg1 Rce8
+25.Rd1 f5 {Kasparov contrattacca al centro con f5.} 26.gxf6 Nxf6 27.Rg3 Rf7 28.Bxb6 {Il Bianco prende il pedone b6, ma i suoi pezzi restano lontani dal proprio re.} Qb8 29.Be3 Nh5 30.Rg4 Nf6 31.Rh4 g5 32.fxg5 Ng4
+33.Qd2 Nxe3 34.Qxe3 Nxc2 35.Qb6 Ba8 {L'alfiere guarda il re bianco lungo la lunga diagonale: il Nero ha l'iniziativa.} 36.Rxd6 {Il Bianco prende pedoni, ma il suo re è troppo scoperto.} Rb7 37.Qxa6 Rxb3 38.Rxe6 Rxb2 39.Qc4 Kh8 40.e5 Qa7+
+41.Kh1 Bxg2+ {L'alfiere si sacrifica sul re: la mossa decisiva.} 42.Kxg2 Nd4+ {Scacco di scoperta della torre in b2: Karpov abbandona.}`,
+  },
 ];
 
 const gameById = new Map(FAMOUS_GAMES.map((g) => [g.id, g]));

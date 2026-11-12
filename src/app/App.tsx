@@ -11,10 +11,6 @@ import { GamePage } from '../pages/GamePage';
 import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
-import { MistakeDetailPage } from '../pages/MistakeDetailPage';
-import { MistakeNewPage } from '../pages/MistakeNewPage';
-import { MistakeReviewPage } from '../pages/MistakeReviewPage';
-import { MistakesPage } from '../pages/MistakesPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
 import { TrainPage } from '../pages/TrainPage';
@@ -87,10 +83,6 @@ export function App() {
             <Route path="/partite" element={<GamesPage />} />
             <Route path="/partite/:id" element={<GamePage profile={profile} />} />
             <Route path="/memory-dna" element={<MemoryDnaPage />} />
-            <Route path="/errori" element={<MistakesPage />} />
-            <Route path="/errori/nuovo" element={<MistakeNewPage profile={profile} />} />
-            <Route path="/errori/ripasso" element={<MistakeReviewPage profile={profile} />} />
-            <Route path="/errori/:id" element={<MistakeDetailPage profile={profile} />} />
             <Route path="/profilo" element={<ProfilePage profile={profile} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

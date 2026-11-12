@@ -197,4 +197,68 @@ test.describe('flusso completo di allenamento', () => {
       expect(await noOverflow(), route).toBe(true);
     }
   });
+
+  test('scelta della difficoltà: più concetti tra cui scegliere, proposte diverse a ogni cambio, nessuna sezione Errori', async ({ page }) => {
+    await completeOnboarding(page);
+    await expect(page.getByRole('link', { name: 'Errori' })).toHaveCount(0);
+    await page.goto('./#/allenati');
+
+    await page.getByTestId('level-3').click();
+    const list = page.getByTestId('plan-list');
+    await expect(list.locator('li').first()).toBeVisible();
+    expect(await list.locator('li').count()).toBeGreaterThanOrEqual(5);
+
+    const titles = async () => list.locator('li .font-medium').allInnerTexts();
+    const seen = new Set<string>([(await titles()).join('|')]);
+    for (let i = 0; i < 6; i++) {
+      await page.getByTestId('reshuffle').click();
+      seen.add((await titles()).join('|'));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+
+    // Si può scegliere cosa allenare: si tiene un solo concetto
+    const boxes = list.locator('input[type="checkbox"]');
+    const n = await boxes.count();
+    for (let i = 0; i < n; i++) if (await boxes.nth(i).isChecked()) await boxes.nth(i).uncheck();
+    await expect(page.getByTestId('start-training')).toBeDisabled();
+    await boxes.nth(n - 1).check();
+    await page.getByTestId('start-training').click();
+    await expect(page.getByTestId('concept-runner')).toBeVisible();
+    await expect(page.getByTestId('item-progress')).toContainText('Concetto 1 di 1');
+  });
+
+  test('voce: si accende e si spegne dalla barra e dal profilo, e i pulsanti Ascolta spariscono da spenta', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/strategie/pin');
+    const toggle = page.getByTestId('voice-toggle');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-label', /Voce attiva/);
+    await expect(page.getByTestId('speak-button').first()).toBeVisible();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-label', /Voce spenta/);
+    await expect(page.getByTestId('speak-button')).toHaveCount(0);
+
+    // La scelta resta anche nel Profilo e dopo il ricaricamento
+    await page.goto('./#/profilo');
+    await expect(page.getByTestId('voice-enabled')).not.toBeChecked();
+    await page.reload();
+    await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce spenta/);
+
+    await page.getByTestId('voice-enabled').check();
+    await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce attiva/);
+  });
+
+  test('partite famose: elenco ampio con filtro Carlsen', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/partite');
+    const all = await page.locator('[data-testid^="game-link-"]').count();
+    expect(all).toBeGreaterThanOrEqual(15);
+    await page.getByTestId('games-filter-carlsen').click();
+    const carlsen = await page.locator('[data-testid^="game-link-"]').count();
+    expect(carlsen).toBeGreaterThanOrEqual(5);
+    expect(carlsen).toBeLessThan(all);
+    await page.locator('[data-testid^="game-link-carlsen-"]').first().click();
+    await expect(page.locator('h1')).toBeVisible();
+  });
 });

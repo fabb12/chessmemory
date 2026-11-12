@@ -1,7 +1,14 @@
 import { Rating } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
 import { CONCEPTS, getExercise } from '../../src/data/exercises';
-import { buildItem, buildSessionPlan, DEFAULT_SESSION_CONFIG, rankNewConcepts } from '../../src/features/learning/sessionBuilder';
+import {
+  buildItem,
+  buildProposals,
+  buildSessionPlan,
+  DEFAULT_SESSION_CONFIG,
+  rankNewConcepts,
+  seededRng,
+} from '../../src/features/learning/sessionBuilder';
 import { createCard, reviewCard, type StoredCard } from '../../src/features/memory/scheduler';
 import { currentStreak, dayKey, daysBetween, initialStreak, registerTrainingDay, trainedToday } from '../../src/features/progress/streak';
 import { DAY, T0 } from './helpers';
@@ -104,6 +111,64 @@ describe('allenamento quotidiano', () => {
     const ghost = { ...learned('pin', T0 - 30 * DAY), conceptId: 'rimosso' };
     const plan = buildSessionPlan({ cards: [ghost], level: 1, now: T0 });
     expect(plan.items.some((i) => i.conceptId === 'rimosso')).toBe(false);
+  });
+});
+
+describe('varietà e scelta dell’allenamento', () => {
+  it('con semi diversi propone concetti nuovi diversi dello stesso livello', () => {
+    const firstPicks = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) {
+      const plan = buildSessionPlan({ cards: [], level: 2, now: T0, rng: seededRng(seed) });
+      expect(plan.items.length).toBeGreaterThan(0);
+      for (const item of plan.items) {
+        expect(CONCEPTS.find((c) => c.id === item.conceptId)!.difficulty).toBeLessThanOrEqual(2);
+      }
+      firstPicks.add(plan.items.map((i) => i.conceptId).join('|'));
+    }
+    expect(firstPicks.size).toBeGreaterThan(3);
+  });
+
+  it('con lo stesso seme il piano è identico', () => {
+    const a = buildSessionPlan({ cards: [], level: 3, now: T0, rng: seededRng(7) });
+    const b = buildSessionPlan({ cards: [], level: 3, now: T0, rng: seededRng(7) });
+    expect(a).toEqual(b);
+  });
+
+  it('senza seme resta deterministico', () => {
+    expect(buildSessionPlan({ cards: [], level: 3, now: T0 })).toEqual(buildSessionPlan({ cards: [], level: 3, now: T0 }));
+  });
+
+  it('con un seme sceglie esercizi diversi per lo stesso concetto', () => {
+    const ids = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) ids.add(buildItem('pin', 'new', 0, seededRng(seed))!.exerciseId);
+    expect(ids.size).toBeGreaterThan(1);
+  });
+
+  it('offre alternative del livello scelto, senza duplicati e senza i concetti già nel piano', () => {
+    const plan = buildSessionPlan({ cards: [], level: 3, now: T0, rng: seededRng(5) });
+    const exclude = new Set(plan.items.map((i) => i.conceptId));
+    const proposals = buildProposals({ cards: [], level: 3, rng: seededRng(6), exclude, count: 6 });
+    expect(proposals).toHaveLength(6);
+    const ids = proposals.map((p) => p.conceptId);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(exclude.has(id)).toBe(false);
+    const levels = ids.map((id) => CONCEPTS.find((c) => c.id === id)!.difficulty);
+    expect(levels.filter((l) => l === 3).length).toBeGreaterThanOrEqual(3);
+    // categorie diverse
+    expect(new Set(ids.map((id) => CONCEPTS.find((c) => c.id === id)!.category)).size).toBeGreaterThan(1);
+  });
+
+  it('le alternative cambiano da un seme all’altro e includono concetti già studiati come ripasso', () => {
+    const cards = CONCEPTS.filter((c) => c.difficulty === 2).slice(0, 3).map((c) => learned(c.id, T0));
+    const sets = new Set<string>();
+    for (let seed = 1; seed <= 10; seed++) {
+      const items = buildProposals({ cards, level: 2, rng: seededRng(seed), exclude: new Set(), count: 6 });
+      sets.add(items.map((i) => i.conceptId).join('|'));
+      for (const item of items) {
+        expect(item.kind).toBe(cards.some((c) => c.conceptId === item.conceptId) ? 'review' : 'new');
+      }
+    }
+    expect(sets.size).toBeGreaterThan(1);
   });
 });
 

@@ -4,8 +4,9 @@ import { FAMOUS_GAMES, findGame } from '../../src/data/games';
 import { parseGame } from '../../src/features/games/pgn';
 
 describe('partite famose', () => {
-  it('ha identificativi unici e almeno otto partite', () => {
-    expect(FAMOUS_GAMES.length).toBeGreaterThanOrEqual(8);
+  it('ha identificativi unici, almeno quindici partite e diverse di Carlsen', () => {
+    expect(FAMOUS_GAMES.length).toBeGreaterThanOrEqual(15);
+    expect(FAMOUS_GAMES.filter((g) => `${g.white} ${g.black}`.includes('Carlsen')).length).toBeGreaterThanOrEqual(5);
     expect(new Set(FAMOUS_GAMES.map((g) => g.id)).size).toBe(FAMOUS_GAMES.length);
     expect(findGame('opera-game')?.white).toBe('Paul Morphy');
   });

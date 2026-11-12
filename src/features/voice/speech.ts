@@ -54,7 +54,7 @@ function italianVoice(): SpeechSynthesisVoice | undefined {
 
 /** Legge il testo; `id` identifica chi parla (per mostrare «Ferma» sul pulsante giusto). */
 export function speak(text: string, id = 'default'): void {
-  if (!speechSupported() || !text.trim()) return;
+  if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
   const utterance = new SpeechSynthesisUtterance(spokenChess(text));
@@ -100,6 +100,7 @@ export function useSpeakingId(): string | null {
 
 // ───── Preferenze (solo su questo dispositivo: la voce dipende dal dispositivo) ─────
 
+const ENABLED_KEY = 'cm.voice.enabled';
 const AUTO_KEY = 'cm.voice.auto';
 const RATE_KEY = 'cm.voice.rate';
 const prefListeners = new Set<() => void>();
@@ -119,6 +120,16 @@ function write(key: string, value: string): void {
     // archivio non disponibile (navigazione privata): resta il valore predefinito
   }
   prefListeners.forEach((l) => l());
+}
+
+/** Interruttore generale della voce: attivo per impostazione predefinita. Da spento nulla viene letto. */
+export function getVoiceEnabled(): boolean {
+  return read(ENABLED_KEY) !== 'off';
+}
+
+export function setVoiceEnabled(on: boolean): void {
+  write(ENABLED_KEY, on ? 'on' : 'off');
+  if (!on) stopSpeaking();
 }
 
 /** Lettura automatica delle spiegazioni: attiva per impostazione predefinita. */
@@ -143,6 +154,10 @@ export function setVoiceRate(rate: number): void {
 function subscribePrefs(l: () => void) {
   prefListeners.add(l);
   return () => prefListeners.delete(l);
+}
+
+export function useVoiceEnabled(): boolean {
+  return useSyncExternalStore(subscribePrefs, getVoiceEnabled, () => true);
 }
 
 export function useVoiceAuto(): boolean {

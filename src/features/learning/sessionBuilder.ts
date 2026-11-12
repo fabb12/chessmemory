@@ -30,6 +30,30 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   weaknessMinAnswers: 3,
 };
 
+/** Generatore di numeri casuali in [0, 1): permette allenamenti sempre diversi ma ripetibili nei test. */
+export type Rng = () => number;
+
+/** Generatore deterministico (mulberry32): lo stesso seme dà sempre la stessa sequenza. */
+export function seededRng(seed: number): Rng {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function shuffled<T>(list: readonly T[], rng: Rng): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
 export interface ConceptAccuracy {
   answers: number;
   correct: number;
@@ -43,6 +67,8 @@ export interface SessionPlanInput {
   accuracy?: ReadonlyMap<string, ConceptAccuracy>;
   concepts?: readonly Concept[];
   config?: SessionConfig;
+  /** Se presente, concetti ed esercizi vengono variati a ogni allenamento. */
+  rng?: Rng;
 }
 
 export interface SessionPlan {
@@ -50,10 +76,18 @@ export interface SessionPlan {
   estimatedSeconds: number;
 }
 
-/** Sceglie gli esercizi per un concetto, alternandoli a ogni ripasso. */
-export function buildItem(conceptId: string, kind: SessionItemKind, reps = 0): SessionItem | null {
+/**
+ * Sceglie gli esercizi per un concetto. Senza `rng` li alterna a ogni ripasso;
+ * con `rng` sceglie a caso, così lo stesso concetto non ha sempre lo stesso esercizio.
+ */
+export function buildItem(conceptId: string, kind: SessionItemKind, reps = 0, rng?: Rng): SessionItem | null {
   const exercises = getConceptExercises(conceptId);
-  const first = exercises[kind === 'new' ? 0 : reps % Math.max(1, exercises.length)];
+  const start = rng
+    ? Math.floor(rng() * exercises.length)
+    : kind === 'new'
+      ? 0
+      : reps % Math.max(1, exercises.length);
+  const first = exercises[start];
   if (!first) return null;
   const transfer =
     exercises.length > 1
@@ -72,6 +106,7 @@ export function rankNewConcepts(
   concepts: readonly Concept[],
   cards: StoredCard[],
   level: Difficulty,
+  rng?: Rng,
 ): Concept[] {
   const learned = new Set(cards.map((c) => c.conceptId));
   const perCategory = new Map<string, number>();
@@ -85,13 +120,63 @@ export function rankNewConcepts(
       ? atOrBelow
       : // Tutto ciò che è alla portata è già stato studiato: si propone il gradino successivo.
         unlearned.filter((c) => c.difficulty === Math.min(...unlearned.map((u) => u.difficulty)));
+  // Con `rng` i pari merito (stesso livello e stessa categoria) si decidono a sorte.
+  const tieBreak = rng
+    ? new Map(shuffled(pool, rng).map((c, i) => [c.id, i]))
+    : new Map(pool.map((c) => [c.id, concepts.indexOf(c)]));
   return [...pool].sort(
     (a, b) =>
       // prima i concetti più vicini al livello, poi le categorie meno studiate
       b.difficulty - a.difficulty ||
       (perCategory.get(a.category) ?? 0) - (perCategory.get(b.category) ?? 0) ||
-      concepts.indexOf(a) - concepts.indexOf(b),
+      tieBreak.get(a.id)! - tieBreak.get(b.id)!,
   );
+}
+
+/** Quanti concetti si mostrano in tutto, tra quelli del piano e le alternative. */
+export const PROPOSAL_COUNT = 8;
+
+/**
+ * Alternative tra cui scegliere per il livello richiesto: concetti di quel
+ * livello (nuovi o già studiati), di categorie diverse e in ordine casuale.
+ * Se ce ne sono poche, si completa con i livelli vicini.
+ */
+export function buildProposals(input: {
+  cards: StoredCard[];
+  level: Difficulty;
+  rng: Rng;
+  /** Concetti già nel piano: non vengono riproposti. */
+  exclude: ReadonlySet<string>;
+  count: number;
+  concepts?: readonly Concept[];
+}): SessionItem[] {
+  const concepts = input.concepts ?? CONCEPTS;
+  const cardOf = new Map(input.cards.map((c) => [c.conceptId, c]));
+  const pool = concepts.filter((c) => !input.exclude.has(c.id) && getConceptExercises(c.id).length > 0);
+  const byDistance = (maxGap: number) => pool.filter((c) => Math.abs(c.difficulty - input.level) <= maxGap);
+
+  // Si prende il livello scelto, poi i vicini finché non basta.
+  const picked: Concept[] = [];
+  for (let gap = 0; gap <= 4 && picked.length < input.count; gap++) {
+    const ring = byDistance(gap).filter((c) => !picked.includes(c));
+    // a ogni giro: una per categoria prima, poi le altre
+    const groups = new Map<string, Concept[]>();
+    for (const c of shuffled(ring, input.rng)) groups.set(c.category, [...(groups.get(c.category) ?? []), c]);
+    const lists = shuffled([...groups.values()], input.rng);
+    for (let round = 0; picked.length < input.count; round++) {
+      const batch = lists.map((l) => l[round]).filter((c): c is Concept => Boolean(c));
+      if (batch.length === 0) break;
+      for (const c of batch) if (picked.length < input.count) picked.push(c);
+    }
+  }
+
+  const items: SessionItem[] = [];
+  for (const c of picked) {
+    const card = cardOf.get(c.id);
+    const item = buildItem(c.id, card ? 'review' : 'new', card?.reps ?? 0, input.rng);
+    if (item) items.push(item);
+  }
+  return items;
 }
 
 export function buildSessionPlan(input: SessionPlanInput): SessionPlan {
@@ -103,14 +188,14 @@ export function buildSessionPlan(input: SessionPlanInput): SessionPlan {
   let used = 0;
 
   const push = (conceptId: string, kind: SessionItemKind, reps: number, cost: number) => {
-    const item = buildItem(conceptId, kind, reps);
+    const item = buildItem(conceptId, kind, reps, input.rng);
     if (!item) return false;
     items.push(item);
     used += cost;
     return true;
   };
 
-  const newCandidates = rankNewConcepts(concepts, cards, input.level);
+  const newCandidates = rankNewConcepts(concepts, cards, input.level, input.rng);
   const reserve = newCandidates.length > 0 ? cfg.secondsPerNew : 0;
 
   // 1. Ripassi in scadenza: prima i più arretrati.

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { spokenChess } from '../../src/features/voice/speech';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getVoiceEnabled, setVoiceEnabled, speak, spokenChess } from '../../src/features/voice/speech';
 
 describe('lettura ad alta voce delle mosse', () => {
   it('legge pezzi, catture, scacchi e numeri di mossa', () => {
@@ -16,5 +16,42 @@ describe('lettura ad alta voce delle mosse', () => {
   it('lascia invariato il testo normale e le case isolate', () => {
     expect(spokenChess('Il pedone in «e4» controlla d5.')).toBe('Il pedone in e4 controlla d5.');
     expect(spokenChess('Re e donna')).toBe('Re e donna');
+  });
+});
+
+describe('voce attivabile e disattivabile', () => {
+  const synth = { speak: vi.fn(), cancel: vi.fn(), getVoices: () => [] };
+
+  beforeEach(() => {
+    localStorage.clear();
+    synth.speak.mockClear();
+    synth.cancel.mockClear();
+    vi.stubGlobal('speechSynthesis', synth);
+    vi.stubGlobal('SpeechSynthesisUtterance', class { text: string; constructor(text: string) { this.text = text; } });
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('è attiva per impostazione predefinita e legge il testo', () => {
+    expect(getVoiceEnabled()).toBe(true);
+    speak('Il cavallo va in f3.');
+    expect(synth.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it('da spenta non legge nulla e ferma la lettura in corso', () => {
+    setVoiceEnabled(false);
+    expect(getVoiceEnabled()).toBe(false);
+    expect(synth.cancel).toHaveBeenCalled();
+    speak('Il cavallo va in f3.');
+    expect(synth.speak).not.toHaveBeenCalled();
+  });
+
+  it('si può riaccendere e la scelta resta salvata', () => {
+    setVoiceEnabled(false);
+    setVoiceEnabled(true);
+    expect(getVoiceEnabled()).toBe(true);
+    expect(localStorage.getItem('cm.voice.enabled')).toBe('on');
+    speak('Ciao.');
+    expect(synth.speak).toHaveBeenCalledTimes(1);
   });
 });
