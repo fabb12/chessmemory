@@ -12,7 +12,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL?.trim() ?? '';
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? '';
 
+/**
+ * Interruttore generale degli account. Per ora l'accesso con Supabase è
+ * disattivato: l'app funziona solo in locale, senza login, anche se le
+ * variabili di ambiente sono impostate. Rimettere a `true` per riattivarlo.
+ */
+export const ACCOUNTS_ENABLED = false;
+
 export function isSupabaseConfigured(): boolean {
+  if (!ACCOUNTS_ENABLED) return false;
   return /^https:\/\/\S+$/.test(url) && anonKey.length > 20;
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccountCard } from '../components/account/AccountCard';
+import { isSupabaseConfigured } from '../services/supabase';
 import { Button } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -141,7 +142,7 @@ export function ProfilePage({ profile }: { profile: Profile }) {
     <div className="mx-auto max-w-2xl space-y-4">
       <PageTitle>{t.profile.title}</PageTitle>
 
-      <AccountCard />
+      {isSupabaseConfigured() && <AccountCard />}
 
       <Card>
         <SectionTitle>{t.profile.levelSection}</SectionTitle>
