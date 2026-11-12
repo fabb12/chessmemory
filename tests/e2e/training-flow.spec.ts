@@ -145,7 +145,7 @@ test.describe('flusso completo di allenamento', () => {
 
     await page.getByRole('link', { name: 'Memory DNA' }).first().click();
     const rates = await page.getByTestId('success-rate').allInnerTexts();
-    expect(rates).toHaveLength(4);
+    expect(rates).toHaveLength(5);
     expect(rates.filter((r) => r === '100%').length).toBeGreaterThan(0);
 
     await page.getByRole('link', { name: 'Strategie' }).first().click();

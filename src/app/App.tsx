@@ -6,6 +6,8 @@ import { useProfile } from '../hooks/useData';
 import { useTheme } from '../hooks/useTheme';
 import { t } from '../i18n';
 import { ConceptPage } from '../pages/ConceptPage';
+import { GamePage } from '../pages/GamePage';
+import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
 import { MistakeDetailPage } from '../pages/MistakeDetailPage';
@@ -80,6 +82,8 @@ export function App() {
             <Route path="/allenati" element={<TrainPage profile={profile} />} />
             <Route path="/strategie" element={<StrategiesPage />} />
             <Route path="/strategie/:id" element={<ConceptPage profile={profile} />} />
+            <Route path="/partite" element={<GamesPage />} />
+            <Route path="/partite/:id" element={<GamePage profile={profile} />} />
             <Route path="/memory-dna" element={<MemoryDnaPage />} />
             <Route path="/errori" element={<MistakesPage />} />
             <Route path="/errori/nuovo" element={<MistakeNewPage profile={profile} />} />

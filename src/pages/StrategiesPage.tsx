@@ -43,6 +43,18 @@ export function StrategiesPage() {
         <PageTitle>{t.strategies.title}</PageTitle>
         <p className="mt-1.5 text-lg text-muted">{t.strategies.intro}</p>
       </header>
+      <Link to="/partite" className="block rounded-3xl" data-testid="games-link">
+        <Card className="cm-card-hover flex items-center gap-3 hover:border-accent/50">
+          <span className="rounded-2xl bg-accent-soft p-2.5 text-accent-strong">
+            <Icon name="crown" size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{t.games.libraryLink}</span>
+            <span className="block text-sm text-muted">{t.games.libraryLinkText}</span>
+          </span>
+          <Icon name="arrowRight" />
+        </Card>
+      </Link>
       {CATEGORIES.map((category) => (
         <section key={category} aria-labelledby={`cat-${category}`}>
           <SectionTitle id={`cat-${category}`} className="flex items-center gap-3 after:h-px after:flex-1 after:bg-line">{t.categoriesLong[category]}</SectionTitle>

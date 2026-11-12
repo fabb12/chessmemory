@@ -13,11 +13,14 @@ L'app funziona interamente sul dispositivo: i progressi restano in IndexedDB e t
   - **Ricorda** – l'utente gioca la mossa (tocco, trascinamento o tastiera). Dopo un errore: indizio strategico → indicazione del pezzo → soluzione spiegata, mai subito.
   - **Spiega** – domanda a risposta multipla sul principio, con testi curati nel dataset.
   - **Riconosci** – stessa idea in una posizione diversa; l'esito è registrato separatamente.
-- **Libreria didattica**: 21 concetti e 42 esercizi (aperture, tattica, strategia, calcolo delle varianti), difficoltà 1–5, con alternative accettate esplicite.
+- **Libreria didattica**: 37 concetti e 74 esercizi in cinque aree (aperture e sviluppo, tattica, strategia, calcolo delle varianti, finali), difficoltà 1–5, con alternative accettate esplicite. Le posizioni nuove sono controllate con Stockfish.
+  - Aperture e sviluppo: centro, sviluppo dei pezzi, arrocco, matto dell’imbecille, sviluppo con tempo sulla donna, fianchetto, rotture centrali (…c5, c4), inchiodatura del cavallo (Ag5, Ab4), trucco della forchetta.
+  - Finali: matti di donna, torre e due torri, stallo, regola del quadrato, opposizione, pedone di torre, torre dietro al pedone passato, taglio del re con la torre, manovra di Réti.
+- **Partite famose**: 10 partite complete e commentate (Morphy all’Opera, l’Immortale, la Sempreverde, Legal, Steinitz–von Bardeleben, Réti–Tartakower, la partita del secolo di Fischer, Fischer–Spassky 1972, Deep Blue–Kasparov 1997, Kasparov–Topalov 1999), da scorrere mossa per mossa anche da tastiera, con «che cosa insegna».
 - **Difficoltà adattiva**: livello dichiarato, valutazione iniziale di 5 posizioni, poi il livello sale o scende in base a correttezza e indizi usati (mai in base al tempo).
 - **Ripetizione dilazionata** con `ts-fsrs` (FSRS): una scheda per concetto, cronologia delle revisioni, ripassi di oggi in Home.
 - **Allenamento quotidiano**: ripassi in scadenza + esercizi mirati sulle debolezze + almeno un concetto nuovo, entro un budget indicativo di 5 minuti. Sessione ripristinabile se interrotta.
-- **Memory DNA**: per ciascuna delle quattro aree percentuale di successo osservata, esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
+- **Memory DNA**: per ciascuna delle quattro aree percentuale di successo osservata (cinque aree), esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
 - **I miei errori**: gli errori delle partite reali diventano schede di ripasso personali.
   - **Foto della scacchiera**: si scatta una foto (fotocamera posteriore o galleria), la foto resta accanto all'editor della posizione e si dispongono i pezzi guardandola. La foto viene ridotta e compressa (JPEG, lato massimo 1280 px) e salvata solo sul dispositivo. *Il riconoscimento automatico dei pezzi non c'è: la posizione si ricostruisce a mano.*
   - **Da una partita**: PGN incollato oppure ultime partite pubbliche da Lichess o Chess.com (solo nome utente, nessuna chiave). Il motore analizza le mosse del giocatore e propone gli errori (imprecisione / errore / errore grave, calcolati sul calo delle probabilità di vittoria, con la stessa curva di Lichess).
