@@ -46,68 +46,88 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const [finished, setFinished] = useState<{ record: SessionRecord; levelBefore: Difficulty } | null>(null);
   const [quitOpen, setQuitOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const autoStarted = useRef(false);
+  const [starting, setStarting] = useState(false);
+  /** La richiesta di avvio presente nell'URL è già stata gestita. */
+  const handled = useRef(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const elapsed = useElapsed(active?.startedAt);
 
   const practiceConcept = params.get('concetto');
   const wantsStart = params.get('avvia') === '1' || Boolean(practiceConcept);
 
-  // Avvia l'allenamento richiesto dall'URL (concetto singolo o piano completo).
-  const startRequested = async () => {
-    try {
-      if (practiceConcept) {
-        const concept = findConcept(practiceConcept);
-        const card = concept ? await db.cards.get(concept.id) : undefined;
-        const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
-        if (item) await startSession({ items: [item], estimatedSeconds: 0 });
-      } else if (plan && plan.items.length > 0) {
-        await startSession(plan);
-      }
-    } catch (error) {
-      console.error('Impossibile avviare l\'allenamento', error);
-    } finally {
-      // Qualunque esito: togli i parametri, così non resta il caricamento infinito.
-      setParams({}, { replace: true });
+  const clearRequest = () => setParams({}, { replace: true });
+
+  // Crea la sessione richiesta dall'URL (concetto singolo o piano completo).
+  const createRequested = async () => {
+    if (practiceConcept) {
+      const concept = findConcept(practiceConcept);
+      const card = concept ? await db.cards.get(concept.id) : undefined;
+      const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
+      if (item) await startSession({ items: [item], estimatedSeconds: 0 });
+    } else if (plan && plan.items.length > 0) {
+      await startSession(plan);
     }
   };
 
-  const confirmReplace = async () => {
+  // Esegue l'avvio e, qualunque sia l'esito, toglie la richiesta dall'URL:
+  // così la pagina non può restare bloccata su «Caricamento…».
+  const runStart = async (task: () => Promise<void>) => {
+    setStarting(true);
+    try {
+      await task();
+    } catch (error) {
+      console.error('Impossibile avviare l\'allenamento', error);
+    } finally {
+      setStarting(false);
+      clearRequest();
+    }
+  };
+
+  const confirmReplace = () => {
     setReplaceOpen(false);
-    await finishSession(); // salva i concetti già completati e chiude la sessione attuale
-    await startRequested();
+    void runStart(async () => {
+      await finishSession(); // salva i concetti già completati e chiude la sessione attuale
+      await createRequested();
+    });
   };
 
   const cancelReplace = () => {
     setReplaceOpen(false);
-    setParams({}, { replace: true });
+    clearRequest();
   };
 
   // Avvio automatico dalla Home («Inizia il mio allenamento») o dalla libreria.
   useEffect(() => {
-    if (!wantsStart || autoStarted.current || active === undefined || finished) return;
+    if (!wantsStart) {
+      // Nessuna richiesta pendente: la prossima potrà essere gestita di nuovo.
+      handled.current = false;
+      return;
+    }
+    if (handled.current || active === undefined) return;
+    if (finished) {
+      handled.current = true;
+      clearRequest();
+      return;
+    }
     if (active) {
       // C'è già un allenamento in corso: chiedi se terminarlo prima di iniziarne un altro.
-      autoStarted.current = true;
+      handled.current = true;
       setReplaceOpen(true);
       return;
     }
-    if (practiceConcept) {
-      autoStarted.current = true;
-      void startRequested();
-      return;
+    if (practiceConcept || plan) {
+      handled.current = true;
+      void runStart(createRequested);
     }
-    if (plan) {
-      autoStarted.current = true;
-      if (plan.items.length === 0) {
-        setParams({}, { replace: true });
-        return;
-      }
-      void startSession(plan)
-        .catch((error) => console.error('Impossibile avviare l\'allenamento', error))
-        .finally(() => setParams({}, { replace: true }));
-    }
-  }, [wantsStart, practiceConcept, active, plan, finished, setParams]);
+  }, [wantsStart, practiceConcept, active, plan, finished]);
+
+  // Rete di sicurezza: se dopo qualche secondo la richiesta è ancora pendente
+  // senza che nulla sia in corso, la si scarta e si mostra la pagina normale.
+  useEffect(() => {
+    if (!wantsStart || active || starting || replaceOpen) return;
+    const id = window.setTimeout(clearRequest, 5000);
+    return () => window.clearTimeout(id);
+  }, [wantsStart, active, starting, replaceOpen]);
 
   const complete = async () => {
     const levelBefore = (active?.levelAtStart ?? profile.adaptive.level) as Difficulty;
@@ -146,7 +166,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
     );
   }
 
-  if (active === undefined || (wantsStart && !active)) return <p>{t.app.loading}</p>;
+  if (active === undefined || starting || (wantsStart && !active && !replaceOpen)) return <p>{t.app.loading}</p>;
 
   // ── Concetto appena completato ──
   if (interstitial) {
@@ -235,7 +255,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
           open={replaceOpen}
           title={t.train.replaceTitle}
           confirmLabel={t.train.replaceConfirm}
-          onConfirm={() => void confirmReplace()}
+          onConfirm={confirmReplace}
           onCancel={cancelReplace}
         >
           <p>{t.train.replaceText}</p>

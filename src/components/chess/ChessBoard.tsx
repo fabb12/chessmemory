@@ -4,6 +4,7 @@ import type { PieceSymbol } from 'chess.js';
 import { t } from '../../i18n';
 import type { Side, Uci } from '../../types';
 import { kingSquareInCheck, legalTargets, pieceAt, sideToMove } from '../../utils/chess';
+import { BoardCoordinates } from './BoardCoordinates';
 import { PromotionDialog } from './PromotionDialog';
 
 export interface BoardArrow {
@@ -172,9 +173,6 @@ export function ChessBoard({
     [checkSquare, hintSquare, lastMove, lastMoveTone, selected, targets],
   );
 
-  const files = orientation === 'white' ? FILES : [...FILES].reverse();
-  const ranks = orientation === 'white' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
-
   const options: ChessboardOptions = {
     id: boardId,
     position: fen,
@@ -239,28 +237,9 @@ export function ChessBoard({
       role="group"
       aria-label={t.board.label(t.sideToMove[turn])}
     >
-      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2">
-        <div
-          className="flex flex-col justify-around text-base font-bold leading-none text-ink sm:text-lg"
-          aria-hidden="true"
-          data-testid="board-ranks"
-        >
-          {ranks.map((r) => (
-            <span key={r} className="text-center">{r}</span>
-          ))}
-        </div>
+      <BoardCoordinates orientation={orientation}>
         <Chessboard options={options} />
-        <span />
-        <div
-          className="flex justify-around text-base font-bold uppercase leading-none text-ink sm:text-lg"
-          aria-hidden="true"
-          data-testid="board-files"
-        >
-          {files.map((f) => (
-            <span key={f} className="text-center">{f}</span>
-          ))}
-        </div>
-      </div>
+      </BoardCoordinates>
       {pendingPromotion && (
         <PromotionDialog
           side={turn}
