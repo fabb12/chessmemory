@@ -154,10 +154,11 @@ test.describe('i miei errori', () => {
     await expect(page.getByTestId('detail-played')).toHaveText('Cf6');
   });
 
-  test('profilo: account non configurato e nuove preferenze', async ({ page }) => {
+  test('profilo: account disattivati e nuove preferenze', async ({ page }) => {
     await openApp(page);
     await page.goto('./#/profilo');
-    await expect(page.getByTestId('account-card')).toHaveAttribute('data-status', 'disabled');
+    await expect(page.getByTestId('player-name')).toBeVisible();
+    await expect(page.getByTestId('account-card')).toHaveCount(0);
     await page.getByTestId('player-name').fill('Bianchi');
     await page.getByTestId('player-name').press('Enter');
     await page.getByLabel('Approfondita (più lenta)').click();

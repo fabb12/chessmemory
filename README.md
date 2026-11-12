@@ -67,6 +67,8 @@ Dettagli:
 
 ## Account con Supabase (facoltativo)
 
+> **Al momento gli account sono disattivati** (`ACCOUNTS_ENABLED = false` in `src/services/supabase.ts`): l'app funziona solo in locale, senza accesso, e il Profilo non mostra la sezione Account. Per riattivarli rimettere la costante a `true`.
+
 Senza configurazione l'app funziona come prima, solo in locale, e il Profilo spiega che gli account non sono attivi.
 
 1. Crea un progetto su [supabase.com](https://supabase.com).
