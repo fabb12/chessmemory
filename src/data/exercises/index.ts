@@ -4,6 +4,8 @@ import { OPENING_EXERCISES } from './openings';
 import { TACTIC_EXERCISES } from './tactics';
 import { STRATEGY_EXERCISES } from './strategy';
 import { CALCULATION_EXERCISES } from './calculation';
+import { OPENING_PLAN_EXERCISES } from './openingPlans';
+import { ENDGAME_EXERCISES } from './endgames';
 
 /**
  * Libreria didattica (lingua: italiano).
@@ -12,9 +14,11 @@ import { CALCULATION_EXERCISES } from './calculation';
  */
 export const EXERCISES: readonly Exercise[] = [
   ...OPENING_EXERCISES,
+  ...OPENING_PLAN_EXERCISES,
   ...TACTIC_EXERCISES,
   ...STRATEGY_EXERCISES,
   ...CALCULATION_EXERCISES,
+  ...ENDGAME_EXERCISES,
 ];
 
 export { CONCEPTS };

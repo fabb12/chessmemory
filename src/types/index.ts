@@ -1,9 +1,9 @@
 /** Tipi di dominio condivisi da dataset, logica didattica e persistenza. */
 
-/** Le quattro categorie del profilo Memory DNA. */
-export type Category = 'openings' | 'tactics' | 'strategy' | 'calculation';
+/** Le cinque categorie del profilo Memory DNA. */
+export type Category = 'openings' | 'tactics' | 'strategy' | 'calculation' | 'endgames';
 
-export const CATEGORIES: readonly Category[] = ['openings', 'tactics', 'strategy', 'calculation'];
+export const CATEGORIES: readonly Category[] = ['openings', 'tactics', 'strategy', 'calculation', 'endgames'];
 
 /** Difficoltà didattica (non è un rating Elo). */
 export type Difficulty = 1 | 2 | 3 | 4 | 5;

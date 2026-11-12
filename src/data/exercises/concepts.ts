@@ -68,6 +68,67 @@ export const CONCEPTS: readonly Concept[] = [
     taskPrompt: 'Costruisci un centro di pedoni solido.',
   },
 
+  {
+    id: 'fools-mate',
+    title: "Il matto dell'imbecille: non scoprire il re",
+    category: 'openings',
+    difficulty: 1,
+    summary: 'Spingere i pedoni «f» e «g» in apertura apre la diagonale verso il re: la donna avversaria dà matto subito.',
+    principle:
+      'Sicurezza del re: i pedoni davanti al re lo proteggono. Spingere presto il pedone «f» (e peggio ancora anche il «g») apre la diagonale e8–h5 o e1–h4.',
+    taskPrompt: "Approfitta del re scoperto: dai scacco matto.",
+  },
+  {
+    id: 'develop-with-tempo',
+    title: 'Sviluppare guadagnando tempo sulla donna',
+    category: 'openings',
+    difficulty: 2,
+    summary: 'Se la donna avversaria esce presto al centro, sviluppa un pezzo che la attacchi: lei deve spostarsi, tu sei avanti nello sviluppo.',
+    principle:
+      'Sviluppo con tempo: una mossa che sviluppa un pezzo e insieme attacca qualcosa vale doppio, perché costringe l’avversario a perdere una mossa.',
+    taskPrompt: 'Sviluppa un pezzo attaccando la donna avversaria.',
+  },
+  {
+    id: 'fianchetto',
+    title: "L'alfiere in fianchetto",
+    category: 'openings',
+    difficulty: 2,
+    summary: 'Dopo la spinta del pedone «g» l’alfiere va in g2 (o g7): da lì controlla la grande diagonale e protegge il re arroccato.',
+    principle:
+      'Fianchetto: un alfiere sulla grande diagonale (a1–h8 o h1–a8) agisce sul centro da lontano ed è un ottimo difensore del re arroccato.',
+    taskPrompt: "Completa il fianchetto: porta l'alfiere sulla grande diagonale.",
+  },
+  {
+    id: 'central-break',
+    title: 'Attaccare il centro avversario con un pedone',
+    category: 'openings',
+    difficulty: 3,
+    summary: 'Un centro di pedoni avversario si attacca alla base con una spinta laterale, come …c5 contro d4 o c4 contro d5.',
+    principle:
+      'Rottura centrale: se l’avversario costruisce un centro di pedoni, lo si colpisce alla base con un pedone laterale (c o f) per indebolirlo e aprire linee.',
+    taskPrompt: 'Attacca il centro avversario con un pedone laterale.',
+  },
+  {
+    id: 'pin-knight',
+    title: 'Inchiodare il cavallo che difende il centro',
+    category: 'openings',
+    difficulty: 3,
+    summary: 'Un alfiere in g5 o b4 inchioda il cavallo davanti a donna o re: il cavallo non difende più bene il centro.',
+    principle:
+      'Sviluppo con pressione: un alfiere che inchioda un cavallo sviluppa un pezzo e ostacola il controllo del centro da parte dell’avversario.',
+    taskPrompt: "Sviluppa l'alfiere inchiodando un cavallo.",
+  },
+  {
+    id: 'fork-trick',
+    title: 'Il trucco della forchetta di pedone',
+    category: 'openings',
+    difficulty: 4,
+    summary: 'Si dà un pezzo per un pedone centrale e lo si riprende subito con una forchetta di pedone su due pezzi.',
+    principle:
+      'Calcolo in apertura: un pedone che avanza attaccando due pezzi insieme fa una forchetta; uno dei due va perso, e il centro passa a chi l’ha giocata.',
+    taskPrompt: 'Riprendi il materiale con una forchetta di pedone.',
+  },
+
   // ───────────── Tattica ─────────────
   {
     id: 'mate-f7',
@@ -222,5 +283,107 @@ export const CONCEPTS: readonly Concept[] = [
     principle:
       "Un'inchiodatura sulla donna non è assoluta: il pezzo può muoversi se le minacce che crea valgono più della donna. Va calcolata ogni risposta.",
     taskPrompt: 'Calcola la combinazione vincente.',
+  },
+
+  // ───────────── Finali ─────────────
+  {
+    id: 'queen-mate',
+    title: 'Matto con donna e re',
+    category: 'endgames',
+    difficulty: 1,
+    summary: 'Con la donna difesa dal proprio re si dà matto al re avversario spinto sul bordo.',
+    principle:
+      'Collaborazione re–donna: la donna da sola non basta, ma se si appoggia accanto al re avversario ed è difesa dal proprio re, il matto è sicuro.',
+    taskPrompt: 'Dai scacco matto con la donna.',
+  },
+  {
+    id: 'rook-mate',
+    title: 'Matto con torre e re',
+    category: 'endgames',
+    difficulty: 1,
+    summary: 'Re contro re in opposizione: la torre dà scacco sulla traversa del bordo e il re avversario non ha case.',
+    principle:
+      'Il re attaccante sta di fronte al re avversario (opposizione) e gli toglie le tre case davanti; la torre dà scacco lungo il bordo.',
+    taskPrompt: 'Dai scacco matto con la torre.',
+  },
+  {
+    id: 'two-rooks-mate',
+    title: 'Matto a scala con due torri',
+    category: 'endgames',
+    difficulty: 2,
+    summary: 'Le due torri si danno il cambio: una taglia una traversa, l’altra dà scacco su quella successiva.',
+    principle:
+      'Matto a scala: una torre chiude la fuga del re su una traversa, l’altra dà scacco su quella del bordo. Il proprio re non serve.',
+    taskPrompt: 'Dai scacco matto con le due torri.',
+  },
+  {
+    id: 'stalemate-trap',
+    title: 'Attenzione allo stallo',
+    category: 'endgames',
+    difficulty: 2,
+    summary: 'Se il re avversario non ha mosse ma non è sotto scacco, la partita è patta. Prima di muovere controlla che abbia ancora una casa o che sia matto.',
+    principle:
+      'Stallo: se chi deve muovere non ha mosse legali e il re non è sotto scacco, la partita finisce patta. Con tanto vantaggio, l’errore più comune è togliere tutte le case senza dare scacco.',
+    taskPrompt: 'Vinci subito, senza dare stallo.',
+  },
+  {
+    id: 'square-rule',
+    title: 'La regola del quadrato',
+    category: 'endgames',
+    difficulty: 2,
+    summary: 'Il re ferma un pedone passato solo se riesce a entrare nel «quadrato» che va dal pedone alla casa di promozione.',
+    principle:
+      'Regola del quadrato: si disegna il quadrato che ha come lato la distanza tra pedone e casa di promozione. Se il re vi entra con la sua mossa, raggiunge il pedone in tempo.',
+    taskPrompt: 'Ferma il pedone passato avversario con il re.',
+  },
+  {
+    id: 'opposition',
+    title: "L'opposizione dei re",
+    category: 'endgames',
+    difficulty: 3,
+    summary: 'Re di fronte con una casa in mezzo: chi deve muovere deve cedere il passo. Nei finali di pedoni spesso decide tutto.',
+    principle:
+      'Opposizione: quando i due re stanno sulla stessa colonna (o traversa) con una sola casa in mezzo, chi ha appena mosso «ha l’opposizione» e costringe l’altro re a spostarsi.',
+    taskPrompt: "Prendi l'opposizione con il re.",
+  },
+  {
+    id: 'rook-pawn-corner',
+    title: "Pedone di torre: il re va nell'angolo",
+    category: 'endgames',
+    difficulty: 3,
+    summary: 'Contro il solo pedone di torre (colonna «a» o «h») il re che raggiunge l’angolo di promozione non può più essere scacciato: è patta.',
+    principle:
+      'Pedone di torre: il re difensore che arriva davanti al pedone, nell’angolo, non può essere spinto via perché il re attaccante finirebbe per dargli stallo.',
+    taskPrompt: "Corri con il re verso l'angolo di promozione.",
+  },
+  {
+    id: 'rook-behind-passed',
+    title: 'La torre dietro al pedone passato',
+    category: 'endgames',
+    difficulty: 3,
+    summary: 'Nei finali di torre la torre si mette dietro al pedone passato: più il pedone avanza, più la torre diventa forte.',
+    principle:
+      'Regola di Tarrasch: la torre va dietro al pedone passato, il proprio o quello avversario. Davanti al pedone diventa passiva, dietro lo spinge a ogni passo.',
+    taskPrompt: 'Metti la torre nel posto giusto rispetto al pedone passato.',
+  },
+  {
+    id: 'cut-off-king',
+    title: 'Tagliare fuori il re con la torre',
+    category: 'endgames',
+    difficulty: 4,
+    summary: 'In un finale di torre e pedone, la torre su una colonna tiene il re avversario lontano dal pedone.',
+    principle:
+      'Taglio del re: una torre su una colonna (o traversa) è un muro che il re non può attraversare. Più colonne separano il re difensore dal pedone, più facile è vincere.',
+    taskPrompt: 'Usa la torre per tenere lontano il re avversario.',
+  },
+  {
+    id: 'reti-maneuver',
+    title: 'La manovra di Réti: due obiettivi con una mossa',
+    category: 'endgames',
+    difficulty: 5,
+    summary: 'Il re si muove in diagonale per inseguire il pedone avversario e, insieme, avvicinarsi al proprio: la diagonale è lunga quanto la colonna.',
+    principle:
+      'Geometria del re: in diagonale il re percorre la stessa distanza che in linea retta, ma può avvicinarsi a due obiettivi insieme. È lo studio di Richard Réti (1921).',
+    taskPrompt: 'Trova la mossa di re che salva la partita.',
   },
 ];

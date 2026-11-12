@@ -9,6 +9,8 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '/', label: t.nav.home, icon: 'home', end: true },
   { to: '/allenati', label: t.nav.train, icon: 'train' },
   { to: '/strategie', label: t.nav.strategies, icon: 'book' },
+  { to: '/analizza', label: t.nav.analyze, icon: 'camera' },
+  { to: '/partite', label: t.nav.games, icon: 'crown' },
   { to: '/errori', label: t.nav.mistakes, icon: 'flag' },
   { to: '/memory-dna', label: t.nav.dna, icon: 'dna' },
   { to: '/profilo', label: t.nav.profile, icon: 'user' },
@@ -94,24 +96,24 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
           aria-label={t.nav.label}
           className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-surface/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_-12px_rgb(10_20_48/0.25)] backdrop-blur-xl backdrop-saturate-150 md:hidden"
         >
-          <ul className="mx-auto grid max-w-xl grid-cols-6">
+          <ul className="mx-auto grid max-w-3xl grid-cols-8">
             {NAV.map((item) => (
               <li key={item.to}>
                 <NavLink
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) =>
-                    `flex min-h-16 flex-col items-center justify-center gap-0.5 px-0.5 text-center text-[0.64rem] font-semibold leading-tight ${
+                    `flex min-h-16 flex-col items-center justify-center gap-0.5 px-0 text-center text-[0.6rem] font-semibold leading-tight ${
                       isActive ? 'text-accent-strong' : 'text-muted'
                     }`
                   }
                 >
                   {({ isActive }) => (
                     <>
-                      <span className={`rounded-full px-2.5 py-1 transition-all ${isActive ? 'cm-btn-primary bg-accent text-on-accent' : ''}`}>
+                      <span className={`rounded-full px-2 py-1 transition-all ${isActive ? 'cm-btn-primary bg-accent text-on-accent' : ''}`}>
                         <Icon name={item.icon} size={22} />
                       </span>
-                      <span className={isActive ? 'text-fg' : ''}>{item.label}</span>
+                      <span className={`max-[429px]:sr-only ${isActive ? 'text-fg' : ''}`}>{item.label}</span>
                     </>
                   )}
                 </NavLink>

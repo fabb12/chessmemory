@@ -6,6 +6,7 @@ import { describeMove, formatLine } from '../../utils/notation';
 import { ChessBoard, type BoardArrow } from '../chess/ChessBoard';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { SpeakButton } from '../ui/SpeakButton';
 
 interface ObservePhaseProps {
   exercise: Exercise;
@@ -88,7 +89,14 @@ export function ObservePhase({ exercise, concept, orientation, onNext }: Observe
       </div>
 
       <div className="animate-rise">
-        <p className="text-sm text-muted">{t.observe.intro}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm text-muted">{t.observe.intro}</p>
+          <SpeakButton
+            text={facts.map((f) => `${f.label}. ${f.text}`).join(' ') + (moves.length > 1 ? ` ${t.observe.line}. ${formatLine(moves)}` : '')}
+            auto={Boolean(onNext)}
+            delay={900}
+          />
+        </div>
         <dl className="mt-3 space-y-3">
           {facts.map((fact) => (
             <div key={fact.label} className="cm-card rounded-2xl border border-l-4 border-line border-l-accent bg-surface p-3.5">

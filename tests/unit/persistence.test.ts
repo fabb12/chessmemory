@@ -183,7 +183,7 @@ describe('statistiche su dati reali', () => {
 
   it('senza risposte non inventa alcun dato', () => {
     const stats = computeCategoryStats([], [], T0);
-    expect(stats).toHaveLength(4);
+    expect(stats).toHaveLength(5);
     expect(stats.every((s) => s.successRate === null && s.answers === 0 && s.trend.length === 0)).toBe(true);
     expect(computeInsight(stats, new Map())).toEqual({ kind: 'empty' });
   });
