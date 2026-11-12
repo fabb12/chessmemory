@@ -22,7 +22,7 @@ export default defineConfig(({ command, isPreview }) => {
   return {
     base,
     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-    // Bundle unico: semplifica il precache offline (circa 200 kB gzip).
+    // Bundle principale unico (circa 200 kB gzip); la libreria Supabase è caricata a parte, solo se configurata.
     build: { chunkSizeWarningLimit: 800 },
     plugins: [
       react(),
@@ -56,8 +56,10 @@ export default defineConfig(({ command, isPreview }) => {
           ],
         },
         workbox: {
-          // Tutta l'app (shell, dataset, pezzi) è nel bundle: precache completo.
-          globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
+          // Tutta l'app (shell, dataset, pezzi) è nel bundle: precache completo,
+          // compreso il motore Stockfish (WebAssembly, circa 1,9 MB) per l'analisi offline.
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2,wasm}'],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
           navigateFallback: 'index.html',
           cleanupOutdatedCaches: true,
         },

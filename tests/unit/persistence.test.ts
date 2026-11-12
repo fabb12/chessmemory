@@ -113,7 +113,7 @@ describe('persistenza dei progressi', () => {
       const profile = await reopened.profile.get(PROFILE_ID);
       expect(profile).toMatchObject({ placementDone: true, declaredLevel: 'beginner' });
       expect(profile!.adaptive.level).toBe(2);
-      expect(profile!.settings).toEqual({ theme: 'dark', boardOrientation: 'black' });
+      expect(profile!.settings).toEqual({ theme: 'dark', boardOrientation: 'black', analysisDepth: 'quick', playerName: '' });
       expect(await reopened.cards.count()).toBe(2);
       expect(await reopened.attempts.count()).toBe(7); // 1 valutazione iniziale + 6 risposte
       expect((await reopened.sessions.toArray())[0]!.id).toBe(record!.id);
@@ -193,7 +193,7 @@ describe('esportazione e importazione', () => {
   it('esporta e reimporta gli stessi dati in un database vuoto', async () => {
     await trainOnce();
     const backup = await exportBackup(database, T0 + DAY);
-    expect(backup).toMatchObject({ app: 'chessmemory-ai', version: 1 });
+    expect(backup).toMatchObject({ app: 'chessmemory-ai', version: 2 });
 
     const data = parseBackupText(JSON.stringify(backup));
     const otherName = `${name}-import`;

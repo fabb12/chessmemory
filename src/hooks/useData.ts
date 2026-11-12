@@ -34,3 +34,16 @@ export function useNow(intervalMs = 60_000): number {
   }, [intervalMs]);
   return now;
 }
+
+export function useMistakes() {
+  return useLiveQuery(() => db.mistakes.orderBy('createdAt').reverse().toArray(), []);
+}
+
+/** `null` se l'errore non esiste. */
+export function useMistake(id: string | undefined) {
+  return useLiveQuery(async () => (id ? ((await db.mistakes.get(id)) ?? null) : null), [id]);
+}
+
+export function usePhoto(id: string | null | undefined) {
+  return useLiveQuery(async () => (id ? ((await db.photos.get(id)) ?? null) : null), [id]);
+}

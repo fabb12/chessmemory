@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { AccountCard } from '../components/account/AccountCard';
 import { Button } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Icon } from '../components/ui/Icon';
 import type { Profile } from '../db/schema';
+import { MAX_PLAYER_NAME } from '../features/account/cloud';
+import type { AnalysisDepth } from '../features/engine/engine';
 import { useSessions } from '../hooks/useData';
 import { dateTimeFormatter, t } from '../i18n';
 import {
@@ -20,6 +23,7 @@ import type { BoardOrientationPreference, ThemePreference } from '../types';
 
 const THEMES: ThemePreference[] = ['system', 'light', 'dark'];
 const ORIENTATIONS: BoardOrientationPreference[] = ['auto', 'white', 'black'];
+const DEPTHS: AnalysisDepth[] = ['quick', 'deep'];
 
 function Segmented<T extends string>({
   legend,
@@ -71,6 +75,14 @@ export function ProfilePage({ profile }: { profile: Profile }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetChecked, setResetChecked] = useState(false);
   const [persisted, setPersisted] = useState<boolean | null>(null);
+  const [playerName, setPlayerName] = useState(profile.settings.playerName);
+
+  // Le preferenze possono cambiare anche dall'account (sincronizzazione).
+  useEffect(() => setPlayerName(profile.settings.playerName), [profile.settings.playerName]);
+  const savePlayerName = () => {
+    const value = playerName.trim().slice(0, MAX_PLAYER_NAME);
+    if (value !== profile.settings.playerName) void updateSettings({ playerName: value });
+  };
 
   useEffect(() => {
     void navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(null));
@@ -129,6 +141,8 @@ export function ProfilePage({ profile }: { profile: Profile }) {
     <div className="mx-auto max-w-2xl space-y-4">
       <PageTitle>{t.profile.title}</PageTitle>
 
+      <AccountCard />
+
       <Card>
         <SectionTitle>{t.profile.levelSection}</SectionTitle>
         <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
@@ -167,6 +181,37 @@ export function ProfilePage({ profile }: { profile: Profile }) {
             labels={t.profile.orientations}
             onChange={(boardOrientation) => void updateSettings({ boardOrientation })}
           />
+          <Segmented
+            legend={t.profile.analysisDepth}
+            name="analysisDepth"
+            value={profile.settings.analysisDepth}
+            options={DEPTHS}
+            labels={t.profile.analysisDepths}
+            onChange={(analysisDepth) => void updateSettings({ analysisDepth })}
+          />
+          <div>
+            <label htmlFor="player-name" className="font-semibold">
+              {t.profile.playerName}
+            </label>
+            <input
+              id="player-name"
+              value={playerName}
+              maxLength={MAX_PLAYER_NAME}
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(e) => setPlayerName(e.target.value)}
+              onBlur={savePlayerName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') savePlayerName();
+              }}
+              aria-describedby="player-name-help"
+              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3"
+              data-testid="player-name"
+            />
+            <p id="player-name-help" className="mt-1 text-sm text-muted">
+              {t.profile.playerNameHelp}
+            </p>
+          </div>
         </div>
       </Card>
 
