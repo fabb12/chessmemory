@@ -47,34 +47,54 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const [quitOpen, setQuitOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const autoStarted = useRef(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const elapsed = useElapsed(active?.startedAt);
 
   const practiceConcept = params.get('concetto');
   const wantsStart = params.get('avvia') === '1' || Boolean(practiceConcept);
 
+  // Avvia l'allenamento richiesto dall'URL (concetto singolo o piano completo).
+  const startRequested = async () => {
+    try {
+      if (practiceConcept) {
+        const concept = findConcept(practiceConcept);
+        const card = concept ? await db.cards.get(concept.id) : undefined;
+        const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
+        if (item) await startSession({ items: [item], estimatedSeconds: 0 });
+      } else if (plan && plan.items.length > 0) {
+        await startSession(plan);
+      }
+    } catch (error) {
+      console.error('Impossibile avviare l\'allenamento', error);
+    } finally {
+      // Qualunque esito: togli i parametri, così non resta il caricamento infinito.
+      setParams({}, { replace: true });
+    }
+  };
+
+  const confirmReplace = async () => {
+    setReplaceOpen(false);
+    await finishSession(); // salva i concetti già completati e chiude la sessione attuale
+    await startRequested();
+  };
+
+  const cancelReplace = () => {
+    setReplaceOpen(false);
+    setParams({}, { replace: true });
+  };
+
   // Avvio automatico dalla Home («Inizia il mio allenamento») o dalla libreria.
   useEffect(() => {
     if (!wantsStart || autoStarted.current || active === undefined || finished) return;
     if (active) {
+      // C'è già un allenamento in corso: chiedi se terminarlo prima di iniziarne un altro.
       autoStarted.current = true;
-      setParams({}, { replace: true });
+      setReplaceOpen(true);
       return;
     }
     if (practiceConcept) {
-      const concept = findConcept(practiceConcept);
       autoStarted.current = true;
-      void (async () => {
-        try {
-          const card = concept ? await db.cards.get(concept.id) : undefined;
-          const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
-          if (item) await startSession({ items: [item], estimatedSeconds: 0 });
-        } catch (error) {
-          console.error('Impossibile avviare l\'allenamento', error);
-        } finally {
-          // Qualunque esito: togli i parametri, così non resta il caricamento infinito.
-          setParams({}, { replace: true });
-        }
-      })();
+      void startRequested();
       return;
     }
     if (plan) {
@@ -210,6 +230,16 @@ export function TrainPage({ profile }: { profile: Profile }) {
           orientationPref={profile.settings.boardOrientation}
           onComplete={(r) => void handleConceptComplete(r)}
         />
+
+        <ConfirmDialog
+          open={replaceOpen}
+          title={t.train.replaceTitle}
+          confirmLabel={t.train.replaceConfirm}
+          onConfirm={() => void confirmReplace()}
+          onCancel={cancelReplace}
+        >
+          <p>{t.train.replaceText}</p>
+        </ConfirmDialog>
 
         <ConfirmDialog
           open={quitOpen}
