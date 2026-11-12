@@ -28,40 +28,44 @@ export function HomePage({ profile }: { profile: Profile }) {
   const minutes = plan ? Math.max(1, Math.round(plan.estimatedSeconds / 60)) : 5;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <header>
+    <div className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
+      <header className="animate-rise">
         <PageTitle>{t.home.greeting(new Date(now).getHours())}</PageTitle>
-        <p className="mt-1 text-muted">{t.home.subtitle}</p>
+        <p className="mt-1.5 text-lg text-muted">{t.home.subtitle}</p>
       </header>
 
-      <Card className="border-accent/40 bg-accent-soft" data-testid="daily-card">
+      <Card className="cm-hero animate-rise p-6 sm:p-9" data-testid="daily-card">
         {hasActive && active ? (
           <>
-            <h2 className="font-display text-2xl font-semibold">{t.home.dailyTitle}</h2>
-            <p className="mt-1">{t.home.resumeText(active.results.length, active.items.length)}</p>
-            <Link to="/allenati" className={`${buttonClass('primary', 'lg', true)} mt-4`} data-testid="resume-training">
+            <h2 className="font-display text-3xl font-semibold sm:text-4xl">{t.home.dailyTitle}</h2>
+            <p className="mt-2 text-lg text-white/85">{t.home.resumeText(active.results.length, active.items.length)}</p>
+            <Link to="/allenati" className={`${buttonClass('primary', 'lg')} mt-6 w-full sm:w-auto sm:px-10`} data-testid="resume-training">
               <Icon name="play" />
               {t.home.resume}
             </Link>
           </>
         ) : (
           <>
-            <h2 className="flex items-center gap-2 font-display text-xl font-semibold">
-              {doneToday && <Icon name="check" className="text-ok" />}
+            <h2 className="flex items-center gap-3 font-display text-3xl font-semibold sm:text-4xl">
+              {doneToday && (
+                <span className="flex size-10 items-center justify-center rounded-full bg-gold/20 text-gold">
+                  <Icon name="check" size={24} />
+                </span>
+              )}
               {doneToday ? t.home.dailyDone : t.home.dailyTitle}
             </h2>
-            <p className="mt-1">
+            <p className="mt-2 max-w-2xl text-lg text-white/85">
               {doneToday ? t.home.dailyDoneText : plan ? t.home.planLine(reviews, targeted, fresh) : t.app.loading}
             </p>
             {!doneToday && plan && (
-              <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-                <Icon name="clock" size={16} />
+              <p className="mt-4 flex w-fit items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm font-medium text-white/90 backdrop-blur">
+                <Icon name="clock" size={16} className="text-gold" />
                 {t.home.minutes(minutes)}
               </p>
             )}
             <Link
               to="/allenati?avvia=1"
-              className={`${buttonClass(doneToday ? 'secondary' : 'primary', 'lg', true)} mt-4`}
+              className={`${buttonClass('primary', 'lg')} mt-6 flex w-full sm:inline-flex sm:w-auto sm:px-10`}
               data-testid="start-training"
             >
               <Icon name="train" />
@@ -71,40 +75,48 @@ export function HomePage({ profile }: { profile: Profile }) {
         )}
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card data-testid="stat-level">
-          <p className="flex items-center gap-1.5 text-sm text-muted">
-            <Icon name="sparkle" size={16} />
+      <div className="grid animate-rise grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <Card className="cm-card-hover" data-testid="stat-level">
+          <p className="flex items-center gap-2.5 text-sm font-medium text-muted">
+            <span className="cm-chip size-8 shrink-0">
+              <Icon name="sparkle" size={17} />
+            </span>
             {t.home.currentLevel}
           </p>
-          <p className="mt-1 font-display text-2xl font-semibold">{t.level.label(level)}</p>
+          <p className="mt-3 font-display text-3xl font-semibold">{t.level.label(level)}</p>
           <p className="text-sm text-muted">{t.level.names[level]}</p>
         </Card>
-        <Card data-testid="stat-due">
-          <p className="flex items-center gap-1.5 text-sm text-muted">
-            <Icon name="calendar" size={16} />
+        <Card className="cm-card-hover" data-testid="stat-due">
+          <p className="flex items-center gap-2.5 text-sm font-medium text-muted">
+            <span className="cm-chip size-8 shrink-0">
+              <Icon name="calendar" size={17} />
+            </span>
             {t.home.dueToday}
           </p>
-          <p className="mt-1 font-display text-2xl font-semibold tabular-nums" data-testid="due-count">
+          <p className="mt-3 font-display text-3xl font-semibold tabular-nums" data-testid="due-count">
             {dueCount}
           </p>
         </Card>
-        <Card data-testid="stat-streak">
-          <p className="flex items-center gap-1.5 text-sm text-muted">
-            <Icon name="flame" size={16} />
+        <Card className="cm-card-hover" data-testid="stat-streak">
+          <p className="flex items-center gap-2.5 text-sm font-medium text-muted">
+            <span className="cm-chip size-8 shrink-0 bg-wood-light text-wood">
+              <Icon name="flame" size={17} />
+            </span>
             {t.home.streak}
           </p>
-          <p className="mt-1 font-display text-2xl font-semibold tabular-nums" data-testid="streak-count">
+          <p className="mt-3 font-display text-3xl font-semibold tabular-nums" data-testid="streak-count">
             {t.home.streakDays(streak)}
           </p>
           {profile.streak.best > 0 && <p className="text-sm text-muted">{t.home.streakBest(profile.streak.best)}</p>}
         </Card>
-        <Card data-testid="stat-category">
-          <p className="flex items-center gap-1.5 text-sm text-muted">
-            <Icon name="book" size={16} />
+        <Card className="cm-card-hover" data-testid="stat-category">
+          <p className="flex items-center gap-2.5 text-sm font-medium text-muted">
+            <span className="cm-chip size-8 shrink-0">
+              <Icon name="book" size={17} />
+            </span>
             {t.home.lastCategory}
           </p>
-          <p className="mt-1 font-display text-xl font-semibold" data-testid="last-category">
+          <p className="mt-3 font-display text-2xl font-semibold" data-testid="last-category">
             {profile.lastCategory ? t.categories[profile.lastCategory] : t.home.none}
           </p>
         </Card>

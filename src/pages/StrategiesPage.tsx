@@ -38,19 +38,19 @@ export function StrategiesPage() {
   const cardMap = new Map((cards ?? []).map((c) => [c.conceptId, c]));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <header>
         <PageTitle>{t.strategies.title}</PageTitle>
-        <p className="mt-1 text-muted">{t.strategies.intro}</p>
+        <p className="mt-1.5 text-lg text-muted">{t.strategies.intro}</p>
       </header>
       {CATEGORIES.map((category) => (
         <section key={category} aria-labelledby={`cat-${category}`}>
-          <SectionTitle id={`cat-${category}`}>{t.categoriesLong[category]}</SectionTitle>
-          <ul className="mt-2 grid gap-2 md:grid-cols-2">
+          <SectionTitle id={`cat-${category}`} className="flex items-center gap-3 after:h-px after:flex-1 after:bg-line">{t.categoriesLong[category]}</SectionTitle>
+          <ul className="mt-3 grid gap-3 md:grid-cols-2">
             {conceptsByCategory(category).map((concept) => (
               <li key={concept.id}>
-                <Link to={`/strategie/${concept.id}`} className="block rounded-2xl" data-testid={`concept-link-${concept.id}`}>
-                  <Card className="h-full transition-colors hover:border-accent/60">
+                <Link to={`/strategie/${concept.id}`} className="block h-full rounded-3xl" data-testid={`concept-link-${concept.id}`}>
+                  <Card className="cm-card-hover h-full hover:border-accent/50">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold">{concept.title}</h3>
                       <StatusBadge status={conceptStatus(cardMap.get(concept.id), now)} />

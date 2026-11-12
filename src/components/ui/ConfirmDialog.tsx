@@ -48,7 +48,7 @@ export function ConfirmDialog({
         e.preventDefault();
         onCancel();
       }}
-      className="m-auto w-[min(92vw,26rem)] rounded-2xl border border-line bg-surface p-5 text-fg shadow-2xl backdrop:bg-black/50"
+      className="m-auto w-[min(92vw,26rem)] rounded-3xl border border-line bg-surface p-6 text-fg shadow-2xl backdrop:bg-[#060b16]/60 backdrop:backdrop-blur-sm"
     >
       {open && (
         <>

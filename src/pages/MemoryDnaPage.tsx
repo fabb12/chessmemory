@@ -43,18 +43,20 @@ export function MemoryDnaPage() {
   const targeted = plan?.items.filter((i) => i.kind !== 'new').length ?? 0;
 
   return (
-    <div className="space-y-4">
-      <header>
+    <div className="space-y-5 sm:space-y-6">
+      <header className="animate-rise">
         <PageTitle>{t.dna.title}</PageTitle>
-        <p className="mt-1 text-muted">{t.dna.intro}</p>
+        <p className="mt-1.5 text-lg text-muted">{t.dna.intro}</p>
       </header>
 
-      <Card className="border-accent/40 bg-accent-soft" data-testid="dna-insight">
-        <h2 className="flex items-center gap-2 font-semibold">
-          <Icon name="target" />
+      <Card className="cm-hero animate-rise sm:p-8" data-testid="dna-insight">
+        <h2 className="flex items-center gap-3 font-display text-2xl font-semibold">
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-white/10 text-gold ring-1 ring-white/15">
+            <Icon name="target" size={22} />
+          </span>
           {t.dna.insightTitle}
         </h2>
-        <p className="mt-1">{insightText(view.insight, targeted)}</p>
+        <p className="mt-3 max-w-3xl text-lg text-white/85">{insightText(view.insight, targeted)}</p>
       </Card>
 
       <ErrorHeatmap attempts={attempts ?? []} />

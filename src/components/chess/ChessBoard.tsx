@@ -28,9 +28,9 @@ export interface ChessBoardProps {
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
-const ARROW_COLORS = { teach: '#1a73d9', bad: '#b3402f' } as const;
-const LIGHT = '#e3f0fc';
-const DARK = '#5b9bd8';
+const ARROW_COLORS = { teach: '#2557e9', bad: '#b3402f' } as const;
+const LIGHT = '#e9edf5';
+const DARK = '#7389ad';
 
 const TONE_BG = {
   neutral: 'rgba(246, 214, 92, 0.55)',
@@ -165,7 +165,7 @@ export function ChessBoard({
         );
       }
       if (layers.length > 0) style.backgroundImage = layers.join(', ');
-      if (square === selected) style.boxShadow = 'inset 0 0 0 4px rgba(26,115,217,0.95)';
+      if (square === selected) style.boxShadow = 'inset 0 0 0 4px rgba(37,87,233,0.95)';
       else if (square === hintSquare) style.boxShadow = 'inset 0 0 0 4px #e0a100, inset 0 0 0 7px rgba(255,255,255,0.7)';
       return style;
     },
@@ -182,9 +182,13 @@ export function ChessBoard({
     animationDurationInMs: 260,
     lightSquareStyle: { backgroundColor: LIGHT },
     darkSquareStyle: { backgroundColor: DARK },
-    lightSquareNotationStyle: { color: '#2f5f94', fontWeight: 600 },
-    darkSquareNotationStyle: { color: '#eaf4ff', fontWeight: 600 },
-    boardStyle: { borderRadius: 14, overflow: 'hidden', boxShadow: '0 8px 28px rgb(0 0 0 / 0.25), 0 0 0 6px #2f6cae' },
+    lightSquareNotationStyle: { color: '#4a5f82', fontWeight: 600 },
+    darkSquareNotationStyle: { color: '#f1f4fa', fontWeight: 600 },
+    boardStyle: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      boxShadow: '0 0 0 6px #0f1d42, 0 0 0 7px rgba(227,181,83,0.55), 0 24px 48px -12px rgb(6 11 22 / 0.55)',
+    },
     arrows: (arrows ?? []).map((a) => ({
       startSquare: a.from,
       endSquare: a.to,
