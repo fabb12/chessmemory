@@ -28,7 +28,7 @@ export default defineConfig(({ command, isPreview }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon.png'],
         manifest: {
           name: 'ChessMemoryBen',
