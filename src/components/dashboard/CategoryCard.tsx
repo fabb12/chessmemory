@@ -12,12 +12,12 @@ export function CategoryCard({ stats }: { stats: CategoryStats }) {
     { label: t.dna.toReview, value: String(stats.toReview) },
   ];
   return (
-    <Card data-testid={`dna-${stats.category}`}>
-      <h2 className="font-display text-lg font-semibold">{t.categoriesLong[stats.category]}</h2>
+    <Card className="cm-card-hover" data-testid={`dna-${stats.category}`}>
+      <h2 className="font-display text-xl font-semibold">{t.categoriesLong[stats.category]}</h2>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-muted">{t.dna.success}</p>
-          <p className="font-display text-4xl font-semibold tabular-nums leading-none" data-testid="success-rate">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{t.dna.success}</p>
+          <p className="mt-1 font-display text-5xl font-semibold tabular-nums leading-none tracking-tight" data-testid="success-rate">
             {rate === null ? '—' : formatPercent(rate)}
           </p>
           {rate === null && <p className="mt-1 text-sm text-muted">{t.dna.noData}</p>}
@@ -37,17 +37,17 @@ export function CategoryCard({ stats }: { stats: CategoryStats }) {
         aria-valuenow={rate === null ? 0 : Math.round(rate * 100)}
         aria-valuetext={rate === null ? t.dna.noData : formatPercent(rate)}
       >
-        <div className="h-full rounded-full bg-accent" style={{ width: `${rate === null ? 0 : Math.round(rate * 100)}%` }} />
+        <div className="cm-bar h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${rate === null ? 0 : Math.round(rate * 100)}%` }} />
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      <dl className="mt-5 grid grid-cols-2 gap-2 text-sm">
         {rows.map((row) => (
-          <div key={row.label}>
+          <div key={row.label} className="rounded-2xl border border-line/70 bg-surface-2/60 px-3 py-2">
             <dt className="text-muted">{row.label}</dt>
-            <dd className="text-base font-semibold tabular-nums">{row.value}</dd>
+            <dd className="text-lg font-semibold tabular-nums">{row.value}</dd>
           </div>
         ))}
       </dl>
-      <h3 className="mt-4 text-sm font-semibold">{t.dna.trend}</h3>
+      <h3 className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{t.dna.trend}</h3>
       <div className="mt-1">
         <TrendChart points={stats.trend} label={t.categoriesLong[stats.category]} />
       </div>

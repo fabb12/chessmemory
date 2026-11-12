@@ -42,7 +42,7 @@ export function SessionSummary({ session, previous, streak, levelBefore, levelAf
   return (
     <div className="mx-auto max-w-2xl space-y-4" data-testid="session-summary">
       <header className="animate-pop text-center">
-        <span className="mx-auto mb-2 flex size-14 items-center justify-center rounded-full bg-ok-soft text-ok">
+        <span className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-ok-soft text-ok shadow-[0_0_0_8px_color-mix(in_srgb,var(--ok)_12%,transparent)]">
           <Icon name="check" size={30} />
         </span>
         <PageTitle>{t.summary.title}</PageTitle>
@@ -54,8 +54,8 @@ export function SessionSummary({ session, previous, streak, levelBefore, levelAf
       <dl className="grid grid-cols-2 gap-3">
         {stats.map((s) => (
           <Card key={s.id} data-testid={`summary-${s.id}`}>
-            <dt className="text-sm text-muted">{s.label}</dt>
-            <dd className="mt-1 font-display text-2xl font-semibold tabular-nums">{s.value}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{s.label}</dt>
+            <dd className="mt-1 font-display text-3xl font-semibold tabular-nums">{s.value}</dd>
           </Card>
         ))}
       </dl>
@@ -84,7 +84,7 @@ export function SessionSummary({ session, previous, streak, levelBefore, levelAf
                 <span className="block font-medium">{findConcept(item.conceptId)?.title ?? item.conceptId}</span>
                 <span className="text-sm text-muted">{t.train.kind[item.kind]}</span>
               </span>
-              <span className="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-sm font-semibold">
+              <span className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-strong">
                 {t.summary.ratingLabels[item.rating] ?? ''}
               </span>
             </li>

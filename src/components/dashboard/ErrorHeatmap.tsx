@@ -98,7 +98,7 @@ export function ErrorHeatmap({ attempts }: { attempts: readonly AttemptRecord[] 
             key={`${mode}-${filter}`}
             role="img"
             aria-label={heat.total ? t.dna.heat.boardLabel(heat.total, topText) : t.dna.heat.empty[mode]}
-            className="heat-board relative grid aspect-square w-full grid-cols-8 overflow-hidden rounded-2xl border-4 border-wood shadow-[0_6px_24px_rgb(15_85_168/0.18)]"
+            className="heat-board relative grid aspect-square w-full grid-cols-8 overflow-hidden rounded-2xl border-[6px] border-[#0f1d42] shadow-[0_0_0_1px_rgb(227_181_83/0.55),0_20px_40px_-12px_rgb(6_11_22/0.5)]"
           >
             {RANKS.map((rank, r) =>
               FILES.map((file, f) => {
@@ -108,7 +108,7 @@ export function ErrorHeatmap({ attempts }: { attempts: readonly AttemptRecord[] 
                 const light = (r + f) % 2 === 0;
                 const style = {
                   '--heat-delay': `${(r + f) * 28}ms`,
-                  backgroundColor: light ? '#e3f0fc' : '#5b9bd8',
+                  backgroundColor: light ? '#e9edf5' : '#7389ad',
                 } as CSSProperties;
                 return (
                   <div
@@ -132,12 +132,12 @@ export function ErrorHeatmap({ attempts }: { attempts: readonly AttemptRecord[] 
                       </span>
                     )}
                     {f === 0 && (
-                      <span aria-hidden="true" className={`absolute left-0.5 top-0 text-[0.6rem] font-bold ${light ? 'text-[#2f6fae]' : 'text-[#e3f0fc]'}`}>
+                      <span aria-hidden="true" className={`absolute left-0.5 top-0 text-[0.6rem] font-bold ${light ? 'text-[#4a5f82]' : 'text-[#f1f4fa]'}`}>
                         {rank}
                       </span>
                     )}
                     {r === 7 && (
-                      <span aria-hidden="true" className={`absolute bottom-0 right-0.5 text-[0.6rem] font-bold ${light ? 'text-[#2f6fae]' : 'text-[#e3f0fc]'}`}>
+                      <span aria-hidden="true" className={`absolute bottom-0 right-0.5 text-[0.6rem] font-bold ${light ? 'text-[#4a5f82]' : 'text-[#f1f4fa]'}`}>
                         {file}
                       </span>
                     )}

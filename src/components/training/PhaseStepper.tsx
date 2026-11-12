@@ -32,9 +32,9 @@ export function PhaseStepper({ phases, current }: PhaseStepperProps) {
             data-state={state}
             aria-current={state === 'current' ? 'step' : undefined}
             className={[
-              'flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl border px-1 py-1.5 text-center text-[0.7rem] font-semibold leading-tight sm:flex-row sm:justify-center sm:gap-1.5 sm:text-xs',
+              'flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-xl border px-1 py-2 transition-all text-center text-[0.7rem] font-semibold leading-tight sm:flex-row sm:justify-center sm:gap-1.5 sm:text-xs',
               state === 'current'
-                ? 'border-accent bg-accent text-on-accent'
+                ? 'cm-btn-primary border-accent bg-accent text-on-accent'
                 : state === 'done'
                   ? 'border-accent/40 bg-accent-soft text-fg'
                   : 'border-line bg-surface text-muted',
