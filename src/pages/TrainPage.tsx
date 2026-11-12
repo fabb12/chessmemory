@@ -310,7 +310,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
                   data-testid={`level-${lv ?? 'auto'}`}
                   onClick={() => setChosenLevel(lv)}
                   className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
-                    on ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-ink'
+                    on ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-fg'
                   }`}
                 >
                   {lv === null ? t.train.levelAuto : lv}

@@ -13,7 +13,7 @@ export function BoardCoordinates({ orientation, children }: { orientation: 'whit
   return (
     <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2">
       <div
-        className="flex flex-col justify-around text-base font-bold leading-none text-ink sm:text-lg"
+        className="flex flex-col justify-around text-base font-bold leading-none text-fg sm:text-lg"
         aria-hidden="true"
         data-testid="board-ranks"
       >
@@ -24,7 +24,7 @@ export function BoardCoordinates({ orientation, children }: { orientation: 'whit
       <div className="min-w-0">{children}</div>
       <span />
       <div
-        className="flex justify-around text-base font-bold uppercase leading-none text-ink sm:text-lg"
+        className="flex justify-around text-base font-bold uppercase leading-none text-fg sm:text-lg"
         aria-hidden="true"
         data-testid="board-files"
       >
