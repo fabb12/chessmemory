@@ -64,16 +64,28 @@ export function TrainPage({ profile }: { profile: Profile }) {
       const concept = findConcept(practiceConcept);
       autoStarted.current = true;
       void (async () => {
-        const card = concept ? await db.cards.get(concept.id) : undefined;
-        const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
-        if (item) await startSession({ items: [item], estimatedSeconds: 0 });
-        setParams({}, { replace: true });
+        try {
+          const card = concept ? await db.cards.get(concept.id) : undefined;
+          const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
+          if (item) await startSession({ items: [item], estimatedSeconds: 0 });
+        } catch (error) {
+          console.error('Impossibile avviare l\'allenamento', error);
+        } finally {
+          // Qualunque esito: togli i parametri, così non resta il caricamento infinito.
+          setParams({}, { replace: true });
+        }
       })();
       return;
     }
-    if (plan && plan.items.length > 0) {
+    if (plan) {
       autoStarted.current = true;
-      void startSession(plan).then(() => setParams({}, { replace: true }));
+      if (plan.items.length === 0) {
+        setParams({}, { replace: true });
+        return;
+      }
+      void startSession(plan)
+        .catch((error) => console.error('Impossibile avviare l\'allenamento', error))
+        .finally(() => setParams({}, { replace: true }));
     }
   }, [wantsStart, practiceConcept, active, plan, finished, setParams]);
 
