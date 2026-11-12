@@ -197,4 +197,33 @@ test.describe('flusso completo di allenamento', () => {
       expect(await noOverflow(), route).toBe(true);
     }
   });
+
+  test('scelta della difficoltà: più concetti tra cui scegliere, proposte diverse a ogni cambio, nessuna sezione Errori', async ({ page }) => {
+    await completeOnboarding(page);
+    await expect(page.getByRole('link', { name: 'Errori' })).toHaveCount(0);
+    await page.goto('./#/allenati');
+
+    await page.getByTestId('level-3').click();
+    const list = page.getByTestId('plan-list');
+    await expect(list.locator('li').first()).toBeVisible();
+    expect(await list.locator('li').count()).toBeGreaterThanOrEqual(5);
+
+    const titles = async () => list.locator('li .font-medium').allInnerTexts();
+    const seen = new Set<string>([(await titles()).join('|')]);
+    for (let i = 0; i < 6; i++) {
+      await page.getByTestId('reshuffle').click();
+      seen.add((await titles()).join('|'));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+
+    // Si può scegliere cosa allenare: si tiene un solo concetto
+    const boxes = list.locator('input[type="checkbox"]');
+    const n = await boxes.count();
+    for (let i = 0; i < n; i++) if (await boxes.nth(i).isChecked()) await boxes.nth(i).uncheck();
+    await expect(page.getByTestId('start-training')).toBeDisabled();
+    await boxes.nth(n - 1).check();
+    await page.getByTestId('start-training').click();
+    await expect(page.getByTestId('concept-runner')).toBeVisible();
+    await expect(page.getByTestId('item-progress')).toContainText('Concetto 1 di 1');
+  });
 });

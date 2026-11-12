@@ -6,8 +6,7 @@ import { Icon } from '../components/ui/Icon';
 import type { Profile } from '../db/schema';
 import { isDue } from '../features/memory/scheduler';
 import { currentStreak, trainedToday } from '../features/progress/streak';
-import { useActiveSession, useCards, useMistakes, useNow } from '../hooks/useData';
-import { dueMistakes } from '../services/mistakes';
+import { useActiveSession, useCards, useNow } from '../hooks/useData';
 import { useTrainingPlan } from '../hooks/useTrainingPlan';
 import { t } from '../i18n';
 
@@ -16,8 +15,6 @@ export function HomePage({ profile }: { profile: Profile }) {
   const cards = useCards();
   const active = useActiveSession();
   const plan = useTrainingPlan(now);
-  const mistakes = useMistakes();
-  const dueMistakeCount = mistakes ? dueMistakes(mistakes, now).length : 0;
 
   const dueCount = cards?.filter((c) => isDue(c, now)).length ?? 0;
   const streak = currentStreak(profile.streak, now);
@@ -137,32 +134,6 @@ export function HomePage({ profile }: { profile: Profile }) {
           <Icon name="arrowRight" />
         </Card>
       </Link>
-
-      <Card data-testid="home-mistakes">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="flex items-center gap-2 font-display text-xl font-semibold">
-              <Icon name="flag" />
-              {t.mistakes.homeTitle}
-            </h2>
-            <p className="mt-1 text-muted">
-              {dueMistakeCount > 0 ? t.mistakes.homeDue(dueMistakeCount) : t.mistakes.homeNone}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {dueMistakeCount > 0 && (
-              <Link to="/errori/ripasso" className={buttonClass('primary')} data-testid="home-review-mistakes">
-                <Icon name="train" size={18} />
-                {t.mistakes.review(dueMistakeCount)}
-              </Link>
-            )}
-            <Link to="/errori/nuovo" className={buttonClass('secondary')} data-testid="home-add-mistake">
-              <Icon name="camera" size={18} />
-              {t.mistakes.add}
-            </Link>
-          </div>
-        </div>
-      </Card>
 
       <InstallCard />
 

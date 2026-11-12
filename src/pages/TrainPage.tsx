@@ -12,15 +12,22 @@ import type { Profile, SessionRecord } from '../db/schema';
 import { buildItem, DEFAULT_SESSION_CONFIG } from '../features/learning/sessionBuilder';
 import { currentStreak } from '../features/progress/streak';
 import { useActiveSession, useNow, useSessions } from '../hooks/useData';
-import { useTrainingPlan } from '../hooks/useTrainingPlan';
+import { useTrainingPlan, useTrainingProposals } from '../hooks/useTrainingPlan';
 import { formatRelativeDay, t } from '../i18n';
 import { finishSession, recordConceptResult, startSession } from '../services/progress';
-import type { ConceptResult, Difficulty } from '../types';
+import type { ConceptResult, Difficulty, SessionItem } from '../types';
 
 interface Interstitial {
   conceptId: string;
   nextDue: number | null;
   isLast: boolean;
+}
+
+/** Seme nuovo a ogni richiesta: i concetti proposti cambiano ogni volta. */
+const freshSeed = () => Math.floor(Math.random() * 2 ** 31);
+
+function itemSeconds(item: SessionItem): number {
+  return item.kind === 'new' ? DEFAULT_SESSION_CONFIG.secondsPerNew : DEFAULT_SESSION_CONFIG.secondsPerReview;
 }
 
 function useElapsed(startedAt: number | undefined): number {
@@ -40,7 +47,11 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const active = useActiveSession();
   const sessions = useSessions();
   const [chosenLevel, setChosenLevel] = useState<Difficulty | null>(null);
-  const plan = useTrainingPlan(now, chosenLevel);
+  const [seed, setSeed] = useState(freshSeed);
+  /** Concetti scelti a mano; `null` = quelli consigliati dal piano. */
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const plan = useTrainingPlan(now, chosenLevel, seed);
+  const proposals = useTrainingProposals(plan, chosenLevel, seed);
 
   const [interstitial, setInterstitial] = useState<Interstitial | null>(null);
   const [finished, setFinished] = useState<{ record: SessionRecord; levelBefore: Difficulty } | null>(null);
@@ -56,6 +67,20 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const wantsStart = params.get('avvia') === '1' || Boolean(practiceConcept);
 
   const clearRequest = () => setParams({}, { replace: true });
+
+  const reshuffle = (level: Difficulty | null = chosenLevel) => {
+    setChosenLevel(level);
+    setSeed(freshSeed());
+    setPicked(null);
+  };
+
+  const toggle = (conceptId: string, defaults: Set<string>) =>
+    setPicked((current) => {
+      const next = new Set(current ?? defaults);
+      if (next.has(conceptId)) next.delete(conceptId);
+      else next.add(conceptId);
+      return next;
+    });
 
   // Crea la sessione richiesta dall'URL (concetto singolo o piano completo).
   const createRequested = async () => {
@@ -287,9 +312,11 @@ export function TrainPage({ profile }: { profile: Profile }) {
   }
 
   // ── Presentazione dell'allenamento ──
-  const reviews = plan?.items.filter((i) => i.kind === 'review').length ?? 0;
-  const targeted = plan?.items.filter((i) => i.kind === 'weakness').length ?? 0;
-  const fresh = plan?.items.filter((i) => i.kind === 'new').length ?? 0;
+  const candidates = plan ? [...plan.items, ...proposals] : [];
+  const defaults = new Set(plan?.items.map((i) => i.conceptId) ?? []);
+  const selectedIds = picked ?? defaults;
+  const chosen = candidates.filter((i) => selectedIds.has(i.conceptId));
+  const chosenSeconds = chosen.reduce((sum, i) => sum + itemSeconds(i), 0);
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <header>
@@ -308,7 +335,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
                   type="button"
                   aria-pressed={on}
                   data-testid={`level-${lv ?? 'auto'}`}
-                  onClick={() => setChosenLevel(lv)}
+                  onClick={() => reshuffle(lv)}
                   className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
                     on ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-fg'
                   }`}
@@ -327,35 +354,66 @@ export function TrainPage({ profile }: { profile: Profile }) {
         <hr className="my-4 border-line" />
         {!plan ? (
           <p>{t.app.loading}</p>
-        ) : plan.items.length === 0 ? (
+        ) : candidates.length === 0 ? (
           <p>{t.train.empty}</p>
         ) : (
           <>
-            <p className="font-semibold">{t.home.planLine(reviews, targeted, fresh)}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-              <Icon name="clock" size={16} />
-              {t.home.minutes(Math.max(1, Math.round(plan.estimatedSeconds / 60)))}
-            </p>
-            <ol className="mt-3 divide-y divide-line" data-testid="plan-list">
-              {plan.items.map((item) => {
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{t.train.pickTitle}</p>
+                <p className="mt-0.5 text-sm text-muted">{t.train.pickHelp}</p>
+              </div>
+              <Button
+                variant="secondary"
+                icon={<Icon name="undo" size={18} />}
+                data-testid="reshuffle"
+                onClick={() => reshuffle()}
+              >
+                {t.train.reshuffle}
+              </Button>
+            </div>
+            <ul className="mt-3 divide-y divide-line" data-testid="plan-list">
+              {candidates.map((item) => {
                 const concept = findConcept(item.conceptId);
+                const on = selectedIds.has(item.conceptId);
                 return (
-                  <li key={item.conceptId} className="flex items-center justify-between gap-3 py-3">
-                    <span className="font-medium">{concept?.title}</span>
-                    <span className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-strong">
-                      {t.train.kind[item.kind]}
-                    </span>
+                  <li key={item.conceptId}>
+                    <label className="flex min-h-14 cursor-pointer items-center gap-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="size-5 shrink-0 accent-[var(--accent)]"
+                        checked={on}
+                        data-testid={`pick-${item.conceptId}`}
+                        onChange={() => toggle(item.conceptId, defaults)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">{concept?.title}</span>
+                        {concept && (
+                          <span className="block text-sm text-muted">
+                            {t.categories[concept.category]} · {t.level.of5(concept.difficulty)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-strong">
+                        {t.train.kind[item.kind]}
+                      </span>
+                    </label>
                   </li>
                 );
               })}
-            </ol>
+            </ul>
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-muted" data-testid="pick-summary">
+              <Icon name="clock" size={16} />
+              {t.train.pickSummary(chosen.length, Math.max(1, Math.round(chosenSeconds / 60)))}
+            </p>
             <Button
               size="lg"
               block
-              className="mt-4"
+              className="mt-3"
               icon={<Icon name="train" />}
               data-testid="start-training"
-              onClick={() => void startSession(plan)}
+              disabled={chosen.length === 0}
+              onClick={() => void startSession({ items: chosen, estimatedSeconds: chosenSeconds })}
             >
               {t.home.start}
             </Button>
