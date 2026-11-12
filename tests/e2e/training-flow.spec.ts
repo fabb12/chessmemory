@@ -226,4 +226,39 @@ test.describe('flusso completo di allenamento', () => {
     await expect(page.getByTestId('concept-runner')).toBeVisible();
     await expect(page.getByTestId('item-progress')).toContainText('Concetto 1 di 1');
   });
+
+  test('voce: si accende e si spegne dalla barra e dal profilo, e i pulsanti Ascolta spariscono da spenta', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/strategie/pin');
+    const toggle = page.getByTestId('voice-toggle');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-label', /Voce attiva/);
+    await expect(page.getByTestId('speak-button').first()).toBeVisible();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-label', /Voce spenta/);
+    await expect(page.getByTestId('speak-button')).toHaveCount(0);
+
+    // La scelta resta anche nel Profilo e dopo il ricaricamento
+    await page.goto('./#/profilo');
+    await expect(page.getByTestId('voice-enabled')).not.toBeChecked();
+    await page.reload();
+    await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce spenta/);
+
+    await page.getByTestId('voice-enabled').check();
+    await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce attiva/);
+  });
+
+  test('partite famose: elenco ampio con filtro Carlsen', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/partite');
+    const all = await page.locator('[data-testid^="game-link-"]').count();
+    expect(all).toBeGreaterThanOrEqual(15);
+    await page.getByTestId('games-filter-carlsen').click();
+    const carlsen = await page.locator('[data-testid^="game-link-"]').count();
+    expect(carlsen).toBeGreaterThanOrEqual(5);
+    expect(carlsen).toBeLessThan(all);
+    await page.locator('[data-testid^="game-link-carlsen-"]').first().click();
+    await expect(page.locator('h1')).toBeVisible();
+  });
 });

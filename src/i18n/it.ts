@@ -275,6 +275,11 @@ export const it = {
     stop: 'Ferma',
     settingsTitle: 'Voce',
     settingsText: 'Le spiegazioni delle mosse possono essere lette ad alta voce con la voce italiana del tuo dispositivo.',
+    enabled: 'Voce attiva',
+    enabledOn: 'La voce può leggere le spiegazioni: usa il pulsante «Ascolta» o la lettura automatica.',
+    enabledOff: 'La voce è spenta: nessuna spiegazione viene letta e i pulsanti «Ascolta» sono nascosti.',
+    toggleOn: 'Voce attiva: tocca per spegnerla',
+    toggleOff: 'Voce spenta: tocca per accenderla',
     auto: 'Leggi automaticamente le spiegazioni',
     rate: 'Velocità della voce',
     rates: { slow: 'Lenta', normal: 'Normale', fast: 'Veloce' },
@@ -344,7 +349,9 @@ export const it = {
   games: {
     title: 'Partite famose',
     intro:
-      'Partite complete dei grandi campioni, commentate mossa per mossa. Scorrile con le frecce (anche da tastiera) e guarda come aperture, sviluppo, attacco e finale si collegano.',
+      'Partite complete dei grandi campioni, da Morphy a Fischer fino a Magnus Carlsen, commentate mossa per mossa. Scorrile con le frecce (anche da tastiera) e guarda come aperture, sviluppo, attacco e finale si collegano.',
+    filterLabel: 'Filtra le partite',
+    filters: { all: 'Tutte', carlsen: 'Magnus Carlsen' } as Record<string, string>,
     back: 'Partite famose',
     notFound: 'Partita non trovata.',
     players: (white: string, black: string) => `${white} – ${black}`,

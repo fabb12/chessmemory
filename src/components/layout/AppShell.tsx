@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { t } from '../../i18n';
+import { setVoiceEnabled, speechSupported, useVoiceEnabled } from '../../features/voice/speech';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { Icon, type IconName } from '../ui/Icon';
 import { Logo } from './Logo';
@@ -24,6 +25,8 @@ interface AppShellProps {
 
 export function AppShell({ children, bare = false, banner }: AppShellProps) {
   const online = useOnlineStatus();
+  const voiceOn = useVoiceEnabled();
+  const voiceSupported = speechSupported();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -37,41 +40,57 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
       <header className="sticky top-0 z-30 border-b border-line/70 bg-bg/75 backdrop-blur-xl backdrop-saturate-150 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-3 px-4">
           <Logo />
-          {!online && (
-            <span
-              role="status"
-              title={t.app.offline}
-              data-testid="offline-indicator"
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warn/50 bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn md:ml-2"
-            >
-              <Icon name="wifiOff" size={14} />
-              {t.app.offlineShort}
-            </span>
-          )}
-          {!bare && (
-            <nav aria-label={t.nav.label} className="ml-auto hidden md:block">
-              <ul className="flex items-center gap-1 rounded-2xl border border-line/80 bg-surface/70 p-1 shadow-sm">
-                {NAV.map((item) => (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.end}
-                      className={({ isActive }) =>
-                        `inline-flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
-                          isActive
-                            ? 'cm-btn-primary bg-accent text-on-accent'
-                            : 'text-muted hover:bg-surface-2 hover:text-fg'
-                        }`
-                      }
-                    >
-                      <Icon name={item.icon} size={18} />
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {!online && (
+              <span
+                role="status"
+                title={t.app.offline}
+                data-testid="offline-indicator"
+                className="inline-flex items-center gap-1.5 rounded-full border border-warn/50 bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn"
+              >
+                <Icon name="wifiOff" size={14} />
+                {t.app.offlineShort}
+              </span>
+            )}
+            {!bare && voiceSupported && (
+              <button
+                type="button"
+                onClick={() => setVoiceEnabled(!voiceOn)}
+                aria-label={voiceOn ? t.voice.toggleOn : t.voice.toggleOff}
+                title={voiceOn ? t.voice.toggleOn : t.voice.toggleOff}
+                data-testid="voice-toggle"
+                className={`inline-flex size-11 items-center justify-center rounded-xl border ${
+                  voiceOn ? 'border-accent/40 bg-accent-soft text-accent-strong' : 'border-line bg-surface text-muted'
+                }`}
+              >
+                <Icon name={voiceOn ? 'speaker' : 'speakerOff'} size={20} />
+              </button>
+            )}
+            {!bare && (
+              <nav aria-label={t.nav.label} className="hidden md:block">
+                <ul className="flex items-center gap-1 rounded-2xl border border-line/80 bg-surface/70 p-1 shadow-sm">
+                  {NAV.map((item) => (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.end}
+                        className={({ isActive }) =>
+                          `inline-flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-all ${
+                            isActive
+                              ? 'cm-btn-primary bg-accent text-on-accent'
+                              : 'text-muted hover:bg-surface-2 hover:text-fg'
+                          }`
+                        }
+                      >
+                        <Icon name={item.icon} size={18} />
+                        {item.label}
+                      </NavLink>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
+          </div>
         </div>
         {!online && (
           <p className="sr-only" role="status">

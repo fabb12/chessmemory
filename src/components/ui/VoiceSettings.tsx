@@ -1,4 +1,13 @@
-import { setVoiceAuto, setVoiceRate, speak, speechSupported, useVoiceAuto, useVoiceRate } from '../../features/voice/speech';
+import {
+  setVoiceAuto,
+  setVoiceEnabled,
+  setVoiceRate,
+  speak,
+  speechSupported,
+  useVoiceAuto,
+  useVoiceEnabled,
+  useVoiceRate,
+} from '../../features/voice/speech';
 import { t } from '../../i18n';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -11,6 +20,7 @@ const RATES = [
 
 /** Preferenze della voce: lettura automatica e velocità (solo su questo dispositivo). */
 export function VoiceSettings() {
+  const enabled = useVoiceEnabled();
   const auto = useVoiceAuto();
   const rate = useVoiceRate();
 
@@ -22,6 +32,18 @@ export function VoiceSettings() {
       <label className="flex min-h-11 cursor-pointer items-center gap-3">
         <input
           type="checkbox"
+          checked={enabled}
+          onChange={(e) => setVoiceEnabled(e.target.checked)}
+          className="size-5 accent-[var(--accent)]"
+          data-testid="voice-enabled"
+        />
+        <span className="font-semibold">{t.voice.enabled}</span>
+      </label>
+      <p className="text-sm text-muted">{enabled ? t.voice.enabledOn : t.voice.enabledOff}</p>
+      <fieldset disabled={!enabled} className={`space-y-4 border-0 p-0 ${enabled ? '' : 'opacity-50'}`}>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3">
+        <input
+          type="checkbox"
           checked={auto}
           onChange={(e) => setVoiceAuto(e.target.checked)}
           className="size-5 accent-[var(--accent)]"
@@ -29,7 +51,7 @@ export function VoiceSettings() {
         />
         <span className="font-semibold">{t.voice.auto}</span>
       </label>
-      <fieldset>
+      <fieldset disabled={!enabled}>
         <legend className="mb-1.5 font-semibold">{t.voice.rate}</legend>
         <div className="flex flex-wrap gap-2">
           {RATES.map((r) => (
@@ -54,6 +76,7 @@ export function VoiceSettings() {
       <Button variant="secondary" icon={<Icon name="speaker" size={16} />} onClick={() => speak(t.voice.testText, 'voice-test')}>
         {t.voice.test}
       </Button>
+      </fieldset>
     </div>
   );
 }
