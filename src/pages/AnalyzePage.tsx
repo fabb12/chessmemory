@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CANDIDATE_TONES, CandidateMoves, type Candidate } from '../components/analyze/CandidateMoves';
+import { BoardOverlay } from '../components/analyze/BoardOverlay';
 import { MoveFeedbackCard } from '../components/analyze/MoveFeedbackCard';
+import { WinningLineCard } from '../components/analyze/WinningLineCard';
 import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
 import { BoardEditor } from '../components/chess/BoardEditor';
 import { ChessBoard, type BoardArrow } from '../components/chess/ChessBoard';
@@ -11,24 +13,42 @@ import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { judgeMove, type MoveFeedback } from '../features/analysis/moveCoach';
+import { winningLine } from '../features/analysis/winningLine';
 import { gridToPlacement, isBoardView, nextView, type BoardView } from '../features/assistant/boardReading';
 import { inferTurn } from '../features/assistant/boardResolve';
-import { AssistantError, explainPosition, readBoardFromImage, useApiKey, type BoardReading } from '../features/assistant/claude';
+import {
+  AssistantError,
+  explainPosition,
+  readBoardFromImage,
+  setFastMode,
+  useApiKey,
+  useFastMode,
+  type BoardReading,
+} from '../features/assistant/claude';
 import { ANALYSIS_DEPTH, getEngine, terminalAnalysis, type Analysis } from '../features/engine/engine';
 import { formatScore } from '../features/engine/uci';
 import { fenToPosition, positionToFen, startPosition, validatePosition, type EditorPosition } from '../features/mistakes/position';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
-import { captureBoardFrame, frameDifference, frameSignature, MOTION } from '../utils/frames';
+import { fromCrop, type Corners, type Rect } from '../features/vision/geometry';
+import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
+import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
 import { formatLine, sanToLocal } from '../utils/notation';
 
 /** Analisi continua: ogni quanto si controlla se la scacchiera si muove (nessun costo, è locale). */
-const SAMPLE_MS = 600;
-/** Campioni fermi consecutivi prima di rileggere (~1,2 s dopo che la mano si è tolta). */
+const SAMPLE_MS = 400;
+/** Campioni fermi consecutivi prima di rileggere (~0,8 s dopo che la mano si è tolta). */
 const STILL_SAMPLES = 2;
 /** Intervallo minimo tra due letture con Claude. */
-const MIN_READ_GAP_MS = 2500;
+const MIN_READ_GAP_MS = 1500;
+
+interface HistoryEntry {
+  san: string;
+  source: 'local' | 'claude';
+  /** Posizione prima della mossa: serve a rileggere se la mossa era sbagliata. */
+  before: EditorPosition;
+}
 
 type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; value: T } | { status: 'error'; error: string };
 
@@ -58,6 +78,7 @@ function errorText(error: unknown): string {
 
 export function AnalyzePage({ profile }: { profile: Profile }) {
   const apiKey = useApiKey();
+  const fast = useFastMode();
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -65,7 +86,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const [reading, setReading] = useState<Phase<BoardReading>>({ status: 'idle' });
   const [position, setPosition] = useState<EditorPosition | null>(null);
   const [flipped, setFlipped] = useState(false);
-  const [myColor, setMyColor] = useState<'w' | 'b' | null>(null);
+  // Con che colore gioca l'utente: dedotto dal lato da cui è scattata la foto, o scelto a mano.
+  const [myColor, setMyColorState] = useState<Side>('w');
+  const [colorSource, setColorSource] = useState<'default' | 'photo' | 'user'>('default');
   const [analysis, setAnalysis] = useState<Phase<Analysis>>({ status: 'idle' });
   const [explanation, setExplanation] = useState<Phase<string>>({ status: 'idle' });
   const [live, setLive] = useState(false);
@@ -77,13 +100,18 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     const saved = loadPref(VIEW_KEY);
     return isBoardView(saved) ? saved : 'auto';
   });
+  // Angoli della scacchiera nell'inquadratura (frazioni del fotogramma).
+  const [corners, setCornersState] = useState<Corners | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   // Allenamento: i suggerimenti restano nascosti finché l'utente non prova una mossa.
   const [practice, setPractice] = useState(() => loadPref(PRACTICE_KEY) === '1');
   const [revealed, setRevealed] = useState(false);
   const [tried, setTried] = useState<Phase<MoveFeedback>>({ status: 'idle' });
-  const [variation, setVariation] = useState<number | null>(null);
+  const [variation, setVariation] = useState<number | 'win' | null>(null);
   const lastSample = useRef<Uint8Array | null>(null);
   const readSignature = useRef<Uint8Array | null>(null);
+  /** Colori delle case nel fotogramma della posizione attuale (per riconoscere la mossa senza Claude). */
+  const snapshot = useRef<Float32Array | null>(null);
   const stillCount = useRef(0);
   const lastReadAt = useRef(0);
   const busy = useRef(false);
@@ -92,18 +120,35 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const lastView = useRef<BoardView | null>(null);
   /** true se la posizione è stata corretta a mano: una lettura sbagliata non deve cancellarla. */
   const userEdited = useRef(false);
+  const cornersByUser = useRef(false);
+  const cornersRef = useRef<Corners | null>(null);
   const evalId = useRef(0);
   const positionRef = useRef<EditorPosition | null>(null);
   positionRef.current = position;
   const viewPrefRef = useRef(viewPref);
   viewPrefRef.current = viewPref;
+  const myColorRef = useRef(myColor);
+  const colorSourceRef = useRef(colorSource);
+
+  const chooseColor = useCallback((color: Side, source: 'photo' | 'user') => {
+    myColorRef.current = color;
+    colorSourceRef.current = source;
+    setMyColorState(color);
+    setColorSource(source);
+    // Le proprie pezzi in basso.
+    setFlipped(color === 'b');
+  }, []);
+
+  const setCorners = useCallback((next: Corners | null) => {
+    cornersRef.current = next;
+    setCornersState(next);
+  }, []);
 
   // ───── Fotocamera ─────
   const startCamera = async () => {
     setCameraError(false);
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        // Bassa risoluzione: basta per ~100 px per casa e il telefono lavora meno.
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
@@ -117,7 +162,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
     setLive(false);
-  }, [stream]);
+    setCorners(null);
+    snapshot.current = null;
+  }, [stream, setCorners]);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -128,7 +175,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
 
-  // ───── Valutazione: Stockfish, poi la spiegazione di Claude ─────
+  // ───── Valutazione: Stockfish, poi (quando tocca a te) la spiegazione di Claude ─────
   const evaluate = useCallback(
     async (pos: EditorPosition) => {
       if (validatePosition(pos)) {
@@ -152,26 +199,27 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         if (id === evalId.current) setAnalysis({ status: 'error', error: t.analyze.errors.engine! });
         return;
       }
-      if (result.lines.length === 0 || !apiKey) return;
+      // La spiegazione riguarda la propria mossa: quando tocca all'avversario non serve (e non costa).
+      if (result.lines.length === 0 || !apiKey || pos.turn !== myColorRef.current) return;
       setExplanation({ status: 'busy' });
       try {
         const text = await explainPosition({
           fen,
           evaluation: formatScore(result.score, pos.turn === 'w'),
-          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, 6)))),
-          playerSide: myColor,
+          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, 8)))),
+          playerSide: myColorRef.current,
         });
         if (id === evalId.current) setExplanation({ status: 'done', value: text });
       } catch (error) {
         if (id === evalId.current) setExplanation({ status: 'error', error: errorText(error) });
       }
     },
-    [apiKey, myColor, profile.settings.analysisDepth],
+    [apiKey, profile.settings.analysisDepth],
   );
 
-  // ───── Lettura della scacchiera ─────
+  // ───── Lettura della scacchiera con Claude ─────
   const read = useCallback(
-    async (image: string, auto: boolean, fromCamera: boolean) => {
+    async (image: string, rect: Rect | null, auto: boolean, fromCamera: boolean) => {
       if (busy.current) return;
       busy.current = true;
       setReading({ status: 'busy' });
@@ -186,14 +234,23 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           view: forced,
           lastView: lastView.current,
           lastRawPlacement: lastRaw.current,
-          // Le letture singole (e la prima) sono più accurate; l'analisi continua resta veloce.
-          careful: !auto || !known,
         });
         setReadSeconds((performance.now() - started) / 1000);
         setReading({ status: 'done', value: result });
         setLastUpdate(Date.now());
         lastRaw.current = result.rawPlacement;
         lastView.current = result.view;
+        // Angoli della scacchiera: servono al ritaglio delle prossime foto e alle mosse viste senza Claude.
+        if (fromCamera && rect && result.corners && !cornersByUser.current) {
+          const mapped = result.corners.map((p) => fromCrop(rect, p)) as Corners;
+          setCorners(mapped);
+          const video = videoRef.current;
+          if (video && !snapshot.current) snapshot.current = sampleSquares(video, mapped);
+        }
+        // Chi sei: dal lato del Bianco sei il Bianco, dal lato del Nero sei il Nero.
+        if (colorSourceRef.current !== 'user' && (result.view === 'bottom' || result.view === 'top')) {
+          chooseColor(result.view === 'bottom' ? 'w' : 'b', 'photo');
+        }
         if (auto && result.placement === lastPlacement.current) return;
         const changed = lastPlacement.current !== null && result.placement !== lastPlacement.current;
         lastPlacement.current = result.placement;
@@ -204,6 +261,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           result.sideToMove !== 'unknown' ? result.sideToMove : auto && changed && previous ? (previous.turn === 'w' ? 'b' : 'w') : (previous?.turn ?? 'w');
         const turn: Side = result.turnKnown ? guessed : inferTurn(result.placement, guessed);
         const next = fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
+        if (fromCamera && previous && result.moves.length > 0) {
+          setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source: 'claude', before: previous }]);
+        }
         userEdited.current = false;
         setPosition(next);
         // Subito le mosse migliori sulla scacchiera: l'utente può comunque correggere i pezzi.
@@ -215,26 +275,81 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         busy.current = false;
       }
     },
-    [evaluate],
+    [evaluate, chooseColor, setCorners],
   );
 
   const captureAndRead = useCallback(
     (auto: boolean) => {
       const video = videoRef.current;
-      const frame = video ? captureBoardFrame(video) : null;
-      if (!video || !frame) return;
+      if (!video || busy.current) return;
+      const frame = captureFrame(video, cornersRef.current);
+      if (!frame) return;
       readSignature.current = frameSignature(video);
+      snapshot.current = cornersRef.current ? sampleSquares(video, cornersRef.current) : null;
       lastReadAt.current = Date.now();
-      void read(frame, auto, true);
+      void read(frame.data, frame.rect, auto, true);
     },
     [read],
   );
+
+  /**
+   * Prova a riconoscere la mossa confrontando le case con il fotogramma della
+   * posizione precedente, senza chiamare Claude. Restituisce false se non è sicuro.
+   */
+  const tryLocalMove = useCallback(
+    (signature: Uint8Array): boolean => {
+      const video = videoRef.current;
+      const quad = cornersRef.current;
+      const before = snapshot.current;
+      const view = lastView.current;
+      const pos = positionRef.current;
+      if (!video || !quad || !before || !view || !pos || validatePosition(pos)) return false;
+      const now = sampleSquares(video, quad);
+      if (!now) return false;
+      const result = inferMove(positionToFen(pos), changesBySquare(cellChanges(before, now), view));
+      if (result.kind === 'unsure') return false;
+      snapshot.current = now;
+      readSignature.current = signature;
+      if (result.kind === 'none') return true;
+      const next = fenToPosition(result.fen);
+      if (!next) return false;
+      setHistory((h) => [...h, { san: sanToLocal(result.san), source: 'local', before: pos }]);
+      lastPlacement.current = result.fen.split(' ')[0] ?? null;
+      lastRaw.current = null;
+      userEdited.current = false;
+      positionRef.current = next;
+      setPosition(next);
+      setLastUpdate(Date.now());
+      void evaluate(next);
+      return true;
+    },
+    [evaluate],
+  );
+
+  /** L'ultima mossa vista è sbagliata: si torna alla posizione prima e Claude rilegge la scacchiera. */
+  const rereadLast = () => {
+    const last = history[history.length - 1];
+    if (last) {
+      setHistory((h) => h.slice(0, -1));
+      positionRef.current = last.before;
+      setPosition(last.before);
+      lastPlacement.current = null;
+    }
+    captureAndRead(true);
+  };
+
+  const recalibrate = () => {
+    cornersByUser.current = false;
+    setCorners(null);
+    snapshot.current = null;
+    captureAndRead(live);
+  };
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     try {
       const image = await prepareImage(file, READING_PHOTO_SIDE);
-      void read(image.dataUrl.split(',')[1] ?? '', false, false);
+      void read(image.dataUrl.split(',')[1] ?? '', null, false, false);
     } catch {
       setReading({ status: 'error', error: t.analyze.errors.unreadable! });
     } finally {
@@ -248,6 +363,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     savePref(VIEW_KEY, choice);
     if (choice === 'auto') return;
     lastView.current = choice;
+    if (colorSourceRef.current !== 'user' && (choice === 'bottom' || choice === 'top')) chooseColor(choice === 'bottom' ? 'w' : 'b', 'photo');
     if (reading.status !== 'done') return;
     const placement = gridToPlacement(reading.value.grid, choice);
     if (!placement) return;
@@ -275,16 +391,22 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     void evaluate(next);
   };
 
+  const pickColor = (color: Side) => {
+    chooseColor(color, 'user');
+    // Ora le mosse consigliate (e la spiegazione) riguardano l'altro colore.
+    if (positionRef.current && !validatePosition(positionRef.current)) void evaluate(positionRef.current);
+  };
+
   // ───── Analisi continua ─────
-  // Nessuna lettura a intervalli fissi: una miniatura locale controlla di continuo la
-  // scacchiera e Claude viene chiamato appena la mano si toglie e qualcosa è cambiato.
+  // Una miniatura locale controlla di continuo se la scacchiera si muove. Appena la mano
+  // si toglie e qualcosa è cambiato: prima si prova a riconoscere la mossa confrontando
+  // le case (istantaneo, senza costi); solo se il risultato è dubbio si chiama Claude.
   useEffect(() => {
     if (!live || !stream) return;
     lastSample.current = null;
-    readSignature.current = null;
     stillCount.current = 0;
     setLiveState('watching');
-    captureAndRead(true);
+    if (!positionRef.current || !snapshot.current) captureAndRead(true);
     const id = window.setInterval(() => {
       const video = videoRef.current;
       const sample = video ? frameSignature(video) : null;
@@ -302,33 +424,46 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       stillCount.current += 1;
       if (stillCount.current < STILL_SAMPLES) return;
       setLiveState('watching');
-      if (busy.current || Date.now() - lastReadAt.current < MIN_READ_GAP_MS) return;
+      if (busy.current) return;
       if (readSignature.current && frameDifference(readSignature.current, sample) < MOTION.changed) return;
+      if (tryLocalMove(sample)) return;
+      if (Date.now() - lastReadAt.current < MIN_READ_GAP_MS) return;
       captureAndRead(true);
     }, SAMPLE_MS);
     return () => window.clearInterval(id);
-  }, [live, stream, captureAndRead]);
+  }, [live, stream, captureAndRead, tryLocalMove]);
 
   const positionError = position ? validatePosition(position) : null;
   const fen = position && !positionError ? positionToFen(position) : null;
   // Il risultato vale solo per la posizione attuale (la scacchiera può cambiare mentre il motore lavora).
   const done = analysis.status === 'done' && analysis.value.fen === fen ? analysis.value : null;
   const showBoard = fen !== null && (done !== null || analysis.status === 'busy');
+  const myTurn = position?.turn === myColor;
   const candidates = useMemo<Candidate[]>(
     () => (done && fen ? done.lines.slice(0, 3).map((line) => ({ line, moves: playLine(fen, line.pv.slice(0, 8)) })) : []),
     [done, fen],
   );
+  const win = useMemo(() => (done && fen ? winningLine(fen, done.lines[0]) : null), [done, fen]);
   const best = candidates[0]?.moves[0];
   const turnName = position ? t.sides[position.turn] : '';
   const evalText = done && position ? formatScore(done.score, position.turn === 'w') : '';
   const verdict = best ? `${t.analyze.bestMove}: ${sanToLocal(best.san)}. ${t.analyze.evaluation}: ${evalText}.` : '';
-  const showSuggestions = !practice || revealed || tried.status === 'done';
-  const variationLine = useMemo(() => (variation !== null && done ? (done.lines[variation]?.pv.slice(0, 10) ?? []) : []), [variation, done]);
+  const showSuggestions = myTurn && (!practice || revealed || tried.status === 'done');
+  const variationLine = useMemo<Uci[]>(() => {
+    if (variation === 'win') return win?.moves.map((m) => m.uci) ?? [];
+    if (variation !== null && done) return done.lines[variation]?.pv.slice(0, 10) ?? [];
+    return [];
+  }, [variation, done, win]);
   const doneRef = useRef<Analysis | null>(null);
   doneRef.current = done;
 
   const arrows = useMemo<BoardArrow[]>(() => {
     const out: BoardArrow[] = [];
+    if (!myTurn) {
+      // Turno dell'avversario: la sua mossa più pericolosa, in rosso.
+      if (best) out.push({ from: best.from, to: best.to, tone: 'bad' });
+      return out;
+    }
     if (showSuggestions) {
       candidates.forEach((candidate, index) => {
         const move = candidate.moves[0];
@@ -343,7 +478,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       out.push({ from, to, tone: tried.value.grade === 'best' || tried.value.grade === 'good' ? 'good' : 'bad' });
     }
     return out;
-  }, [candidates, showSuggestions, tried]);
+  }, [best, candidates, myTurn, showSuggestions, tried]);
 
   /** L'utente prova una mossa sulla scacchiera: Stockfish la giudica. */
   const tryMove = async (uci: Uci) => {
@@ -365,6 +500,22 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     setTried({ status: 'idle' });
   };
 
+  // Stato dell'analisi continua, in una frase.
+  const bestLocal = best ? sanToLocal(best.san) : '';
+  const banner =
+    reading.status === 'busy'
+      ? { text: t.analyze.live.banner.reading, tone: 'neutral' }
+      : liveState === 'moving'
+        ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
+        : !position
+          ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
+          : analysis.status === 'busy'
+            ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
+            : myTurn
+              ? { text: bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove, tone: 'mine' }
+              : { text: t.analyze.live.banner.theirs, tone: 'theirs' };
+  const winExtra = win?.kind === 'mate' ? t.analyze.win.mate(win.mateIn ?? 1) : win?.kind === 'check' ? t.analyze.win.check(win.checkIn ?? 1) : '';
+
   return (
     <div className="space-y-5">
       <header>
@@ -378,6 +529,20 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           <p className="mt-1 mb-3">{t.analyze.key.needed}</p>
           <ApiKeyForm />
         </Card>
+      )}
+
+      {live && (
+        <div
+          role="status"
+          data-testid="live-banner"
+          data-tone={banner.tone}
+          className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3 font-display text-xl font-semibold ${
+            banner.tone === 'mine' ? 'border-ok bg-ok-soft text-ok' : banner.tone === 'theirs' ? 'border-line bg-surface-2' : 'border-line bg-surface'
+          }`}
+        >
+          <span>{banner.text}</span>
+          {banner.tone === 'mine' && bestLocal && <SpeakButton text={t.analyze.live.speak(bestLocal, winExtra)} auto />}
+        </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
@@ -396,12 +561,28 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   className="absolute inset-0 size-full object-contain"
                   data-testid="camera-video"
                 />
-                {/* Guida: solo il quadrato centrale viene inviato a Claude. */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 rounded-md border-2 border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
-                />
-                <p className="absolute inset-x-0 bottom-1 text-center text-xs font-semibold text-white drop-shadow">{t.analyze.camera.guide}</p>
+                {corners ? (
+                  <BoardOverlay
+                    corners={corners}
+                    view={viewPref === 'auto' ? (reading.status === 'done' ? reading.value.view : null) : viewPref}
+                    onChange={(next) => {
+                      cornersByUser.current = true;
+                      setCorners(next);
+                      // La griglia è cambiata: il confronto delle case riparte da qui.
+                      const video = videoRef.current;
+                      snapshot.current = video ? sampleSquares(video, next) : null;
+                    }}
+                  />
+                ) : (
+                  <>
+                    {/* Guida: alla prima lettura viene inviato solo il quadrato centrale. */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 rounded-md border-2 border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+                    />
+                    <p className="absolute inset-x-0 bottom-1 text-center text-xs font-semibold text-white drop-shadow">{t.analyze.camera.guide}</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 p-4 text-center text-muted">
@@ -410,6 +591,14 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </div>
             )}
           </div>
+          {stream && corners && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="text-muted">{t.analyze.live.calibrated}</p>
+              <Button variant="ghost" size="sm" onClick={recalibrate} disabled={!apiKey || reading.status === 'busy'}>
+                {t.analyze.live.recalibrate}
+              </Button>
+            </div>
+          )}
           <details className="rounded-xl bg-surface-2 px-3 py-2 text-sm" data-testid="camera-tips">
             <summary className="cursor-pointer font-semibold">{t.analyze.camera.tipsTitle}</summary>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -423,10 +612,32 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               {t.analyze.camera.denied}
             </p>
           )}
+          {stream && apiKey && (
+            <div className="space-y-2 rounded-xl border border-line p-3">
+              {live ? (
+                <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={() => setLive(false)} data-testid="live-toggle">
+                  {t.analyze.live.stop}
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={() => setLive(true)} data-testid="live-toggle">
+                    {t.analyze.live.start}
+                  </Button>
+                  <p className="text-sm font-semibold">{t.analyze.live.stepsTitle}</p>
+                  <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
+                    {t.analyze.live.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {stream ? (
               <>
                 <Button
+                  variant="secondary"
                   icon={<Icon name="eye" size={18} />}
                   onClick={() => captureAndRead(false)}
                   disabled={!apiKey || reading.status === 'busy'}
@@ -434,7 +645,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 >
                   {t.analyze.camera.capture}
                 </Button>
-                <Button variant="secondary" onClick={stopCamera}>
+                <Button variant="ghost" onClick={stopCamera}>
                   {t.analyze.camera.stop}
                 </Button>
               </>
@@ -453,42 +664,42 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </Button>
             )}
           </div>
-          {stream && apiKey && (
-            <label className="flex cursor-pointer items-start gap-3">
-              <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="photo-orientation" className="block text-sm font-semibold">
+                {t.analyze.orientation.label}
+              </label>
+              <select
+                id="photo-orientation"
+                value={viewPref}
+                onChange={(e) => changeView(isBoardView(e.target.value) ? e.target.value : 'auto')}
+                className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm font-semibold"
+                data-testid="photo-orientation"
+              >
+                <option value="auto">{t.analyze.orientation.auto}</option>
+                {(['bottom', 'top', 'left', 'right'] as const).map((v) => (
+                  <option key={v} value={v}>
+                    {t.analyze.orientation.options[v]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-start gap-3 pt-1">
+              <input
+                type="checkbox"
+                checked={fast}
+                onChange={(e) => setFastMode(e.target.checked)}
+                className="mt-1 size-5 accent-[var(--accent)]"
+                data-testid="fast-toggle"
+              />
               <span>
-                <span className="block font-semibold">{t.analyze.camera.live}</span>
-                <span className="block text-sm text-muted">{t.analyze.camera.liveHelp}</span>
+                <span className="block text-sm font-semibold">{t.analyze.fast.label}</span>
+                <span className="block text-xs text-muted">{t.analyze.fast.help}</span>
               </span>
             </label>
-          )}
-          <div>
-            <label htmlFor="photo-orientation" className="block text-sm font-semibold">
-              {t.analyze.orientation.label}
-            </label>
-            <select
-              id="photo-orientation"
-              value={viewPref}
-              onChange={(e) => changeView(isBoardView(e.target.value) ? e.target.value : 'auto')}
-              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm font-semibold"
-              data-testid="photo-orientation"
-            >
-              <option value="auto">{t.analyze.orientation.auto}</option>
-              {(['bottom', 'top', 'left', 'right'] as const).map((v) => (
-                <option key={v} value={v}>
-                  {t.analyze.orientation.options[v]}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted">{t.analyze.orientation.help}</p>
           </div>
           <div aria-live="polite" className="space-y-1 text-sm">
-            {live && reading.status !== 'busy' && (
-              <p className="text-muted" data-testid="live-state">
-                {liveState === 'moving' ? t.analyze.camera.moving : t.analyze.camera.watching}
-              </p>
-            )}
-            {reading.status === 'busy' && <p className="font-semibold">{t.analyze.reading}</p>}
+            {reading.status === 'busy' && !live && <p className="font-semibold">{t.analyze.reading}</p>}
             {reading.status === 'error' && (
               <p role="alert" className="font-semibold text-bad">
                 {reading.error}
@@ -500,7 +711,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   {t.analyze.confidence[reading.value.confidence]} · {t.analyze.readDone}
                   {readSeconds !== null && <span className="font-normal text-muted"> ({t.analyze.readTime(readSeconds)})</span>}
                 </p>
-                {reading.value.moves.length > 0 && (
+                {reading.value.moves.length > 0 && !live && (
                   <p className="text-muted" data-testid="read-moves">
                     {t.analyze.moveFound(reading.value.moves.map(sanToLocal).join(' '))}
                   </p>
@@ -527,15 +738,53 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             )}
             {lastUpdate && live && <p className="text-muted">{t.analyze.camera.lastUpdate(new Date(lastUpdate).toLocaleTimeString('it-IT'))}</p>}
           </div>
+          {history.length > 0 && (
+            <div className="space-y-2 rounded-xl bg-surface-2 p-3" data-testid="live-history">
+              <p className="text-sm font-semibold">{t.analyze.live.history}</p>
+              <ol className="flex flex-wrap gap-1 text-sm">
+                {history.slice(-12).map((entry, index) => (
+                  <li key={`${history.length}-${index}`} className="rounded-lg bg-surface px-2 py-0.5 tabular-nums" title={t.analyze.live.sources[entry.source]}>
+                    {entry.san}
+                    {entry.source === 'local' && <span aria-hidden className="ml-1 text-ok">⚡</span>}
+                  </li>
+                ))}
+              </ol>
+              {stream && (
+                <Button variant="ghost" size="sm" icon={<Icon name="undo" size={16} />} onClick={rereadLast} disabled={reading.status === 'busy'}>
+                  {t.analyze.live.wrong}
+                </Button>
+              )}
+            </div>
+          )}
         </Card>
 
         {position && (
           <Card className="space-y-3" data-testid="analyze-position">
+            <fieldset>
+              <legend className="mb-1 text-sm font-semibold">
+                {t.analyze.side.label}
+                {colorSource === 'photo' && <span className="font-normal text-muted"> · {t.analyze.side.fromPhoto}</span>}
+              </legend>
+              <div className="flex flex-wrap gap-2" data-testid="my-color">
+                {(['w', 'b'] as const).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={myColor === c}
+                    onClick={() => pickColor(c)}
+                    className={`min-h-10 rounded-xl border-2 px-4 text-sm font-semibold ${myColor === c ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+                  >
+                    {t.sides[c]}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-muted">{t.analyze.side.help}</p>
+            </fieldset>
             {showBoard && fen ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold" data-testid="analyze-turn">
-                    {t.analyze.turnIs(turnName)}
+                  <p className={`font-semibold ${myTurn ? 'text-ok' : ''}`} data-testid="analyze-turn">
+                    {myTurn ? t.analyze.turnMine(turnName) : t.analyze.turnTheirs(turnName)}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" size="sm" onClick={swapTurn}>
@@ -548,7 +797,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 </div>
                 {variation !== null && variationLine.length > 0 ? (
                   <div className="space-y-2" data-testid="analyze-variation">
-                    <p className="text-sm text-muted">{t.analyze.candidates.viewing(sanToLocal(candidates[variation]?.moves[0]?.san ?? ''))}</p>
+                    <p className="text-sm text-muted">
+                      {t.analyze.candidates.viewing(
+                        sanToLocal((variation === 'win' ? win?.moves[0]?.san : candidates[variation]?.moves[0]?.san) ?? ''),
+                      )}
+                    </p>
                     <LineViewer fen={fen} line={variationLine} orientation={flipped ? 'black' : 'white'} showBestArrow={false} testId="analyze-line" />
                     <Button variant="secondary" block onClick={() => setVariation(null)}>
                       {t.analyze.candidates.hideLine}
@@ -559,7 +812,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                     <ChessBoard
                       fen={fen}
                       orientation={flipped ? 'black' : 'white'}
-                      interactive={done !== null && done.lines.length > 0 && tried.status !== 'busy'}
+                      interactive={myTurn && done !== null && done.lines.length > 0 && tried.status !== 'busy'}
                       onMove={(uci) => void tryMove(uci)}
                       arrows={arrows}
                     />
@@ -589,7 +842,13 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 {t.mistakes.editor.errors[positionError]}
               </p>
             )}
-            {done && done.lines.length > 0 && (
+            {done && done.lines.length > 0 && !myTurn && (
+              <div className="space-y-1 rounded-xl bg-surface-2 p-3" data-testid="opponent-turn">
+                <p className="font-semibold">{t.analyze.opponent.waiting}</p>
+                {best && <p className="text-sm text-muted">{t.analyze.opponent.threat(sanToLocal(best.san))}</p>}
+              </div>
+            )}
+            {done && done.lines.length > 0 && myTurn && (
               <div className="space-y-2 rounded-xl bg-surface-2 p-3">
                 <label className="flex cursor-pointer items-start gap-3">
                   <input
@@ -629,40 +888,16 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </div>
             )}
             {!showBoard && (
-              <>
-                <fieldset>
-                  <legend className="mb-1 text-sm font-semibold">{t.analyze.myColor}</legend>
-                  <div className="flex flex-wrap gap-2">
-                    {(['w', 'b', 'none'] as const).map((c) => {
-                      const value = c === 'none' ? null : c;
-                      return (
-                        <button
-                          key={c}
-                          type="button"
-                          aria-pressed={myColor === value}
-                          onClick={() => {
-                            setMyColor(value);
-                            if (value) setFlipped(value === 'b');
-                          }}
-                          className={`min-h-10 rounded-xl border-2 px-3 text-sm font-semibold ${myColor === value ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
-                        >
-                          {t.analyze.myColors[c]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-                <Button
-                  size="lg"
-                  block
-                  icon={<Icon name="target" />}
-                  disabled={positionError !== null}
-                  onClick={() => void evaluate(position)}
-                  data-testid="evaluate"
-                >
-                  {`${t.analyze.evaluate} · ${t.analyze.turn} ${turnName}`}
-                </Button>
-              </>
+              <Button
+                size="lg"
+                block
+                icon={<Icon name="target" />}
+                disabled={positionError !== null}
+                onClick={() => void evaluate(position)}
+                data-testid="evaluate"
+              >
+                {`${t.analyze.evaluate} · ${t.analyze.turn} ${turnName}`}
+              </Button>
             )}
           </Card>
         )}
@@ -674,7 +909,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         </p>
       )}
 
-      {done && fen && (showSuggestions || done.lines.length === 0) && (
+      {done && fen && ((showSuggestions && done.lines.length > 0) || done.lines.length === 0) && (
         <Card className="space-y-3" data-testid="analyze-result" aria-live="polite">
           {done.lines.length === 0 ? (
             <p className="font-semibold">{t.analyze.gameOver}</p>
@@ -695,11 +930,17 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                     </p>
                   </div>
                 )}
-                <SpeakButton text={verdict} auto={explanation.status === 'idle' && !apiKey} />
+                {!live && <SpeakButton text={`${verdict} ${winExtra}`} auto={explanation.status === 'idle' && !apiKey} />}
               </div>
               <p className="text-xs text-muted">{t.analyze.evalHelp}</p>
+              {win && <WinningLineCard line={win} open={variation === 'win'} onToggle={() => setVariation(variation === 'win' ? null : 'win')} />}
               <p className="text-sm text-muted">{t.analyze.candidates.help}</p>
-              <CandidateMoves candidates={candidates} whiteToMove={position?.turn === 'w'} openIndex={variation} onOpen={setVariation} />
+              <CandidateMoves
+                candidates={candidates}
+                whiteToMove={position?.turn === 'w'}
+                openIndex={typeof variation === 'number' ? variation : null}
+                onOpen={setVariation}
+              />
             </>
           )}
           {explanation.status === 'busy' && <p className="font-semibold">{t.analyze.explaining}</p>}
@@ -719,7 +960,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             <div className="rounded-xl border border-l-4 border-line border-l-accent bg-surface p-3.5" data-testid="analyze-explanation">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-accent-strong">{t.analyze.explanation}</p>
-                <SpeakButton text={`${verdict} ${explanation.value}`} auto />
+                {!live && <SpeakButton text={`${verdict} ${explanation.value}`} auto />}
               </div>
               <p className="mt-1 whitespace-pre-line">{explanation.value}</p>
             </div>

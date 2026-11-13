@@ -8,6 +8,7 @@ import {
   ranksToGrid,
   type BoardView,
 } from './boardReading';
+import { plausibleCorners, type Corners } from '../vision/geometry';
 import { resolveReading, type ReadingReference, type ResolvedReading } from './boardResolve';
 
 /**
@@ -53,6 +54,38 @@ export function useApiKey(): string {
   );
 }
 
+// Modalità veloce (fast mode dell'API): la risposta arriva prima, ma ogni lettura costa circa il doppio.
+const FAST_STORAGE = 'cm.anthropic.fast';
+const fastListeners = new Set<() => void>();
+
+export function getFastMode(): boolean {
+  try {
+    return localStorage.getItem(FAST_STORAGE) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function setFastMode(on: boolean): void {
+  try {
+    localStorage.setItem(FAST_STORAGE, on ? '1' : '0');
+  } catch {
+    // preferenza non salvata
+  }
+  fastListeners.forEach((l) => l());
+}
+
+export function useFastMode(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      fastListeners.add(l);
+      return () => fastListeners.delete(l);
+    },
+    getFastMode,
+    () => true,
+  );
+}
+
 /** Formato plausibile di una chiave Anthropic (controllo locale, non verifica la validità). */
 export function looksLikeApiKey(key: string): boolean {
   return /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key.trim());
@@ -92,6 +125,21 @@ function mapError(error: unknown, sdk: typeof Anthropic | null): AssistantError 
 }
 
 type BetaMessage = Anthropic.Beta.BetaMessage;
+type CreateParams = Anthropic.Beta.MessageCreateParamsNonStreaming;
+
+/**
+ * Invia la richiesta, in modalità veloce se è attiva. La modalità veloce ha un
+ * limite di richieste a parte: se viene rifiutata si ripete subito a velocità normale.
+ */
+async function createMessage(client: Anthropic, sdk: typeof Anthropic, params: CreateParams): Promise<BetaMessage> {
+  if (!getFastMode()) return client.beta.messages.create(params);
+  try {
+    return await client.beta.messages.create({ ...params, speed: 'fast' });
+  } catch (error) {
+    if (error instanceof sdk.RateLimitError || error instanceof sdk.BadRequestError) return client.beta.messages.create(params);
+    throw error;
+  }
+}
 
 function textOf(message: BetaMessage): string {
   return message.content
@@ -123,6 +171,8 @@ export interface BoardReading {
   corrected: string[];
   /** Mosse (SAN) riconosciute rispetto alla posizione precedente. */
   moves: string[];
+  /** Angoli dell'area di gioco nell'immagine inviata (frazioni 0–1), se plausibili. */
+  corners: Corners | null;
 }
 
 export interface ReadOptions {
@@ -138,13 +188,31 @@ export interface ReadOptions {
   lastView?: BoardView | null;
   /** Lettura grezza precedente. */
   lastRawPlacement?: string | null;
-  /** Lettura più accurata (più lenta): per le letture singole su richiesta. */
-  careful?: boolean;
 }
+
+const CORNER = {
+  type: 'object',
+  properties: { x: { type: 'integer' }, y: { type: 'integer' } },
+  required: ['x', 'y'],
+  additionalProperties: false,
+} as const;
 
 const READING_SCHEMA = {
   type: 'object',
   properties: {
+    board_corners: {
+      type: 'object',
+      description:
+        'The 4 corners of the 8x8 playing area (where the outer squares end, not the wooden frame), in image coordinates from 0 to 1000: x from the left edge, y from the top edge.',
+      properties: {
+        top_left: CORNER,
+        top_right: CORNER,
+        bottom_right: CORNER,
+        bottom_left: CORNER,
+      },
+      required: ['top_left', 'top_right', 'bottom_right', 'bottom_left'],
+      additionalProperties: false,
+    },
     white_count: { type: 'integer', description: 'How many WHITE pieces you can see on the board (0-16). Count them first.' },
     black_count: { type: 'integer', description: 'How many BLACK pieces you can see on the board (0-16). Count them first.' },
     grid: {
@@ -162,13 +230,13 @@ const READING_SCHEMA = {
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
     notes: { type: 'string', description: 'Short notes in Italian about doubtful squares; empty if none.' },
   },
-  required: ['white_count', 'black_count', 'grid', 'white_side', 'side_to_move', 'confidence', 'notes'],
+  required: ['board_corners', 'white_count', 'black_count', 'grid', 'white_side', 'side_to_move', 'confidence', 'notes'],
   additionalProperties: false,
 } as const;
 
 const READING_PROMPT = `This is a photo of a physical chess board with a game in progress. Transcribe the position you see.
 
-1. Look only at the 64 playing squares (ignore the frame, printed coordinates, captured pieces beside the board, hands).
+1. Locate the board: board_corners = the 4 corners of the 8x8 playing area as seen in the image (0-1000 coordinates). Then look only at the 64 playing squares (ignore the frame, printed coordinates, captured pieces beside the board, hands).
 2. Count the pieces first: white_count and black_count (the starting position has 16 each; there can never be more).
 3. Fill "grid" exactly as the image shows it: 8 rows from the TOP of the image to the BOTTOM, each row from LEFT to RIGHT, 8 characters per row. Do NOT rotate, flip or reorder anything and do NOT try to put White at the bottom: just report what stands on each square as you see it. The number of letters in the grid must match your counts.
 4. white_side: the edge of the image (bottom, top, left or right) next to which the White pieces stand. Use the coordinates printed on the board if visible; otherwise the starting setup / which army is on which side, and the rule that each player has a LIGHT square in his right-hand corner.
@@ -180,6 +248,7 @@ If a square is hidden or unclear, make your best guess and say so in "notes" (It
 const FEN_PLACEMENT = /^([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+$/;
 
 export interface RawReading {
+  corners: Corners | null;
   grid: string[] | null;
   whiteSide: BoardView;
   whiteCount: number | null;
@@ -200,11 +269,25 @@ function parseReading(message: BetaMessage): RawReading {
   return parseReadingJson(parsed);
 }
 
+function parseCorners(raw: unknown): Corners | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const point = (p: unknown) => {
+    const q = p as { x?: unknown; y?: unknown } | null;
+    return q && typeof q.x === 'number' && typeof q.y === 'number' ? { x: q.x / 1000, y: q.y / 1000 } : null;
+  };
+  const corners = [point(value.top_left), point(value.top_right), point(value.bottom_right), point(value.bottom_left)];
+  if (corners.some((p) => p === null)) return null;
+  const quad = corners as Corners;
+  return plausibleCorners(quad, 0.08) ? quad : null;
+}
+
 /** Interpreta la risposta JSON di Claude (esportata per i test). */
 export function parseReadingJson(parsed: Record<string, unknown>): RawReading {
   const grid = Array.isArray(parsed.grid) ? normalizeGrid(parsed.grid) : null;
   const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
   return {
+    corners: parseCorners(parsed.board_corners),
     grid,
     whiteSide: isBoardView(parsed.white_side) ? parsed.white_side : 'bottom',
     whiteCount: count(parsed.white_count),
@@ -256,7 +339,7 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
-      created.client.beta.messages.create({
+      createMessage(created.client, created.sdk, {
         model: ASSISTANT_MODEL,
         max_tokens: 8000,
         betas: ['server-side-fallback-2026-07-01'],
@@ -276,7 +359,8 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
           })
         : null;
 
-    let reading = parseReading(await ask(options.careful ? 'medium' : 'low', ''));
+    // Sforzo basso: la lettura è rapida, e gli errori isolati li corregge il codice con le regole.
+    let reading = parseReading(await ask('low', ''));
     let resolved = interpret(reading);
     let problems = readingProblems(reading, resolved);
     if (problems.length > 0) {
@@ -308,6 +392,7 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
       rawPlacement: resolved.rawPlacement,
       corrected: resolved.corrected,
       moves: resolved.moves,
+      corners: reading.corners,
     };
   } catch (error) {
     throw mapError(error, sdk);
@@ -341,7 +426,7 @@ export async function explainPosition(input: ExplainInput): Promise<string> {
     sdk = created.sdk;
     const side = input.fen.split(' ')[1] === 'b' ? 'il Nero' : 'il Bianco';
     const player = input.playerSide ? `\nL'utente gioca con ${input.playerSide === 'w' ? 'il Bianco' : 'il Nero'}: parla dal suo punto di vista.` : '';
-    const message = await created.client.beta.messages.create({
+    const message = await createMessage(created.client, created.sdk, {
       model: ASSISTANT_MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
