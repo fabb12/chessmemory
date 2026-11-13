@@ -12,8 +12,7 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '/strategie', label: t.nav.strategies, icon: 'book' },
   { to: '/analizza', label: t.nav.analyze, icon: 'camera' },
   { to: '/partite', label: t.nav.games, icon: 'crown' },
-  { to: '/memory-dna', label: t.nav.dna, icon: 'dna' },
-  { to: '/profilo', label: t.nav.profile, icon: 'user' },
+  { to: '/progressi', label: t.nav.dna, icon: 'dna' },
 ];
 
 interface AppShellProps {
@@ -59,12 +58,27 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
                 aria-label={voiceOn ? t.voice.toggleOn : t.voice.toggleOff}
                 title={voiceOn ? t.voice.toggleOn : t.voice.toggleOff}
                 data-testid="voice-toggle"
-                className={`inline-flex size-11 items-center justify-center rounded-xl border ${
+                className={`inline-flex size-10 items-center justify-center rounded-xl border sm:size-11 ${
                   voiceOn ? 'border-accent/40 bg-accent-soft text-accent-strong' : 'border-line bg-surface text-muted'
                 }`}
               >
                 <Icon name={voiceOn ? 'speaker' : 'speakerOff'} size={20} />
               </button>
+            )}
+            {!bare && (
+              <NavLink
+                to="/profilo"
+                aria-label={t.nav.profile}
+                title={t.nav.profile}
+                data-testid="nav-profile"
+                className={({ isActive }) =>
+                  `order-last inline-flex size-10 items-center sm:size-11 justify-center rounded-xl border ${
+                    isActive ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-muted hover:text-fg'
+                  }`
+                }
+              >
+                <Icon name="user" size={20} />
+              </NavLink>
             )}
             {!bare && (
               <nav aria-label={t.nav.label} className="hidden md:block">
@@ -105,16 +119,20 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
         {children}
       </main>
 
-      <p className={`pt-2 text-center text-[0.7rem] tracking-wide text-muted/80 ${bare ? '' : 'pb-24 md:pb-4'}`} data-testid="app-version">
-        {t.app.versionLabel(__APP_VERSION__)}
-      </p>
+      {!bare && (
+        <footer className="pb-24 pt-2 text-center text-xs text-muted md:pb-5">
+          <NavLink to="/informazioni" className="underline-offset-2 hover:underline">
+            {t.info.link}
+          </NavLink>
+        </footer>
+      )}
 
       {!bare && (
         <nav
           aria-label={t.nav.label}
           className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-surface/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_-12px_rgb(10_20_48/0.25)] backdrop-blur-xl backdrop-saturate-150 md:hidden"
         >
-          <ul className="mx-auto grid max-w-3xl grid-cols-7">
+          <ul className="mx-auto grid max-w-3xl grid-cols-6">
             {NAV.map((item) => (
               <li key={item.to}>
                 <NavLink
@@ -131,7 +149,7 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
                       <span className={`rounded-full px-2 py-1 transition-all ${isActive ? 'cm-btn-primary bg-accent text-on-accent' : ''}`}>
                         <Icon name={item.icon} size={22} />
                       </span>
-                      <span className={`max-[429px]:sr-only ${isActive ? 'text-fg' : ''}`}>{item.label}</span>
+                      <span className={isActive ? 'text-fg' : ''}>{item.label}</span>
                     </>
                   )}
                 </NavLink>

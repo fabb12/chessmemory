@@ -97,7 +97,7 @@ export function SessionSummary({ session, previous, streak, levelBefore, levelAf
           <Icon name="home" />
           {t.summary.home}
         </Link>
-        <Link to="/memory-dna" className={buttonClass('secondary', 'lg', true)}>
+        <Link to="/progressi" className={buttonClass('secondary', 'lg', true)}>
           <Icon name="dna" />
           {t.summary.dna}
         </Link>

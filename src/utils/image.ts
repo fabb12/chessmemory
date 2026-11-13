@@ -29,21 +29,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function draw(
-  source: CanvasImageSource,
-  width: number,
-  height: number,
-  rotate90 = false,
-): PreparedImage {
+function draw(source: CanvasImageSource, width: number, height: number): PreparedImage {
   const canvas = document.createElement('canvas');
-  canvas.width = rotate90 ? height : width;
-  canvas.height = rotate90 ? width : height;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas non disponibile');
-  if (rotate90) {
-    ctx.translate(canvas.width, 0);
-    ctx.rotate(Math.PI / 2);
-  }
   ctx.drawImage(source, 0, 0, width, height);
   return { dataUrl: canvas.toDataURL('image/jpeg', JPEG_QUALITY), width: canvas.width, height: canvas.height };
 }
@@ -63,10 +54,4 @@ export async function prepareImage(file: File, maxSide = MAX_PHOTO_SIDE): Promis
   } finally {
     URL.revokeObjectURL(url);
   }
-}
-
-/** Ruota la foto di 90° in senso orario. */
-export async function rotateImage(image: PreparedImage): Promise<PreparedImage> {
-  const img = await loadImage(image.dataUrl);
-  return draw(img, img.naturalWidth, img.naturalHeight, true);
 }

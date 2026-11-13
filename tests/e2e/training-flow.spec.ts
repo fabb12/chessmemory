@@ -139,11 +139,11 @@ test.describe('flusso completo di allenamento', () => {
     await expect(page.getByTestId('onboarding-welcome')).toHaveCount(0);
 
     await page.getByRole('link', { name: 'Profilo' }).first().click();
-    await expect(page.getByTestId('profile-declared')).toHaveText('Principiante');
+    await expect(page.getByTestId('profile-level')).toHaveText('Livello 1 di 5');
     await expect(page.getByTestId('sessions-total')).toHaveText('1 allenamento completato');
     await expect(page.getByTestId('session-history').locator('li')).toHaveCount(1);
 
-    await page.getByRole('link', { name: 'Memory DNA' }).first().click();
+    await page.getByRole('link', { name: 'Progressi' }).first().click();
     const rates = await page.getByTestId('success-rate').allInnerTexts();
     expect(rates).toHaveLength(5);
     expect(rates.filter((r) => r === '100%').length).toBeGreaterThan(0);
@@ -191,7 +191,7 @@ test.describe('flusso completo di allenamento', () => {
     await page.getByTestId('resume-training').click();
     await expect(page.getByTestId('concept-runner')).toBeVisible();
 
-    for (const route of ['#/strategie', '#/memory-dna', '#/profilo']) {
+    for (const route of ['#/strategie', '#/progressi', '#/profilo', '#/informazioni']) {
       await page.goto(`./${route}`);
       await expect(page.locator('h1')).toBeVisible();
       expect(await noOverflow(), route).toBe(true);

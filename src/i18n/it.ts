@@ -33,10 +33,11 @@ export const it = {
     home: 'Home',
     train: 'Allenati',
     strategies: 'Strategie',
-    dna: 'Memory DNA',
+    dna: 'Progressi',
     games: 'Partite',
     analyze: 'Analizza',
     profile: 'Profilo',
+    info: 'Informazioni',
   },
   sides: { w: 'Bianco', b: 'Nero' },
   sideToMove: { w: 'Muove il Bianco', b: 'Muove il Nero' },
@@ -90,37 +91,6 @@ export const it = {
     intermediate: 'Intermedio',
     unsure: 'Non sono sicuro',
   } satisfies Record<DeclaredLevel, string>,
-  declaredHelp: {
-    beginner: 'Conosco le regole e sto imparando le prime idee.',
-    intermediate: 'Gioco con regolarità e conosco le tattiche di base.',
-    unsure: 'Preferisco che sia l’app a capirlo.',
-  } satisfies Record<DeclaredLevel, string>,
-  onboarding: {
-    welcomeTitle: 'Benvenuto in ChessMemoryBen',
-    welcomeText:
-      'Un allenatore personale per ricordare le mosse, capire le idee e riconoscerle in posizioni nuove. Cinque minuti al giorno.',
-    pillars: [
-      { title: 'Memoria', text: 'Ricorda la mossa giusta.' },
-      { title: 'Comprensione', text: 'Capisci perché funziona.' },
-      { title: 'Trasferimento', text: 'Riconosci l’idea altrove.' },
-    ],
-    start: 'Cominciamo',
-    levelTitle: 'Qual è il tuo livello?',
-    levelText: 'Serve solo a scegliere i primi esercizi: poi la difficoltà si adatta ai tuoi risultati.',
-    placementTitle: 'Valutazione iniziale',
-    placementIntro: (n: number) =>
-      `${n} posizioni rapide per trovare il punto di partenza. Non è un esame: se non sai una risposta riceverai un indizio.`,
-    placementStart: 'Inizia la valutazione',
-    placementProgress: (i: number, n: number) => `Posizione ${i} di ${n}`,
-    placementPrompt: 'Trova la mossa migliore.',
-    resultTitle: 'Il tuo punto di partenza',
-    resultText: (solved: number, total: number) =>
-      `Hai risolto ${solved} posizioni su ${total} senza che servisse la soluzione.`,
-    resultNote: 'Il livello salirà o scenderà da solo in base ai risultati dei tuoi allenamenti.',
-    finish: 'Vai alla Home',
-    localData:
-      'Nessuna registrazione: i progressi restano su questo dispositivo. Cancellando i dati del browser andrebbero persi; puoi esportarli dal Profilo.',
-  },
   home: {
     greeting: (hour: number) => (hour < 5 ? 'Buonanotte' : hour < 13 ? 'Buongiorno' : hour < 18 ? 'Buon pomeriggio' : 'Buonasera'),
     subtitle: 'Pronto per i tuoi cinque minuti?',
@@ -266,7 +236,7 @@ export const it = {
       `Per ora torniamo al livello ${n}, per consolidare le basi. Risalirai appena i risultati migliorano.`,
     streak: (n: number) => (n === 1 ? 'Primo giorno della tua sequenza!' : `${n} giorni di allenamento consecutivi.`),
     home: 'Torna alla Home',
-    dna: 'Vedi il Memory DNA',
+    dna: 'Vedi i tuoi progressi',
     conceptsTitle: 'I concetti di oggi',
     ratingLabels: { 1: 'Da rivedere', 2: 'Incerto', 3: 'Buono', 4: 'Sicuro' } as Record<number, string>,
   },
@@ -290,11 +260,11 @@ export const it = {
   analyze: {
     title: 'Analizza la partita',
     intro:
-      'Inquadra la scacchiera: Claude riconosce i pezzi, Stockfish calcola le mosse migliori e le disegna sulla scacchiera, Claude ti spiega l’idea (anche a voce). Puoi anche provare prima tu una mossa e vedere come la giudica il motore: serve ad allenare il tuo occhio, non a giocare al posto tuo.',
+      'Inquadra la scacchiera: l’app riconosce i pezzi, ti mostra le mosse migliori quando tocca a te e ti spiega l’idea, anche a voce.',
     homeCardTitle: 'Analizza dal vivo con la fotocamera',
-    homeCardText: 'Inquadra la scacchiera: valutazione e mossa migliore spiegate a voce.',
+    homeCardText: 'Inquadra la scacchiera: mosse migliori, linea vincente e spiegazione a voce.',
     key: {
-      title: 'Chiave API di Claude',
+      title: 'Analisi con la fotocamera',
       label: 'Chiave API Anthropic',
       help:
         'La crei su console.anthropic.com (API Keys). Resta solo su questo dispositivo, non va nei backup né nel cloud, e viene inviata soltanto ad api.anthropic.com. Ogni lettura della scacchiera ha un piccolo costo sul tuo account Anthropic.',
@@ -302,7 +272,7 @@ export const it = {
       remove: 'Rimuovi la chiave',
       saved: (tail: string) => `Chiave salvata (${tail})`,
       invalid: 'Non sembra una chiave Anthropic valida: deve iniziare con «sk-ant-».',
-      needed: 'Per leggere la scacchiera dalla foto serve una chiave API di Claude.',
+      needed: 'Per riconoscere la scacchiera da foto e fotocamera serve una chiave API di Anthropic (Claude). Senza chiave puoi comunque sistemare i pezzi a mano e analizzarli.',
     },
     camera: {
       start: 'Accendi la fotocamera',
@@ -510,8 +480,8 @@ export const it = {
     notFound: 'Concetto non trovato.',
   },
   dna: {
-    title: 'Memory DNA',
-    intro: 'Il tuo profilo di allenamento nelle cinque aree.',
+    title: 'I tuoi progressi',
+    intro: 'Come stai andando nelle cinque aree, e su cosa conviene allenarsi.',
     disclaimer:
       'Le percentuali derivano dai risultati dei tuoi esercizi in questa app. Sono un’indicazione pratica per orientare l’allenamento, non una misura scientifica della memoria.',
     success: 'Successo osservato',
@@ -576,7 +546,6 @@ export const it = {
   profile: {
     title: 'Profilo',
     levelSection: 'Livello',
-    declared: 'Livello dichiarato',
     current: 'Livello didattico attuale',
     historySection: 'Storico degli allenamenti',
     historyEmpty: 'Non hai ancora completato allenamenti.',
@@ -590,9 +559,6 @@ export const it = {
     orientations: { auto: 'Dal lato di chi muove', white: 'Sempre dal Bianco', black: 'Sempre dal Nero' },
     analysisDepth: 'Analisi con il motore',
     analysisDepths: { quick: 'Rapida', deep: 'Approfondita (più lenta)' },
-    playerName: 'Il tuo nome nelle partite',
-    playerNameHelp:
-      'Come compari nei file PGN o il tuo nome utente su Lichess / Chess.com: serve a capire con quale colore giocavi.',
     dataSection: 'I tuoi dati',
     dataNote:
       'I progressi sono salvati su questo dispositivo, nel browser. Se cancelli i dati di navigazione vengono persi: esporta un backup ogni tanto (oppure salvali nel tuo account).',
@@ -614,7 +580,6 @@ export const it = {
     resetDone: 'Progressi cancellati.',
     storagePersisted: 'Archiviazione protetta: il browser non eliminerà i dati automaticamente.',
     storageBestEffort: 'Il browser potrebbe liberare spazio eliminando i dati se il dispositivo è quasi pieno.',
-    version: (v: string) => `Versione ${v}`,
   },
   account: {
     title: 'Account',
@@ -699,6 +664,66 @@ export const it = {
     stepStart: 'Posizione',
     stepBack: 'Mossa precedente',
     stepForward: 'Mossa successiva',
+  },
+  info: {
+    title: 'Informazioni e privacy',
+    intro: 'Come vengono trattati i tuoi dati, le condizioni d’uso e i componenti open source dell’app.',
+    link: 'Informazioni, privacy e licenze',
+    devIncomplete:
+      'Solo in sviluppo: compila i dati del titolare in src/config/brand.ts (ragione sociale, email) e fai verificare informativa e condizioni da un consulente prima della vendita.',
+    updated: (date: string) => `Ultimo aggiornamento: ${date}`,
+    privacy: {
+      title: 'Privacy',
+      controller: 'Titolare del trattamento:',
+      items: [
+        {
+          title: 'Dati salvati sul dispositivo',
+          text: 'Progressi, risposte agli esercizi, preferenze e storico degli allenamenti restano nel browser di questo dispositivo (IndexedDB). Non vengono inviati a nessuno, salvo quanto descritto sotto. Puoi esportarli, importarli o cancellarli dal Profilo.',
+        },
+        {
+          title: 'Account (facoltativo)',
+          text: 'Se crei un account, email, preferenze e (solo se lo chiedi tu) una copia dei progressi vengono salvati sul servizio cloud Supabase. Puoi uscire dall’account in qualsiasi momento.',
+        },
+        {
+          title: 'Analisi con la fotocamera',
+          text: 'Quando chiedi di leggere la scacchiera, l’immagine della scacchiera (ritagliata e ridotta) viene inviata ad Anthropic per il riconoscimento dei pezzi, e la posizione viene inviata per la spiegazione della mossa. Il video della fotocamera resta sul dispositivo: viene inviato solo il fotogramma della lettura. La chiave API di Anthropic resta in questo browser e viene inviata soltanto ad api.anthropic.com.',
+        },
+        {
+          title: 'Fotocamera e voce',
+          text: 'La fotocamera si attiva solo quando premi «Accendi la fotocamera» e si spegne quando esci o premi «Spegni». La lettura ad alta voce usa la sintesi vocale del dispositivo, senza servizi esterni.',
+        },
+        {
+          title: 'Nessuna pubblicità o profilazione',
+          text: 'L’app non usa cookie pubblicitari, non traccia la navigazione e non vende dati a terzi.',
+        },
+      ],
+    },
+    terms: {
+      title: 'Condizioni d’uso',
+      items: [
+        'L’app è uno strumento didattico per migliorare a scacchi: livelli, percentuali e consigli sono indicazioni pratiche, non un punteggio Elo né una misura scientifica.',
+        'Valutazioni e mosse consigliate sono calcolate da un motore scacchistico e da un modello di intelligenza artificiale: possono contenere errori, soprattutto nella lettura delle foto. Controlla sempre la posizione.',
+        'Usare i suggerimenti durante una partita ufficiale o online è vietato dai regolamenti scacchistici: usa l’analisi per allenarti e per rivedere le tue partite.',
+        'Le letture con la fotocamera usano la tua chiave API di Anthropic: i relativi costi sono addebitati sul tuo account Anthropic.',
+      ],
+    },
+    licenses: {
+      title: 'Licenze open source',
+      intro: 'L’app è costruita anche con questi componenti, ciascuno con la propria licenza.',
+      items: [
+        { name: 'Stockfish (stockfish.js)', license: 'GPL-3.0', url: 'https://github.com/nmrugg/stockfish.js' },
+        { name: 'chess.js', license: 'BSD-2-Clause', url: 'https://github.com/jhlywa/chess.js' },
+        { name: 'react-chessboard', license: 'MIT', url: 'https://github.com/Clariity/react-chessboard' },
+        { name: 'ts-fsrs', license: 'MIT', url: 'https://github.com/open-spaced-repetition/ts-fsrs' },
+        { name: 'React, React Router', license: 'MIT', url: 'https://github.com/facebook/react' },
+        { name: 'Dexie', license: 'Apache-2.0', url: 'https://github.com/dexie/Dexie.js' },
+        { name: 'Supabase JS', license: 'MIT', url: 'https://github.com/supabase/supabase-js' },
+        { name: 'Anthropic SDK', license: 'Apache-2.0', url: 'https://github.com/anthropics/anthropic-sdk-typescript' },
+        { name: 'Inter, Fraunces (caratteri)', license: 'SIL OFL 1.1', url: 'https://github.com/fontsource/fontsource' },
+      ],
+      stockfish:
+        'Stockfish è software libero distribuito con licenza GNU GPL versione 3: gira come programma separato nel browser e il suo codice sorgente completo è disponibile al link indicato.',
+    },
   },
   dates: {
     today: 'oggi',

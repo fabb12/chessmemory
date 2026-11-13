@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AccountCard } from '../components/account/AccountCard';
 import { isSupabaseConfigured } from '../services/supabase';
 import { Button } from '../components/ui/Button';
@@ -8,7 +9,6 @@ import { Icon } from '../components/ui/Icon';
 import { VoiceSettings } from '../components/ui/VoiceSettings';
 import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
 import type { Profile } from '../db/schema';
-import { MAX_PLAYER_NAME } from '../features/account/cloud';
 import type { AnalysisDepth } from '../features/engine/engine';
 import { useSessions } from '../hooks/useData';
 import { dateTimeFormatter, t } from '../i18n';
@@ -78,14 +78,6 @@ export function ProfilePage({ profile }: { profile: Profile }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetChecked, setResetChecked] = useState(false);
   const [persisted, setPersisted] = useState<boolean | null>(null);
-  const [playerName, setPlayerName] = useState(profile.settings.playerName);
-
-  // Le preferenze possono cambiare anche dall'account (sincronizzazione).
-  useEffect(() => setPlayerName(profile.settings.playerName), [profile.settings.playerName]);
-  const savePlayerName = () => {
-    const value = playerName.trim().slice(0, MAX_PLAYER_NAME);
-    if (value !== profile.settings.playerName) void updateSettings({ playerName: value });
-  };
 
   useEffect(() => {
     void navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(null));
@@ -148,13 +140,7 @@ export function ProfilePage({ profile }: { profile: Profile }) {
 
       <Card>
         <SectionTitle>{t.profile.levelSection}</SectionTitle>
-        <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-muted">{t.profile.declared}</dt>
-            <dd className="text-base font-semibold" data-testid="profile-declared">
-              {profile.declaredLevel ? t.declared[profile.declaredLevel] : '—'}
-            </dd>
-          </div>
+        <dl className="mt-2 text-sm">
           <div>
             <dt className="text-muted">{t.profile.current}</dt>
             <dd className="text-base font-semibold" data-testid="profile-level">
@@ -192,29 +178,6 @@ export function ProfilePage({ profile }: { profile: Profile }) {
             labels={t.profile.analysisDepths}
             onChange={(analysisDepth) => void updateSettings({ analysisDepth })}
           />
-          <div>
-            <label htmlFor="player-name" className="font-semibold">
-              {t.profile.playerName}
-            </label>
-            <input
-              id="player-name"
-              value={playerName}
-              maxLength={MAX_PLAYER_NAME}
-              autoCapitalize="none"
-              spellCheck={false}
-              onChange={(e) => setPlayerName(e.target.value)}
-              onBlur={savePlayerName}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') savePlayerName();
-              }}
-              aria-describedby="player-name-help"
-              className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface px-3"
-              data-testid="player-name"
-            />
-            <p id="player-name-help" className="mt-1 text-sm text-muted">
-              {t.profile.playerNameHelp}
-            </p>
-          </div>
         </div>
       </Card>
 
@@ -300,7 +263,12 @@ export function ProfilePage({ profile }: { profile: Profile }) {
         </Button>
       </Card>
 
-      <p className="text-center text-sm text-muted">{t.profile.version(__APP_VERSION__)}</p>
+      <Card className="flex flex-wrap items-center justify-between gap-2">
+        <Link to="/informazioni" className="font-semibold text-accent-strong underline" data-testid="info-link">
+          {t.info.link}
+        </Link>
+        <span className="text-sm text-muted">{t.app.versionLabel(__APP_VERSION__.split('+')[0] ?? __APP_VERSION__)}</span>
+      </Card>
 
       <ConfirmDialog
         open={pendingImport !== null}

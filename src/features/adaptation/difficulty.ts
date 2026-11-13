@@ -1,4 +1,4 @@
-import type { DeclaredLevel, Difficulty } from '../../types';
+import type { Difficulty } from '../../types';
 import type { TaskQuality } from '../learning/moveTask';
 
 /**
@@ -90,46 +90,8 @@ export function updateDifficulty(
   return base;
 }
 
-// ───────────── Valutazione iniziale ─────────────
-
-export interface PlacementConfig {
-  exerciseCount: number;
-  startLevel: Record<DeclaredLevel, Difficulty>;
-  /** Livello massimo assegnabile dalla valutazione iniziale. */
-  maxResultLevel: Record<DeclaredLevel, Difficulty>;
-}
-
-export const DEFAULT_PLACEMENT_CONFIG: PlacementConfig = {
-  exerciseCount: 5,
-  startLevel: { beginner: 1, unsure: 2, intermediate: 3 },
-  maxResultLevel: { beginner: 3, unsure: 4, intermediate: 4 },
-};
-
-/** Livello del prossimo esercizio di valutazione («scala»: su se bene, giù se male). */
-export function nextPlacementLevel(current: Difficulty, quality: TaskQuality): Difficulty {
-  const delta = quality === 'clean' ? 1 : quality === 'failed' ? -1 : 0;
-  return clampLevel(current + delta, { minLevel: 1, maxLevel: 5 });
-}
-
+/** Risposta della valutazione iniziale (oggi non più proposta: i profili partono dal livello 1). */
 export interface PlacementAnswer {
   level: Difficulty;
   quality: TaskQuality;
-}
-
-/**
- * Livello iniziale: il livello più alto risolto senza aiuti almeno una volta,
- * ridotto di uno se a quel livello ci sono stati anche fallimenti; se nulla è
- * stato risolto senza aiuti si parte dal livello 1.
- */
-export function placementResult(
-  declared: DeclaredLevel,
-  answers: PlacementAnswer[],
-  cfg: PlacementConfig = DEFAULT_PLACEMENT_CONFIG,
-): Difficulty {
-  const clean = answers.filter((a) => a.quality === 'clean').map((a) => a.level);
-  if (clean.length === 0) return 1;
-  const top = Math.max(...clean);
-  const failedAtTop = answers.some((a) => a.level === top && a.quality === 'failed');
-  const level = failedAtTop ? top - 1 : top;
-  return clampLevel(Math.min(level, cfg.maxResultLevel[declared]), { minLevel: 1, maxLevel: 5 });
 }

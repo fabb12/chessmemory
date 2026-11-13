@@ -4,7 +4,15 @@
 
 L'app funziona interamente sul dispositivo: i progressi restano in IndexedDB e tutto funziona offline dopo il primo caricamento, compresa l'analisi con Stockfish. Gli **account** sono facoltativi: se si collega un progetto Supabase, le preferenze vengono salvate nell'account e i progressi si possono copiare nel cloud.
 
-> Nota sul nome: in questa versione non c'è alcun modello di intelligenza artificiale. Difficoltà, ripassi e consigli sono calcolati da regole locali documentate e dall'algoritmo di ripetizione dilazionata FSRS. L'app non promette miglioramenti garantiti.
+> Allenamento, difficoltà e ripassi sono calcolati sul dispositivo da regole documentate e dall'algoritmo di ripetizione dilazionata FSRS. L'intelligenza artificiale (Claude, API Anthropic) è usata solo in «Analizza», per riconoscere la scacchiera da foto e fotocamera e per spiegare le mosse. L'app non promette miglioramenti garantiti.
+
+## Prima della vendita
+
+- **Dati del titolare**: compila `src/config/brand.ts` (ragione sociale, indirizzo, email di assistenza, data dell'informativa). Compaiono nella pagina «Informazioni e privacy» (`#/informazioni`); in sviluppo la pagina avvisa se mancano.
+- **Testi legali**: informativa privacy e condizioni d'uso descrivono ciò che il codice fa davvero (dati locali, account Supabase facoltativo, immagini inviate ad Anthropic), ma vanno fatti verificare da un consulente (GDPR, minori: l'app è pensata anche per bambini).
+- **Stockfish è GPL-3.0**: gira come programma separato in un Web Worker; la pagina «Informazioni» riporta la licenza e il link al sorgente. Mantieni la nota se cambi versione del motore.
+- **Chiave API**: oggi l'analisi con la fotocamera usa la chiave Anthropic dell'utente. Per un prodotto in vendita serve un piccolo server che custodisca la chiave e misuri l'uso per abbonamento (vedi le idee in fondo).
+- **Nome e marchio**: il nome è in `src/i18n/it.ts` (`app.name`), nel manifest PWA (`vite.config.ts`) e in `index.html`.
 
 ## Funzionalità
 
@@ -29,13 +37,13 @@ L'app funziona interamente sul dispositivo: i progressi restano in IndexedDB e t
   - Serve una **chiave API Anthropic** dell'utente (console.anthropic.com), inserita in Analizza o nel Profilo: resta solo nel browser (localStorage), non entra nei backup né nel cloud e viene inviata soltanto ad `api.anthropic.com` (accesso diretto dal browser, perché l'app non ha un server). Ogni lettura ha un costo sull'account Anthropic dell'utente.
   - L'SDK `@anthropic-ai/sdk` viene caricato solo quando si usa Analizza.
 - **Partite famose**: 19 partite complete e commentate (Morphy all’Opera, l’Immortale, la Sempreverde, Legal, Steinitz–von Bardeleben, Réti–Tartakower, la partita del secolo di Fischer, Fischer–Spassky 1972 (6ª e 3ª), Karpov–Kasparov 1985, Deep Blue–Kasparov 1997, Kasparov–Topalov 1999) e 7 di Magnus Carlsen (Carlsen–Topalov 2009, Carlsen–Nakamura 2013, Carlsen–Anand 2013 e 2014, Carlsen–Karjakin 2016, Carlsen–Nepomniachtchi 2021), con filtro «Magnus Carlsen»; da scorrere mossa per mossa anche da tastiera, con «che cosa insegna».
-- **Difficoltà adattiva**: livello dichiarato, valutazione iniziale di 5 posizioni, poi il livello sale o scende in base a correttezza e indizi usati (mai in base al tempo).
+- **Difficoltà adattiva**: si parte dal livello 1 senza test iniziale, poi il livello sale o scende in base a correttezza e indizi usati (mai in base al tempo).
 - **Ripetizione dilazionata** con `ts-fsrs` (FSRS): una scheda per concetto, cronologia delle revisioni, ripassi di oggi in Home.
 - **Allenamento quotidiano**: ripassi in scadenza + esercizi mirati sulle debolezze + almeno un concetto nuovo, entro un budget indicativo di 5 minuti. Si sceglie la difficoltà (da 1 a 5, o automatica) e si vedono più concetti tra cui scegliere: quelli consigliati sono già selezionati, gli altri si possono aggiungere, e «Cambia proposte» ne propone di diversi (concetti ed esercizi cambiano a ogni allenamento). Sessione ripristinabile se interrotta.
-- **Memory DNA**: per ciascuna delle quattro aree percentuale di successo osservata (cinque aree), esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
+- **Progressi** (ex «Memory DNA», `#/progressi`): per ciascuna delle cinque aree percentuale di successo osservata, esercizi completati, ripassi previsti, concetti consolidati e da ripassare, andamento nel tempo e un consiglio basato su regole locali.
 - **Stockfish 19** (WebAssembly, versione *lite* a thread singolo, circa 1,9 MB) gira in un Web Worker, offline. Profondità «rapida» (12) o «approfondita» (18) nelle preferenze.
 - **Account (Supabase, facoltativi)**: registrazione e accesso con email e password, password dimenticata, sincronizzazione automatica delle preferenze (tema, orientamento, profondità di analisi, nome nelle partite), salvataggio e ripristino dei progressi nel cloud (le foto restano sul dispositivo).
-- **Profilo**: account, storico, tema chiaro/scuro, orientamento della scacchiera, esportazione/importazione JSON validata, ripristino con conferma esplicita.
+- **Profilo** (icona in alto a destra): account, livello, preferenze, voce, chiave per l'analisi con la fotocamera, storico, esportazione/importazione JSON validata, ripristino con conferma esplicita, link a «Informazioni, privacy e licenze».
 - **PWA**: installabile, service worker con precache completo, indicatore offline.
 - **Accessibilità**: navigazione da tastiera (anche sulla scacchiera), stati comunicati con testo e icone oltre che con il colore, layout da 320 px al desktop.
 

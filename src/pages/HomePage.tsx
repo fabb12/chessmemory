@@ -137,7 +137,6 @@ export function HomePage({ profile }: { profile: Profile }) {
 
       <InstallCard />
 
-      <p className="text-sm text-muted">{t.level.notElo}</p>
     </div>
   );
 }
