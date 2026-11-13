@@ -23,6 +23,11 @@ export interface FamousGame {
   themes: GameTheme[];
   /** Presentazione breve per l'elenco. */
   summary: string;
+  /**
+   * Commento iniziale, mostrato (e letto a voce) prima della prima mossa:
+   * il contesto, il carattere della partita e che cosa se ne può imparare.
+   */
+  intro: string;
   /** Che cosa insegna la partita. */
   lessons: string[];
   /** Mosse in SAN con commenti tra graffe. */
@@ -42,6 +47,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = [
     themes: ['opening', 'development', 'attack', 'sacrifice'],
     summary:
       'Giocata in un palco durante il «Barbiere di Siviglia»: Morphy mostra che cosa succede quando un giocatore sviluppa tutti i pezzi e l’altro no.',
+    intro:
+      "Siamo a Parigi nel 1858, in un palco del Teatro dell’Opera: Paul Morphy, il più forte giocatore del suo tempo, affronta in consultazione due nobili mentre in scena va il «Barbiere di Siviglia». È la partita perfetta per capire lo sviluppo. Il Nero perde tempo con l’alfiere e lascia metà dei pezzi a casa; Morphy invece porta in gioco un pezzo dopo l’altro, arrocca lungo e apre le linee con due sacrifici. Guardala chiedendoti a ogni mossa: quanti pezzi sta usando il Bianco, e quanti il Nero?",
     lessons: [
       'Lo sviluppo rapido vale più di un pedone o di un pezzo.',
       'Un vantaggio di sviluppo si sfrutta aprendo le linee verso il re avversario.',
@@ -66,6 +73,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = [
     themes: ['opening', 'sacrifice'],
     summary:
       'Una trappola d’apertura celebre: il Bianco lascia la donna in presa e dà matto con i pezzi minori.',
+    intro:
+      "Una partita di poche mosse giocata intorno al 1750 al Café de la Régence di Parigi, il ritrovo degli scacchisti dell’epoca. Più che una partita è una trappola diventata famosa: il Bianco lascia la donna in presa, il Nero la cattura e riceve matto dai pezzi minori. La caratteristica è l’inchiodatura «finta»: il cavallo sembra bloccato, ma dietro c’è la donna, non il re. Impara a chiederti sempre che cosa minaccia l’avversario prima di prendere un pezzo che sembra regalato.",
     lessons: [
       'Un’inchiodatura su un cavallo non è assoluta se dietro c’è la donna, non il re.',
       'Prima di catturare un pezzo grosso, controlla che cosa minaccia l’avversario.',
@@ -86,6 +95,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = [
     themes: ['opening', 'attack', 'sacrifice'],
     summary:
       'Anderssen sacrifica un alfiere, entrambe le torri e la donna, e dà matto con i tre pezzi minori rimasti.',
+    intro:
+      "Londra, 1851: una partita amichevole giocata durante il primo grande torneo internazionale. È lo scacco romantico nella sua forma più pura: Gambetto di re, pezzi offerti uno dopo l’altro e un attacco che non dà respiro. Anderssen sacrifica un alfiere, le due torri e infine la donna, e dà matto con i tre pezzi minori rimasti. La lezione va oltre lo spettacolo: il materiale conta poco se i tuoi pezzi lavorano tutti insieme e quelli dell’avversario sono fuori gioco.",
     lessons: [
       'Nell’attacco conta quanti pezzi partecipano, non il materiale sulla scacchiera.',
       'Un re senza difensori può subire matto anche da pezzi minori.',
@@ -109,6 +120,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['opening', 'development', 'attack', 'sacrifice'],
     summary:
       'Un gambetto per guadagnare tempo, il centro aperto e una combinazione finale che ancora oggi si studia in ogni scuola di scacchi.',
+    intro:
+      "Berlino, 1852: ancora Anderssen, questa volta contro Jean Dufresne, in una partita amichevole che Steinitz chiamò «la sempreverde dell’alloro di Anderssen». Il Bianco gioca il Gambetto Evans: un pedone in cambio di tempo per sviluppare e costruire il centro. La caratteristica è la combinazione finale, una serie di sacrifici con scacchi continui che non lascia mai al Nero il tempo di eseguire le sue minacce. Osserva come le colonne aperte davanti al re diventano strade per i pezzi bianchi.",
     lessons: [
       'Nel Gambetto Evans il Bianco dà un pedone per sviluppare con tempo e costruire il centro.',
       'Le colonne aperte davanti al re sono la strada per l’attacco.',
@@ -132,6 +145,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['opening', 'development', 'attack', 'sacrifice'],
     summary:
       'Il re nero non riesce ad arroccare e Steinitz lo insegue con una torre che non può essere catturata. Von Bardeleben lasciò la sala invece di arrendersi.',
+    intro:
+      "Hastings, 1895. Wilhelm Steinitz, primo campione del mondo ufficiale, è noto per aver insegnato il gioco posizionale; qui mostra che sapeva anche attaccare con precisione. Il re nero resta al centro, il pedone d del Bianco apre la strada e una torre bianca in settima traversa dà scacco su scacco senza poter essere catturata. Von Bardeleben, invece di arrendersi, lasciò la sala. Impara quanto costa non arroccare e come una torre attiva, difesa indirettamente, vale più di molto materiale.",
     lessons: [
       'Se il re resta al centro, ogni colonna aperta diventa pericolosa.',
       'Un pedone centrale che avanza può aprire la strada all’attacco.',
@@ -155,6 +170,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['opening', 'development', 'sacrifice'],
     summary:
       'Undici mosse: il Nero cattura un pedone di troppo con la donna, il Bianco arrocca lungo e dà matto con un doppio scacco.',
+    intro:
+      "Vienna, 1910: undici mosse appena, una delle miniature più famose di sempre. Richard Réti, che diventerà un maestro delle idee moderne, punisce Savielly Tartakower nella Difesa Caro-Kann. Il Nero mangia un pedone con la donna lasciando il re al centro; il Bianco arrocca lungo, sacrifica la donna e chiude con uno scacco doppio e il matto. È la partita ideale per memorizzare un motivo: arrocco lungo, torre sulla colonna d e scacco doppio quando il re non può fuggire.",
     lessons: [
       'In apertura non si mangiano pedoni lasciando il re al centro.',
       'L’arrocco lungo porta subito una torre sulla colonna del re avversario.',
@@ -176,6 +193,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['opening', 'development', 'sacrifice', 'endgame'],
     summary:
       'Fischer, tredicenne, sacrifica la donna per un attacco che gli frutta torre, due alfieri e un cavallo, poi chiude con un matto di soli pezzi minori e torre.',
+    intro:
+      "New York, 1956: Bobby Fischer ha tredici anni e gioca con il Nero contro Donald Byrne, uno dei migliori maestri americani. La partita fu subito chiamata «la partita del secolo». Il Bianco perde un po’ di tempo in apertura e tiene il re al centro; Fischer lo punisce con un sacrificio di donna stupefacente alla diciassettesima mossa. In cambio riceve torre, due alfieri e cavallo, e i suoi pezzi coordinati danno matto. Impara a valutare un sacrificio da quanto lavorano bene i pezzi che ricevi.",
     lessons: [
       'Il re che non arrocca è un bersaglio anche a metà partita.',
       'Un sacrificio di donna può essere un investimento se i pezzi che si ricevono lavorano insieme.',
@@ -200,6 +219,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['strategy', 'development', 'attack'],
     summary:
       'Fischer gioca per la prima volta in carriera 1.c4 e vince una partita «perfetta»: alla fine anche Spassky applaudì.',
+    intro:
+      "Reykjavík, 1972, sesta partita del match più famoso della storia, giocato in piena Guerra fredda. Fischer, che giocava quasi sempre 1.e4, sorprende tutti con 1.c4 e arriva a una variante del Gambetto di donna rifiutato. È una partita strategica, quasi «perfetta»: il Bianco blocca i pedoni sospesi neri, li trasforma in bersagli e poi attacca sul lato di re. Alla fine anche Spassky si unì all’applauso del pubblico. Impara come si gioca contro i pedoni sospesi e come si passa dal centro all’attacco.",
     lessons: [
       'I pedoni sospesi (c5 e d5) sono forti al centro ma diventano un bersaglio se vengono bloccati.',
       'Un pedone passato avanzato (e6) lega i pezzi dell’avversario.',
@@ -224,6 +245,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['opening', 'sacrifice', 'attack'],
     summary:
       'La partita decisiva della sfida: Kasparov sbaglia l’ordine di mosse in apertura e il computer sacrifica un cavallo in e6. Il campione del mondo abbandona dopo 19 mosse.',
+    intro:
+      "New York, 1997: la sesta e ultima partita della rivincita tra il campione del mondo Garry Kasparov e il computer Deep Blue di IBM. Il match era in parità e questa partita lo decise: per la prima volta un computer batté un campione del mondo in un match. Kasparov sbaglia l’ordine delle mosse in una Caro-Kann che conosceva bene e Deep Blue sacrifica subito un cavallo in e6. Il re nero non riesce più ad arroccare. Impara che in apertura un solo tempo sbagliato può bastare a perdere.",
     lessons: [
       'In apertura anche l’ordine delle mosse conta: un tempo di ritardo può costare caro.',
       'Un sacrificio che lascia il re avversario al centro dà un attacco duraturo.',
@@ -245,6 +268,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ['attack', 'sacrifice', 'endgame'],
     summary:
       'Il re nero viene trascinato dalla colonna b fino a d1, nel campo bianco, grazie a una serie di sacrifici calcolata con molte mosse di anticipo.',
+    intro:
+      "Wijk aan Zee, 1999: Garry Kasparov, campione del mondo, gioca quella che molti considerano la sua partita più bella. Contro la Difesa Pirc di Veselin Topalov il re nero si rifugia sul lato di donna, ma con la ventiquattresima mossa Kasparov sacrifica una torre e comincia una caccia al re che lo porta fino a d1, nel campo bianco. È una combinazione calcolata con molte mosse di anticipo. Seguila lentamente e chiediti a ogni mossa perché il re nero non ha alternative.",
     lessons: [
       'Un re che esce dal suo rifugio può essere inseguito per tutta la scacchiera.',
       'I sacrifici di torre su d4 ed e7 aprono le linee verso il re.',
@@ -269,6 +294,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "endgame"],
     summary:
       "La prima vittoria di Carlsen nel match mondiale con Anand: senza donne, con piccoli vantaggi accumulati un po' alla volta e un finale di torri condotto fino in fondo.",
+    intro:
+      "Chennai, 2013, campionato del mondo: lo sfidante è Magnus Carlsen, 22 anni, contro il campione Viswanathan Anand, a casa sua. Dopo quattro patte questa è la prima vittoria del match, e mostra lo stile di Carlsen: nessun attacco travolgente, ma piccoli vantaggi accumulati con pazienza. Le donne si cambiano presto e la partita si decide in un lungo finale di torri. Impara a non accontentarti della patta quando la posizione è appena migliore: continua a fare domande all’avversario finché sbaglia.",
     lessons: [
       "Un lieve vantaggio, se si fa crescere con pazienza, può diventare un finale vinto.",
       "Dopo il cambio delle donne contano l'attività dei pezzi e la posizione del re.",
@@ -295,6 +322,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "endgame"],
     summary:
       "Una partita lunga e tesa: Carlsen difende con calma e, quando il Bianco allenta la presa, trasforma i suoi pedoni passati sul lato di re in una vittoria.",
+    intro:
+      "Chennai, 2013, sesta partita: il giorno dopo la sua prima vittoria Carlsen ha il Nero, e Anand sceglie la tranquilla Spagnola con 4.d3. Non succede nulla di clamoroso per molte mosse; Carlsen difende con calma, cambia i pezzi giusti e, quando il Bianco allenta la presa nel finale di torri, i suoi pedoni passati sul lato di re diventano inarrestabili. Con questa vittoria prende il largo nel match. Impara quanto valgono una torre attiva e due pedoni passati collegati.",
     lessons: [
       "Difendersi con calma permette di sfruttare le imprecisioni dell'avversario.",
       "Nel finale di torri l'attività della torre conta più di un pedone.",
@@ -322,6 +351,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "endgame", "attack"],
     summary:
       "Carlsen cambia subito le donne ma tiene viva la partita: con i pedoni h avanzati e una torre in g3 mette sotto pressione il re nero e vince un pedone decisivo.",
+    intro:
+      "Soči, 2014: rivincita del mondiale tra Carlsen e Anand. Carlsen cambia le donne alla nona mossa, eppure la partita resta piena di tensione: avanza il pedone h, porta una torre sulla terza traversa e mette pressione al re nero anche senza donne. Alla mossa 26 entrambi i giocatori sbagliano: Carlsen permette una combinazione e Anand non la vede, poi perde. Impara due cose: un finale senza donne può essere ricco di attacco, e prima di ogni mossa controlla sempre le minacce dell’avversario, anche quando stai meglio.",
     lessons: [
       "Il cambio delle donne non spegne la partita: l'attacco sul re può continuare anche senza.",
       "Pedoni su c4 ed e4 tolgono spazio e case al Nero (il «vincolo Maróczy»).",
@@ -345,6 +376,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "endgame"],
     summary:
       "136 mosse, la partita più lunga della storia dei campionati del mondo: Carlsen sacrifica la donna per due torri e poi spinge per ore finché il Nero cede.",
+    intro:
+      "Dubai, 2021: sesta partita del mondiale contro Ian Nepomniachtchi, dopo cinque patte. Diventa la partita più lunga della storia dei campionati del mondo: 136 mosse, quasi otto ore. Carlsen dà la donna per due torri, poi per decine di mosse manovra torri e cavallo cercando un varco, mentre il Nero difende con la donna. Da qui in avanti lo sfidante crollò e il match finì presto. Impara la pazienza nei finali lunghi e come due torri coordinate possono battere una donna.",
     lessons: [
       "Un sacrificio di qualità (donna per due torri) può dare un vantaggio posizionale più che materiale.",
       "Nei finali lunghi la pazienza e la precisione contano più della fretta di vincere.",
@@ -380,6 +413,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["attack", "strategy"],
     summary:
       "A 18 anni Carlsen batte l'ex campione del mondo Topalov con un attacco sul lato di re condotto con i pedoni: arrocchi opposti e linee aperte contro il re avversario.",
+    intro:
+      "Nanchino, 2009, torneo Pearl Spring: Carlsen ha 18 anni e qui ottiene una delle prestazioni migliori della sua carriera giovanile. Contro l’ex campione del mondo Veselin Topalov, nella Difesa Est-Indiana, sceglie un piano diretto: arrocco lungo, pedoni g e h lanciati contro il re nero. Con gli arrocchi opposti vince chi apre prima le linee. Impara come si attacca con i pedoni quando i re sono su lati diversi e perché il tempismo conta più del materiale.",
     lessons: [
       "Con gli arrocchi opposti si attacca spingendo i pedoni verso il re avversario.",
       "Aprire le colonne davanti al re nemico dà alle torri vie d'accesso decisive.",
@@ -404,6 +439,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "endgame"],
     summary:
       "Dopo la sconfitta nell'ottava partita, Carlsen riporta il match in parità con una vittoria da maestro: pressione continua in un finale con poco materiale.",
+    intro:
+      "New York, 2016: Sergey Karjakin ha appena vinto l’ottava partita e il campione Carlsen è in svantaggio. Nella decima risponde con una vittoria da maestro, partendo da una tranquilla Spagnola Berlinese con 4.d3. Il finale sembra pari, ma Carlsen sposta il gioco da un’ala all’altra, apre il lato di donna con b4–b5 al momento giusto e alla fine il suo re entra nella posizione nera. Impara come si vince una posizione «normale» mettendo problemi all’avversario mossa dopo mossa.",
     lessons: [
       "Un finale quasi pari può essere vinto se si mettono continuamente problemi all'avversario.",
       "Spostare il gioco da un lato all'altro della scacchiera sovraccarica le difese dell'avversario.",
@@ -432,6 +469,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["attack", "sacrifice"],
     summary:
       "Carlsen risponde con precisione all'aggressiva difesa di Nakamura e, in sole 31 mosse, travolge il re nero con i pedoni f e g e un sacrificio d'alfiere.",
+    intro:
+      "Wijk aan Zee, 2013: Carlsen contro Hikaru Nakamura, uno dei giocatori più aggressivi del circuito. Il Nero sceglie la Siciliana Kalashnikov e lancia subito il pedone h, ma Carlsen risponde con calma, chiude il centro con un pedone in d5 e poi contrattacca proprio sul lato di re con f4–f5. In 31 mosse un sacrificio d’alfiere scardina le difese nere. Impara a non farti spaventare da un attacco prematuro e a contrattaccare quando l’avversario ha indebolito il proprio re.",
     lessons: [
       "Un attacco sul re funziona meglio quando pedoni e pezzi collaborano.",
       "Un sacrificio d'alfiere può scardinare la copertura del re e dare un vantaggio decisivo.",
@@ -454,6 +493,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["strategy", "attack"],
     summary:
       "La prima vittoria di Fischer contro Spassky: un cavallo sul bordo, in h5, e un gioco sul lato di re che mette in difficoltà il campione del mondo.",
+    intro:
+      "Reykjavík, 1972, terza partita: Fischer ha perso la prima e non si è presentato alla seconda, ed è sotto di due punti. Questa partita viene giocata in una saletta lontana dal pubblico, e qui Fischer batte Spassky per la prima volta in carriera. Con la Benoni sceglie una mossa sorprendente, il cavallo in h5, accettando i pedoni doppiati in cambio di pezzi attivi e di pressione sul re bianco. Impara che le regole generali (niente cavalli sul bordo, niente pedoni doppiati) cedono davanti a un piano concreto.",
     lessons: [
       "Un cavallo sul bordo può essere strano ma efficace se serve a un piano chiaro.",
       "Pedoni doppiati sono accettabili se in cambio si ottengono pezzi attivi.",
@@ -478,6 +519,8 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
     themes: ["attack", "strategy", "sacrifice"],
     summary:
       "L'ultima partita del match: con il Nero Kasparov vince e, a 22 anni, diventa il più giovane campione del mondo della storia.",
+    intro:
+      "Mosca, 1985: ultima partita del campionato del mondo. Kasparov conduce di un punto e Anatoly Karpov, il campione, deve vincere per conservare il titolo. Karpov attacca con i pedoni sul lato di re, ma così indebolisce la propria posizione; Kasparov, con il Nero in una Siciliana Scheveningen, resiste, contrattacca al centro e con l’alfiere sulla lunga diagonale chiude la partita. A 22 anni diventa il più giovane campione del mondo. Impara come rispondere a un attacco di pedoni: colpendo al centro.",
     lessons: [
       "Il Nero può contrattaccare al centro mentre il Bianco attacca sul lato di re.",
       "Un alfiere sulla lunga diagonale può decidere una partita da lontano.",

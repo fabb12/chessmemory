@@ -7,6 +7,8 @@ const PNG = Buffer.from(
 );
 /** Il Nero deve parare il matto in f7 (Df3 + Ac4). */
 const PLACEMENT = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR';
+/** Claude risponde con 8 traverse di 8 caratteri («.» = casa vuota). */
+const RANKS = PLACEMENT.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
 const EXPLANATION = 'Il Bianco minaccia matto in f7: il Nero deve sviluppare il cavallo in f6.';
 
 test('analizza: foto → lettura con Claude (simulato) → Stockfish → spiegazione', async ({ page }) => {
@@ -17,7 +19,7 @@ test('analizza: foto → lettura con Claude (simulato) → Stockfish → spiegaz
     bodies.push(body);
     const isReading = JSON.stringify(body.messages).includes('"image"');
     const text = isReading
-      ? JSON.stringify({ placement: PLACEMENT, white_at_bottom: true, side_to_move: 'b', confidence: 'high', notes: '' })
+      ? JSON.stringify({ ranks: RANKS, white_at_bottom: true, side_to_move: 'b', confidence: 'high', notes: '' })
       : EXPLANATION;
     await route.fulfill({
       status: 200,
@@ -54,6 +56,45 @@ test('analizza: foto → lettura con Claude (simulato) → Stockfish → spiegaz
   await expect(page.getByTestId('analyze-explanation')).toContainText(EXPLANATION);
 
   expect(bodies).toHaveLength(2);
-  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', output_config: { format: { type: 'json_schema' } } });
+  // Lettura veloce: sforzo basso e nessuna seconda lettura, perché la posizione è valida.
+  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'low', format: { type: 'json_schema' } } });
   expect(String((bodies[1]!.messages as { content: string }[])[0]!.content)).toContain(`${PLACEMENT} b`);
+});
+
+test('analizza: una lettura impossibile viene ripetuta con più attenzione', async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  // Prima risposta: due re bianchi (un errore tipico re/donna). Seconda: corretta.
+  const wrong = [...RANKS.slice(0, 7), 'RNB.K.KR'];
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    bodies.push(body);
+    const ranks = bodies.length === 1 ? wrong : RANKS;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: `msg_${bodies.length}`,
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5',
+        content: [{ type: 'text', text: JSON.stringify({ ranks, white_at_bottom: true, side_to_move: 'b', confidence: 'high', notes: '' }) }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+
+  await page.goto('./');
+  await page.getByTestId('home-analyze').click();
+  await page.getByTestId('api-key-input').fill(`sk-ant-api03-${'x'.repeat(40)}`);
+  await page.getByRole('button', { name: 'Salva la chiave' }).click();
+  await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByText('Lettura sicura')).toBeVisible();
+  await expect(page.getByTestId('evaluate')).toBeEnabled();
+
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toMatchObject({ output_config: { effort: 'medium' } });
+  expect(JSON.stringify(bodies[1]!.messages)).toContain('White has 2 kings');
 });

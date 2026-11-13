@@ -13,28 +13,18 @@ import { ANALYSIS_DEPTH, getEngine, terminalAnalysis, type Analysis } from '../f
 import { formatScore } from '../features/engine/uci';
 import { fenToPosition, positionToFen, startPosition, validatePosition, type EditorPosition } from '../features/mistakes/position';
 import { t } from '../i18n';
-import { prepareImage } from '../utils/image';
+import { captureBoardFrame, frameDifference, frameSignature, MOTION } from '../utils/frames';
+import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
 import { formatLine, sanToLocal } from '../utils/notation';
 
-const LIVE_INTERVAL_S = 20;
-const MAX_SIDE = 1280;
+/** Analisi continua: ogni quanto si controlla se la scacchiera si muove (nessun costo, è locale). */
+const SAMPLE_MS = 600;
+/** Campioni fermi consecutivi prima di rileggere (~1,2 s dopo che la mano si è tolta). */
+const STILL_SAMPLES = 2;
+/** Intervallo minimo tra due letture con Claude. */
+const MIN_READ_GAP_MS = 2500;
 
 type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; value: T } | { status: 'error'; error: string };
-
-/** Fotogramma corrente del video in JPEG (base64 senza prefisso), lato massimo 1280 px. */
-function captureFrame(video: HTMLVideoElement): string | null {
-  const w = video.videoWidth;
-  const h = video.videoHeight;
-  if (!w || !h) return null;
-  const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1] ?? null;
-}
 
 function errorText(error: unknown): string {
   const kind = error instanceof AssistantError ? error.kind : 'other';
@@ -55,6 +45,13 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const [explanation, setExplanation] = useState<Phase<string>>({ status: 'idle' });
   const [live, setLive] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [liveState, setLiveState] = useState<'watching' | 'moving'>('watching');
+  const [readSeconds, setReadSeconds] = useState<number | null>(null);
+  const [videoAspect, setVideoAspect] = useState(4 / 3);
+  const lastSample = useRef<Uint8Array | null>(null);
+  const readSignature = useRef<Uint8Array | null>(null);
+  const stillCount = useRef(0);
+  const lastReadAt = useRef(0);
   const busy = useRef(false);
   const lastPlacement = useRef<string | null>(null);
   const positionRef = useRef<EditorPosition | null>(null);
@@ -65,7 +62,8 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     setCameraError(false);
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        // Bassa risoluzione: basta per ~100 px per casa e il telefono lavora meno.
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
       setStream(media);
@@ -123,12 +121,16 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   // ───── Lettura della scacchiera ─────
   const read = useCallback(
-    async (image: string, auto: boolean) => {
+    async (image: string, auto: boolean, fromCamera: boolean) => {
       if (busy.current) return;
       busy.current = true;
       setReading({ status: 'busy' });
+      const started = performance.now();
       try {
-        const result = await readBoardFromImage(image);
+        // La posizione già nota (magari corretta a mano) aiuta Claude a non sbagliare i pezzi dubbi.
+        const known = positionRef.current && !validatePosition(positionRef.current) ? positionToFen(positionRef.current).split(' ')[0] : null;
+        const result = await readBoardFromImage(image, { previous: fromCamera ? (known ?? lastPlacement.current) : null });
+        setReadSeconds((performance.now() - started) / 1000);
         setReading({ status: 'done', value: result });
         setLastUpdate(Date.now());
         if (auto && result.placement === lastPlacement.current) return;
@@ -160,8 +162,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   const captureAndRead = useCallback(
     (auto: boolean) => {
-      const frame = videoRef.current ? captureFrame(videoRef.current) : null;
-      if (frame) void read(frame, auto);
+      const video = videoRef.current;
+      const frame = video ? captureBoardFrame(video) : null;
+      if (!video || !frame) return;
+      readSignature.current = frameSignature(video);
+      lastReadAt.current = Date.now();
+      void read(frame, auto, true);
     },
     [read],
   );
@@ -169,8 +175,8 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const image = await prepareImage(file);
-      void read(image.dataUrl.split(',')[1] ?? '', false);
+      const image = await prepareImage(file, READING_PHOTO_SIDE);
+      void read(image.dataUrl.split(',')[1] ?? '', false, false);
     } catch {
       setReading({ status: 'error', error: t.analyze.errors.unreadable! });
     } finally {
@@ -179,10 +185,36 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   };
 
   // ───── Analisi continua ─────
+  // Nessuna lettura a intervalli fissi: una miniatura locale controlla di continuo la
+  // scacchiera e Claude viene chiamato appena la mano si toglie e qualcosa è cambiato.
   useEffect(() => {
     if (!live || !stream) return;
+    lastSample.current = null;
+    readSignature.current = null;
+    stillCount.current = 0;
+    setLiveState('watching');
     captureAndRead(true);
-    const id = window.setInterval(() => captureAndRead(true), LIVE_INTERVAL_S * 1000);
+    const id = window.setInterval(() => {
+      const video = videoRef.current;
+      const sample = video ? frameSignature(video) : null;
+      if (!sample) return;
+      const previous = lastSample.current;
+      lastSample.current = sample;
+      if (!previous) return;
+      const motion = frameDifference(previous, sample);
+      if (motion > MOTION.moving) {
+        stillCount.current = 0;
+        setLiveState('moving');
+        return;
+      }
+      if (motion >= MOTION.still) return;
+      stillCount.current += 1;
+      if (stillCount.current < STILL_SAMPLES) return;
+      setLiveState('watching');
+      if (busy.current || Date.now() - lastReadAt.current < MIN_READ_GAP_MS) return;
+      if (readSignature.current && frameDifference(readSignature.current, sample) < MOTION.changed) return;
+      captureAndRead(true);
+    }, SAMPLE_MS);
     return () => window.clearInterval(id);
   }, [live, stream, captureAndRead]);
 
@@ -214,7 +246,25 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         <Card className="space-y-3">
           <div className="overflow-hidden rounded-2xl border border-line bg-surface-2">
             {stream ? (
-              <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full bg-black object-contain" data-testid="camera-video" />
+              <div className="relative w-full bg-black" style={{ aspectRatio: videoAspect }}>
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget;
+                    if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
+                  }}
+                  className="absolute inset-0 size-full object-contain"
+                  data-testid="camera-video"
+                />
+                {/* Guida: solo il quadrato centrale viene inviato a Claude. */}
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 rounded-md border-2 border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+                />
+                <p className="absolute inset-x-0 bottom-1 text-center text-xs font-semibold text-white drop-shadow">{t.analyze.camera.guide}</p>
+              </div>
             ) : (
               <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 p-4 text-center text-muted">
                 <Icon name="camera" size={40} />
@@ -222,6 +272,14 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </div>
             )}
           </div>
+          <details className="rounded-xl bg-surface-2 px-3 py-2 text-sm" data-testid="camera-tips">
+            <summary className="cursor-pointer font-semibold">{t.analyze.camera.tipsTitle}</summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {t.analyze.camera.tips.map((tip) => (
+                <li key={tip}>{tip}</li>
+              ))}
+            </ul>
+          </details>
           {cameraError && (
             <p role="alert" className="text-sm font-semibold text-bad">
               {t.analyze.camera.denied}
@@ -262,11 +320,16 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} className="mt-1 size-5 accent-[var(--accent)]" />
               <span>
                 <span className="block font-semibold">{t.analyze.camera.live}</span>
-                <span className="block text-sm text-muted">{t.analyze.camera.liveHelp(LIVE_INTERVAL_S)}</span>
+                <span className="block text-sm text-muted">{t.analyze.camera.liveHelp}</span>
               </span>
             </label>
           )}
           <div aria-live="polite" className="space-y-1 text-sm">
+            {live && reading.status !== 'busy' && (
+              <p className="text-muted" data-testid="live-state">
+                {liveState === 'moving' ? t.analyze.camera.moving : t.analyze.camera.watching}
+              </p>
+            )}
             {reading.status === 'busy' && <p className="font-semibold">{t.analyze.reading}</p>}
             {reading.status === 'error' && (
               <p role="alert" className="font-semibold text-bad">
@@ -277,6 +340,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               <>
                 <p className="font-semibold">
                   {t.analyze.confidence[reading.value.confidence]} · {t.analyze.readDone}
+                  {readSeconds !== null && <span className="font-normal text-muted"> ({t.analyze.readTime(readSeconds)})</span>}
                 </p>
                 {reading.value.notes && <p className="text-muted">{reading.value.notes}</p>}
                 {reading.value.sideToMove === 'unknown' && <p className="text-muted">{t.analyze.sideUnknown}</p>}

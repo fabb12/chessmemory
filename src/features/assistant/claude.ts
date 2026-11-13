@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type Anthropic from '@anthropic-ai/sdk';
+import { placementProblems, placementToRanks, ranksToPlacement } from './boardReading';
 
 /**
  * Assistente con Claude (API Anthropic), usato da «Analizza»:
@@ -103,71 +104,124 @@ export interface BoardReading {
   notes: string;
 }
 
+export interface ReadOptions {
+  /**
+   * Posizione precedente (campo FEN dei pezzi), se nota: nell'analisi continua
+   * di solito è cambiata una sola mossa, e serve a Claude per risolvere i pezzi
+   * dubbi (alfiere o pedone? re o donna?) senza ripartire da zero.
+   */
+  previous?: string | null;
+}
+
 const READING_SCHEMA = {
   type: 'object',
   properties: {
-    placement: {
-      type: 'string',
-      description:
-        "FEN piece-placement field only, rank 8 first, from White's point of view (e.g. rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR).",
-    },
     white_at_bottom: {
       type: 'boolean',
       description: 'True if the white pieces started on the side of the board nearest the camera.',
     },
+    ranks: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        "Exactly 8 strings, rank 8 first down to rank 1, always from White's point of view. Each string has exactly 8 characters, files a to h: K Q R B N P for White, k q r b n p for Black, '.' for an empty square. Example start position: rnbqkbnr, pppppppp, ........ (x4), PPPPPPPP, RNBQKBNR.",
+    },
     side_to_move: { type: 'string', enum: ['w', 'b', 'unknown'] },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-    notes: { type: 'string', description: 'Short notes in Italian about any doubtful squares; empty if none.' },
+    notes: { type: 'string', description: 'Short notes in Italian about doubtful squares; empty if none.' },
   },
-  required: ['placement', 'white_at_bottom', 'side_to_move', 'confidence', 'notes'],
+  required: ['white_at_bottom', 'ranks', 'side_to_move', 'confidence', 'notes'],
   additionalProperties: false,
 } as const;
 
-const READING_PROMPT = `This is a photo of a physical chess board during a game in progress.
-Identify every piece on every square and return the position as the piece-placement field of a FEN string.
+const READING_PROMPT = `This is a photo of a physical chess board during a game in progress. Read the position.
 
-How to work:
-- First find the board's orientation: use the coordinates printed on the board if visible; otherwise the light square must be at each player's right-hand corner (h1 and a8 are light), and the side where most white pieces stand is usually White's side.
-- Read the board rank by rank. Always write the FEN from White's point of view (rank 8 first, file a to h), whichever way the photo is oriented.
-- Distinguish bishops from pawns and kings from queens carefully. Each side has exactly one king.
-- If a square is hidden or unclear, make your best guess and mention it in "notes" (in Italian, one short sentence).
-- side_to_move: only if something in the photo shows it (e.g. a chess clock); otherwise "unknown".`;
+1. Orientation: use the coordinates printed on the board if visible; otherwise h1 and a8 are light squares (light square in each player's right-hand corner). White usually sits on the side where most white pieces are.
+2. The photo is usually taken at an angle: every piece stands on the square under its BASE. Tall pieces lean toward the far side and their heads overlap the square behind: assign each piece by its base, never by its head.
+3. Identify each piece by its silhouette: king = tallest, with a cross on top; queen = tall, crown with points or a small ball; bishop = mitre with a diagonal slit, medium height; knight = horse head; rook = short tower with battlements; pawn = smallest, plain round ball. Bishops and pawns, kings and queens are the usual mistakes: compare heights with the neighbours.
+4. Colour: judge the colour of the piece material, not of the square it stands on.
+5. Write "ranks" from White's point of view (rank 8 first, files a to h) whichever way the photo is oriented, exactly 8 characters per rank.
+6. Check before answering: one king per side, at most 8 pawns per side, no pawns on ranks 1 or 8, at most 16 pieces per side.
+If a square is hidden or unclear, make your best guess and say so in "notes" (Italian, one short sentence). side_to_move: only if something in the photo shows it (e.g. a chess clock), otherwise "unknown".`;
 
 const FEN_PLACEMENT = /^([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+$/;
 
-export async function readBoardFromImage(base64Jpeg: string): Promise<BoardReading> {
+interface RawReading {
+  placement: string | null;
+  sideToMove: BoardReading['sideToMove'];
+  confidence: BoardReading['confidence'];
+  notes: string;
+}
+
+function parseReading(message: BetaMessage): RawReading {
+  if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+  let parsed: { ranks?: unknown; placement?: unknown; side_to_move?: unknown; confidence?: unknown; notes?: unknown };
+  try {
+    parsed = JSON.parse(textOf(message));
+  } catch {
+    throw new AssistantError('unreadable');
+  }
+  let placement: string | null = null;
+  if (Array.isArray(parsed.ranks) && parsed.ranks.every((r) => typeof r === 'string')) {
+    placement = ranksToPlacement(parsed.ranks as string[]);
+  } else if (typeof parsed.placement === 'string' && FEN_PLACEMENT.test(parsed.placement.trim())) {
+    placement = parsed.placement.trim();
+  }
+  const side = parsed.side_to_move === 'w' || parsed.side_to_move === 'b' ? parsed.side_to_move : 'unknown';
+  const confidence = parsed.confidence === 'high' || parsed.confidence === 'low' ? parsed.confidence : 'medium';
+  return { placement, sideToMove: side, confidence, notes: typeof parsed.notes === 'string' ? parsed.notes : '' };
+}
+
+/**
+ * Legge la posizione da una foto (JPEG base64, già ridotta a bassa risoluzione).
+ *
+ * Velocità: prima lettura con sforzo basso, così la risposta arriva in pochi
+ * secondi. Affidabilità: la posizione viene controllata qui (re, pedoni,
+ * traverse impossibili) e, solo se non torna, Claude rilegge la foto con più
+ * attenzione sapendo che cosa era sbagliato.
+ */
+export async function readBoardFromImage(base64Jpeg: string, options: ReadOptions = {}): Promise<BoardReading> {
   let sdk: typeof Anthropic | null = null;
   try {
     const created = await createClient();
     sdk = created.sdk;
-    const message = await created.client.beta.messages.create({
-      model: ASSISTANT_MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: READING_SCHEMA } },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } },
-            { type: 'text', text: READING_PROMPT },
-          ],
-        },
-      ],
-    });
-    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
-    let parsed: { placement?: unknown; side_to_move?: unknown; confidence?: unknown; notes?: unknown };
-    try {
-      parsed = JSON.parse(textOf(message));
-    } catch {
-      throw new AssistantError('unreadable');
+    const previous = options.previous && FEN_PLACEMENT.test(options.previous) ? options.previous : null;
+    const hint = previous
+      ? `\n\nThe previous position on this board (ranks 8→1) was:\n${placementToRanks(previous).join('\n')}\nUsually only one move has been played since (two squares change; four for castling). Use it to resolve doubtful pieces, but the photo is what counts: report what you see.`
+      : '';
+    const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
+
+    const ask = (effort: 'low' | 'medium', extra: string) =>
+      created.client.beta.messages.create({
+        model: ASSISTANT_MODEL,
+        max_tokens: 8000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: { effort, format: { type: 'json_schema', schema: READING_SCHEMA } },
+        messages: [{ role: 'user', content: [image, { type: 'text', text: READING_PROMPT + hint + extra }] }],
+      });
+
+    let reading = parseReading(await ask('low', ''));
+    const problems = reading.placement ? placementProblems(reading.placement) : ['the ranks were not 8 strings of 8 characters'];
+    if (problems.length > 0) {
+      const first = reading.placement ? `\nA first quick reading gave (ranks 8→1):\n${placementToRanks(reading.placement).join('\n')}\n` : '';
+      const retry = parseReading(
+        await ask(
+          'medium',
+          `\n\nCareful: a first reading was impossible: ${problems.join('; ')}.${first}Look at the photo again square by square and fix it.`,
+        ),
+      );
+      // Si tiene la seconda lettura se è valida, o comunque se la prima non lo era affatto.
+      if (retry.placement && (placementProblems(retry.placement).length === 0 || !reading.placement)) reading = retry;
     }
-    const placement = typeof parsed.placement === 'string' ? parsed.placement.trim() : '';
-    if (!FEN_PLACEMENT.test(placement)) throw new AssistantError('unreadable');
-    const side = parsed.side_to_move === 'w' || parsed.side_to_move === 'b' ? parsed.side_to_move : 'unknown';
-    const confidence = parsed.confidence === 'high' || parsed.confidence === 'low' ? parsed.confidence : 'medium';
-    return { placement, sideToMove: side, confidence, notes: typeof parsed.notes === 'string' ? parsed.notes : '' };
+    if (!reading.placement) throw new AssistantError('unreadable');
+    const stillWrong = placementProblems(reading.placement).length > 0;
+    return {
+      placement: reading.placement,
+      sideToMove: reading.sideToMove,
+      confidence: stillWrong ? 'low' : reading.confidence,
+      notes: reading.notes,
+    };
   } catch (error) {
     throw mapError(error, sdk);
   }
