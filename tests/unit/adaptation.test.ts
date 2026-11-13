@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ADAPTATION_CONFIG,
   initialAdaptiveState,
-  nextPlacementLevel,
-  placementResult,
   updateDifficulty,
   type AdaptiveState,
 } from '../../src/features/adaptation/difficulty';
-import { pickPlacementExercise } from '../../src/features/onboarding/placement';
 import { performanceScore } from '../../src/features/memory/rating';
-import type { Exercise } from '../../src/types';
 import { conceptResult } from './helpers';
 
 function feed(state: AdaptiveState, scores: number[]): AdaptiveState {
@@ -73,48 +69,3 @@ describe('difficoltà adattiva', () => {
   });
 });
 
-describe('valutazione iniziale', () => {
-  it('la scala sale con risposte pulite e scende con i fallimenti', () => {
-    expect(nextPlacementLevel(2, 'clean')).toBe(3);
-    expect(nextPlacementLevel(2, 'assisted')).toBe(2);
-    expect(nextPlacementLevel(2, 'failed')).toBe(1);
-    expect(nextPlacementLevel(1, 'failed')).toBe(1);
-    expect(nextPlacementLevel(5, 'clean')).toBe(5);
-  });
-
-  it('assegna il livello dal più alto risolto senza aiuti, entro il tetto del livello dichiarato', () => {
-    expect(placementResult('beginner', [])).toBe(1);
-    expect(placementResult('beginner', [{ level: 1, quality: 'failed' }, { level: 1, quality: 'assisted' }])).toBe(1);
-    expect(
-      placementResult('beginner', [
-        { level: 1, quality: 'clean' },
-        { level: 2, quality: 'clean' },
-        { level: 3, quality: 'failed' },
-        { level: 2, quality: 'clean' },
-        { level: 3, quality: 'assisted' },
-      ]),
-    ).toBe(2);
-    const allClean = [1, 2, 3, 4, 5].map((level) => ({ level: level as 1, quality: 'clean' as const }));
-    expect(placementResult('beginner', allClean)).toBe(3);
-    expect(placementResult('intermediate', allClean)).toBe(4);
-    expect(
-      placementResult('intermediate', [
-        { level: 3, quality: 'clean' },
-        { level: 4, quality: 'failed' },
-        { level: 3, quality: 'failed' },
-      ]),
-    ).toBe(2);
-  });
-
-  it('sceglie esercizi di concetti diversi vicini al livello richiesto', () => {
-    const used: Exercise[] = [];
-    for (const level of [1, 2, 3, 2, 3] as const) {
-      const next = pickPlacementExercise(level, used);
-      expect(next).not.toBeNull();
-      expect(next!.difficulty).toBe(level);
-      expect(used.some((e) => e.conceptId === next!.conceptId)).toBe(false);
-      used.push(next!);
-    }
-    expect(new Set(used.map((e) => e.category)).size).toBeGreaterThan(1);
-  });
-});

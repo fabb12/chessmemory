@@ -10,6 +10,7 @@ import { ConceptPage } from '../pages/ConceptPage';
 import { GamePage } from '../pages/GamePage';
 import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
+import { InfoPage } from '../pages/InfoPage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
@@ -20,6 +21,26 @@ function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
+/** Titolo della scheda del browser per ogni sezione. */
+const TITLES: [RegExp, string][] = [
+  [/^\/allenati/, t.nav.train],
+  [/^\/strategie/, t.nav.strategies],
+  [/^\/analizza/, t.analyze.title],
+  [/^\/partite/, t.games.title],
+  [/^\/progressi/, t.dna.title],
+  [/^\/profilo/, t.nav.profile],
+  [/^\/informazioni/, t.info.title],
+];
+
+function DocumentTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const section = TITLES.find(([re]) => re.test(pathname))?.[1];
+    document.title = section ? `${section} · ${t.app.name}` : `${t.app.name} · ${t.app.tagline}`;
   }, [pathname]);
   return null;
 }
@@ -72,6 +93,7 @@ export function App() {
   return (
     <HashRouter>
       <ScrollToTop />
+      <DocumentTitle />
       <AccountProvider settings={profile.settings}>
         <AppShell>
           <Routes>
@@ -82,7 +104,9 @@ export function App() {
             <Route path="/analizza" element={<AnalyzePage profile={profile} />} />
             <Route path="/partite" element={<GamesPage />} />
             <Route path="/partite/:id" element={<GamePage profile={profile} />} />
-            <Route path="/memory-dna" element={<MemoryDnaPage />} />
+            <Route path="/progressi" element={<MemoryDnaPage />} />
+            <Route path="/memory-dna" element={<Navigate to="/progressi" replace />} />
+            <Route path="/informazioni" element={<InfoPage />} />
             <Route path="/profilo" element={<ProfilePage profile={profile} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

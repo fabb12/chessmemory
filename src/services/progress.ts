@@ -117,10 +117,6 @@ export async function startSession(
   return session;
 }
 
-export async function abandonSession(database: ChessMemoryDB = db): Promise<void> {
-  await database.activeSession.delete(ACTIVE_SESSION_ID);
-}
-
 /**
  * Registra un concetto completato: aggiorna la scheda FSRS, la cronologia
  * delle risposte e delle revisioni, il livello adattivo e la sessione in corso.

@@ -29,11 +29,11 @@ export function LogoMark({ size = 36 }: { size?: number }) {
 
 export function Logo() {
   return (
-    <span className="inline-flex items-center gap-2.5">
+    <span className="inline-flex min-w-0 items-center gap-2">
       <span className="rounded-2xl shadow-[0_6px_16px_-6px_rgb(37_87_233/0.7)]">
         <LogoMark />
       </span>
-      <span className="font-display text-xl font-semibold tracking-tight">{t.app.name}</span>
+      <span className="font-display text-lg font-semibold tracking-tight min-[380px]:text-xl">{t.app.name}</span>
     </span>
   );
 }

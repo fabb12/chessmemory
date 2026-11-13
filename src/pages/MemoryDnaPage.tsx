@@ -67,8 +67,9 @@ export function MemoryDnaPage() {
         ))}
       </div>
 
-      <p className="text-sm text-muted">{t.dna.conceptsMastered}</p>
-      <p className="text-sm text-muted">{t.dna.disclaimer}</p>
+      <p className="text-sm text-muted">
+        {t.dna.conceptsMastered} {t.dna.disclaimer}
+      </p>
     </div>
   );
 }
