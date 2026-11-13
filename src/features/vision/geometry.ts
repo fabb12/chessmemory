@@ -114,6 +114,11 @@ export function cropAround(corners: Corners, aspect: number): Rect {
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
+/** Angoli espressi in frazioni del ritaglio (inverso di `fromCrop`). */
+export function toCrop(rect: Rect, corners: Corners): Corners {
+  return corners.map((p) => ({ x: (p.x - rect.x) / rect.w, y: (p.y - rect.y) / rect.h })) as Corners;
+}
+
 /** Riporta nel fotogramma un punto espresso in frazioni del ritaglio. */
 export function fromCrop(rect: Rect, p: Point): Point {
   return { x: rect.x + p.x * rect.w, y: rect.y + p.y * rect.h };

@@ -81,7 +81,16 @@ export default defineConfig(({ command, isPreview }) => {
           // Tutta l'app (shell, dataset, pezzi) è nel bundle: precache completo,
           // compreso il motore Stockfish (WebAssembly, circa 1,9 MB) per l'analisi offline.
           globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2,wasm}'],
+          // Runtime ONNX (~15 MB) e modello YOLO: scaricati solo quando servono, non in precache.
+          globIgnores: ['**/ort-wasm*.wasm', '**/models/**'],
           maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => /\/models\/|ort-wasm[^/]*\.wasm$/.test(url.pathname),
+              handler: 'CacheFirst',
+              options: { cacheName: 'vision-models', expiration: { maxEntries: 8 } },
+            },
+          ],
           navigateFallback: 'index.html',
           cleanupOutdatedCaches: true,
         },

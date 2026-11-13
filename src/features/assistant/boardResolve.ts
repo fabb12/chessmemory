@@ -9,6 +9,7 @@ import {
   placementToRanks,
   type BoardView,
 } from './boardReading';
+import { CLAUDE_CONFIDENCE, evidenceGrid, evidenceToRanks, SYMBOLS, type Evidence } from '../vision/evidence';
 
 /**
  * Dalla lettura grezza della foto alla posizione più credibile.
@@ -41,6 +42,8 @@ export interface ReadingReference {
 interface Candidate {
   flat: string;
   placement: string;
+  /** FEN completa (con arrocchi ed en passant) raggiunta con le mosse. */
+  fen: string;
   turn: Side;
   plies: number;
   san: string[];
@@ -61,11 +64,12 @@ function reachable(fen: string, source: Candidate['source'], flipped: boolean, m
   }
   const found = new Map<string, Candidate>();
   const record = (plies: number, san: string[]) => {
-    const [placement = '', turn = 'w'] = chess.fen().split(' ');
+    const full = chess.fen();
+    const [placement = '', turn = 'w'] = full.split(' ');
     const key = `${placement} ${turn}`;
     const known = found.get(key);
     if (known && known.plies <= plies) return;
-    found.set(key, { flat: flatOf(placement), placement, turn: turn as Side, plies, san, flipped, source });
+    found.set(key, { flat: flatOf(placement), placement, fen: full, turn: turn as Side, plies, san, flipped, source });
   };
   const walk = (plies: number, san: string[]) => {
     record(plies, san);
@@ -121,22 +125,57 @@ function mismatch(a: string, b: string, limit: number): number {
   return n;
 }
 
+/**
+ * Costo di ogni simbolo su ogni casa (dall'ottava traversa), in «case sbagliate»:
+ * smentire una lettura di Claude da sola costa 1; smentire Claude e YOLO
+ * d'accordo e sicuri costa circa 2; una casa incerta costa quasi nulla.
+ */
+type Costs = Map<string, number>[];
+
+const UNIT = Math.log(CLAUDE_CONFIDENCE / ((1 - CLAUDE_CONFIDENCE) / (SYMBOLS.length - 1)));
+
+function evidenceCosts(evidence: Evidence): Costs {
+  return evidence.map((p) => {
+    const costs = new Map<string, number>();
+    let min = Infinity;
+    for (const s of SYMBOLS) {
+      const c = -Math.log(Math.max(1e-6, p[s] ?? 0));
+      costs.set(s, c);
+      if (c < min) min = c;
+    }
+    for (const s of SYMBOLS) costs.set(s, (costs.get(s)! - min) / UNIT);
+    return costs;
+  });
+}
+
+function weightedMismatch(flat: string, costs: Costs, limit: number): number {
+  let total = 0;
+  for (let i = 0; i < 64; i++) {
+    total += costs[i]!.get(flat[i]!) ?? 0;
+    if (total > limit) return total;
+  }
+  return total;
+}
+
 interface Fit {
   candidate: Candidate;
+  /** Case diverse dalla lettura. */
   mismatch: number;
+  /** Case diverse pesate con la sicurezza della lettura (uguale a `mismatch` senza YOLO). */
+  weighted: number;
   cost: number;
 }
 
 /** Posizione legale più vicina alla lettura (entro la tolleranza), o null. */
-function bestFit(flat: string, candidates: readonly Candidate[]): Fit | null {
+function bestFit(flat: string, candidates: readonly Candidate[], costs: Costs | null = null): Fit | null {
   let best: Fit | null = null;
   for (const candidate of candidates) {
     const tolerance = TOLERANCE[candidate.plies] ?? 0;
-    const diff = mismatch(flat, candidate.flat, tolerance);
+    const diff = costs ? weightedMismatch(candidate.flat, costs, tolerance) : mismatch(flat, candidate.flat, tolerance);
     if (diff > tolerance) continue;
     // Ogni casa sbagliata pesa più di una semimossa: si preferisce la spiegazione più semplice.
     const cost = 2 * diff + candidate.plies + (candidate.flipped ? 0.5 : 0) + (candidate.source === 'start' ? 0.25 : 0);
-    if (!best || cost < best.cost) best = { candidate, mismatch: diff, cost };
+    if (!best || cost < best.cost) best = { candidate, mismatch: costs ? mismatch(flat, candidate.flat, 64) : diff, weighted: diff, cost };
   }
   return best;
 }
@@ -163,6 +202,12 @@ export interface ResolveInput {
   reference?: ReadingReference | null;
   /** Lettura grezza precedente (per riconoscere una lettura stabile). */
   lastRawPlacement?: string | null;
+  /**
+   * Probabilità per casa (ordine della foto) da YOLO e/o Claude. Se c'è, la
+   * lettura grezza è il simbolo più probabile di ogni casa e le correzioni sono
+   * pesate con la sicurezza di ciascuna casa.
+   */
+  evidence?: Evidence | null;
 }
 
 export interface ResolvedReading {
@@ -178,6 +223,10 @@ export interface ResolvedReading {
   moves: string[];
   /** Problemi della posizione risultante (vuoto = plausibile). */
   problems: string[];
+  /** FEN completa se la posizione è stata raggiunta con mosse legali (conserva arrocchi ed en passant). */
+  fen: string | null;
+  /** Quanto la posizione scelta smentisce la lettura (in case sbagliate pesate); null se non è una posizione legale nota. */
+  fitCost: number | null;
 }
 
 export function resolveReading(input: ResolveInput): ResolvedReading {
@@ -187,11 +236,12 @@ export function resolveReading(input: ResolveInput): ResolvedReading {
   const reference = input.reference ?? null;
   const candidates = [...(reference ? referenceCandidates(reference) : []), ...startCandidates()];
 
+  const grid = input.evidence ? evidenceGrid(input.evidence) : input.grid;
   let chosen: { view: BoardView; placement: string; fit: Fit | null } | null = null;
   for (const view of order) {
-    const placement = gridToPlacement(input.grid, view);
+    const placement = gridToPlacement(grid, view);
     if (!placement) continue;
-    const fit = bestFit(flatOf(placement), candidates);
+    const fit = bestFit(flatOf(placement), candidates, input.evidence ? evidenceCosts(evidenceToRanks(input.evidence, view)) : null);
     if (!chosen) {
       chosen = { view, placement, fit };
       continue;
@@ -201,7 +251,17 @@ export function resolveReading(input: ResolveInput): ResolvedReading {
   }
   if (!chosen) {
     // Griglia non valida (non dovrebbe succedere: viene verificata a monte).
-    return { placement: '8/8/8/8/8/8/8/8', turn: null, view: order[0] ?? 'bottom', rawPlacement: '8/8/8/8/8/8/8/8', corrected: [], moves: [], problems: ['empty'] };
+    return {
+      placement: '8/8/8/8/8/8/8/8',
+      turn: null,
+      view: order[0] ?? 'bottom',
+      rawPlacement: '8/8/8/8/8/8/8/8',
+      corrected: [],
+      moves: [],
+      problems: ['empty'],
+      fen: null,
+      fitCost: null,
+    };
   }
 
   const raw = chosen.placement;
@@ -212,6 +272,8 @@ export function resolveReading(input: ResolveInput): ResolvedReading {
   let turn: Side | null = null;
   let corrected: string[] = [];
   let moves: string[] = [];
+  let fen: string | null = null;
+  let fitCost: number | null = null;
 
   if (fit) {
     // Due letture uguali di seguito che differiscono dalla posizione precedente: quella era sbagliata
@@ -222,7 +284,9 @@ export function resolveReading(input: ResolveInput): ResolvedReading {
       turn = fit.candidate.turn;
       corrected = fit.mismatch > 0 ? changedSquares(raw, placement) : [];
       moves = fit.candidate.san;
+      fen = fit.candidate.fen;
+      fitCost = fit.weighted;
     }
   }
-  return { placement, turn, view: chosen.view, rawPlacement: raw, corrected, moves, problems: placementProblems(placement) };
+  return { placement, turn, view: chosen.view, rawPlacement: raw, corrected, moves, problems: placementProblems(placement), fen, fitCost };
 }
