@@ -127,6 +127,51 @@ function mapError(error: unknown, sdk: typeof Anthropic | null): AssistantError 
 type BetaMessage = Anthropic.Beta.BetaMessage;
 type CreateParams = Anthropic.Beta.MessageCreateParamsNonStreaming;
 
+// ───── Consumo di token (per mostrarlo all'utente) ─────
+
+export interface AssistantUsage {
+  readings: number;
+  explanations: number;
+  /** Token in ingresso a prezzo pieno (testo e immagini nuovi). */
+  input: number;
+  /** Token in ingresso letti dalla cache (costano circa un ventesimo). */
+  cached: number;
+  output: number;
+}
+
+const EMPTY_USAGE: AssistantUsage = { readings: 0, explanations: 0, input: 0, cached: 0, output: 0 };
+let usage: AssistantUsage = EMPTY_USAGE;
+const usageListeners = new Set<() => void>();
+
+function recordUsage(kind: 'reading' | 'explanation', message: BetaMessage): void {
+  const u = message.usage;
+  usage = {
+    readings: usage.readings + (kind === 'reading' ? 1 : 0),
+    explanations: usage.explanations + (kind === 'explanation' ? 1 : 0),
+    input: usage.input + (u?.input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0),
+    cached: usage.cached + (u?.cache_read_input_tokens ?? 0),
+    output: usage.output + (u?.output_tokens ?? 0),
+  };
+  usageListeners.forEach((l) => l());
+}
+
+export function resetAssistantUsage(): void {
+  usage = EMPTY_USAGE;
+  usageListeners.forEach((l) => l());
+}
+
+/** Consumo delle chiamate a Claude in questa sessione della pagina. */
+export function useAssistantUsage(): AssistantUsage {
+  return useSyncExternalStore(
+    (l) => {
+      usageListeners.add(l);
+      return () => usageListeners.delete(l);
+    },
+    () => usage,
+    () => EMPTY_USAGE,
+  );
+}
+
 /**
  * Invia la richiesta, in modalità veloce se è attiva. La modalità veloce ha un
  * limite di richieste a parte: se viene rifiutata si ripete subito a velocità normale.
@@ -228,7 +273,7 @@ const READING_SCHEMA = {
     },
     side_to_move: { type: 'string', enum: ['w', 'b', 'unknown'] },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-    notes: { type: 'string', description: 'Short notes in Italian about doubtful squares; empty if none.' },
+    notes: { type: 'string', description: 'At most 8 words in Italian about doubtful squares; empty string if none.' },
   },
   required: ['board_corners', 'white_count', 'black_count', 'grid', 'white_side', 'side_to_move', 'confidence', 'notes'],
   additionalProperties: false,
@@ -243,7 +288,7 @@ const READING_PROMPT = `This is a photo of a physical chess board with a game in
 5. The photo is usually taken at an angle: every piece stands on the square under its BASE. Tall pieces lean toward the far side and their heads overlap the square behind: assign each piece by its base, never by its head.
 6. Identify each piece by its silhouette: king = tallest, cross on top; queen = tall, crown with points or a small ball; bishop = mitre with a diagonal slit, medium height; knight = horse head; rook = short tower with battlements; pawn = smallest, plain round ball. Bishops/pawns and kings/queens are the usual mistakes: compare heights with the neighbours.
 7. Colour: judge the colour of the piece material, not of the square it stands on.
-If a square is hidden or unclear, make your best guess and say so in "notes" (Italian, one short sentence). side_to_move: only if something in the photo shows it (e.g. a chess clock), otherwise "unknown".`;
+If a square is hidden or unclear, make your best guess and mention it in "notes" (Italian, at most 8 words; leave it empty otherwise). side_to_move: only if something in the photo shows it (e.g. a chess clock), otherwise "unknown".`;
 
 const FEN_PLACEMENT = /^([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+$/;
 
@@ -345,7 +390,13 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         output_config: { effort, format: { type: 'json_schema', schema: READING_SCHEMA } },
-        messages: [{ role: 'user', content: [image, { type: 'text', text: READING_PROMPT + hint + extra }] }],
+        // Le istruzioni fisse vanno nel prompt di sistema, in cache: dalla seconda lettura
+        // (entro 5 minuti) costano circa un ventesimo. Dopo, solo la foto e il poco che cambia.
+        system: [{ type: 'text', text: READING_PROMPT, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: hint + extra ? [image, { type: 'text', text: (hint + extra).trim() }] : [image] }],
+      }).then((message) => {
+        recordUsage('reading', message);
+        return message;
       });
 
     const interpret = (reading: RawReading): ResolvedReading | null =>
@@ -409,6 +460,8 @@ export interface ExplainInput {
   lines: string[];
   /** Colore con cui gioca l'utente, se l'ha indicato. */
   playerSide: 'w' | 'b' | null;
+  /** Risposta breve (2–3 frasi) sulla sola mossa migliore: meno token, adatta alla voce del tutor. */
+  brief?: boolean;
 }
 
 const EXPLAIN_SYSTEM = `Sei un istruttore di scacchi che parla a principianti e giocatori intermedi, anche bambini.
@@ -440,10 +493,13 @@ export async function explainPosition(input: ExplainInput): Promise<string> {
 Muove ${side}.
 Valutazione di Stockfish (dal punto di vista del Bianco): ${input.evaluation}
 Varianti migliori:
-${input.lines.map((l, i) => `${i + 1}. ${l}`).join('\n')}${player}`,
+${(input.brief ? input.lines.slice(0, 2) : input.lines).map((l, i) => `${i + 1}. ${l}`).join('\n')}${player}${
+            input.brief ? '\nRispondi solo in 2–3 frasi brevi: perché la mossa migliore è buona e che cosa minaccia o impedisce.' : ''
+          }`,
         },
       ],
     });
+    recordUsage('explanation', message);
     if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
     const text = textOf(message);
     if (!text) throw new AssistantError('unreadable');

@@ -362,15 +362,21 @@ export const it = {
       help: 'Usa la modalità veloce di Claude: risposta fino a 2–3 volte più rapida, ma ogni lettura costa circa il doppio.',
     },
     live: {
-      start: 'Avvia l’analisi continua',
-      stop: 'Ferma l’analisi continua',
-      stepsTitle: 'Come funziona l’analisi continua',
+      start: 'Avvia la modalità tutor',
+      stop: 'Ferma la modalità tutor',
+      stepsTitle: 'Come funziona la modalità tutor',
       steps: [
         'Appoggia il telefono su un supporto, fermo, con tutta la scacchiera nell’inquadratura.',
         'Alla prima lettura compare una griglia verde sulla scacchiera: se non combacia con le case, trascina i 4 angoli.',
-        'Gioca normalmente. Fatta una mossa, togli la mano: la posizione si aggiorna da sola (le mosse semplici in mezzo secondo, senza Claude).',
-        'Quando tocca a te vedi (e senti) la mossa migliore e la linea vincente; quando tocca all’avversario ti mostro la sua minaccia.',
+        'Gioca normalmente. Fatta una mossa, togli la mano: il tutor la riconosce da solo (quasi sempre senza interpellare Claude).',
+        'A ogni mossa il tutor ti parla: quando tocca a te ti dice la mossa migliore, dopo la tua ti dice com’era, e ti avvisa delle minacce dell’avversario. «Perché?» chiede a Claude una spiegazione breve.',
       ],
+      repeat: 'Ripeti',
+      why: 'Perché?',
+      usage: (reads: number, explains: number, tokens: number, cached: number, local: number) =>
+        `Claude in questa sessione: ${reads} ${reads === 1 ? 'lettura' : 'letture'}, ${explains} ${explains === 1 ? 'spiegazione' : 'spiegazioni'}, circa ${tokens.toLocaleString('it-IT')} token${
+          cached ? ` (+${cached.toLocaleString('it-IT')} dalla cache, quasi gratis)` : ''
+        }. Mosse riconosciute senza Claude: ${local}.`,
       banner: {
         reading: 'Leggo la scacchiera…',
         moving: 'Mano sulla scacchiera: aspetto che sia ferma…',
@@ -380,7 +386,6 @@ export const it = {
         theirs: 'Tocca all’avversario: aspetto la sua mossa',
         waiting: 'Inquadra tutta la scacchiera…',
       },
-      speak: (move: string, extra: string) => `Tocca a te. Mossa consigliata: ${move}. ${extra}`,
       history: 'Mosse viste',
       sources: { local: 'vista subito', claude: 'letta da Claude' } as Record<string, string>,
       wrong: 'Mossa sbagliata? Rileggi la scacchiera',

@@ -13,6 +13,7 @@ import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { judgeMove, type MoveFeedback } from '../features/analysis/moveCoach';
+import { tutorSpeech, type TutorMove } from '../features/analysis/tutor';
 import { winningLine } from '../features/analysis/winningLine';
 import { gridToPlacement, isBoardView, nextView, type BoardView } from '../features/assistant/boardReading';
 import { inferTurn } from '../features/assistant/boardResolve';
@@ -22,6 +23,7 @@ import {
   readBoardFromImage,
   setFastMode,
   useApiKey,
+  useAssistantUsage,
   useFastMode,
   type BoardReading,
 } from '../features/assistant/claude';
@@ -35,6 +37,7 @@ import { cellChanges, changesBySquare, inferMove } from '../features/vision/loca
 import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
 import { formatLine, sanToLocal } from '../utils/notation';
+import { setVoiceEnabled, speak, speechSupported, stopSpeaking } from '../features/voice/speech';
 
 /** Analisi continua: ogni quanto si controlla se la scacchiera si muove (nessun costo, è locale). */
 const SAMPLE_MS = 400;
@@ -91,7 +94,14 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const [colorSource, setColorSource] = useState<'default' | 'photo' | 'user'>('default');
   const [analysis, setAnalysis] = useState<Phase<Analysis>>({ status: 'idle' });
   const [explanation, setExplanation] = useState<Phase<string>>({ status: 'idle' });
+  // Modalità tutor: osserva di continuo la scacchiera e dice (a voce) la mossa migliore.
   const [live, setLive] = useState(false);
+  const [tutorText, setTutorText] = useState('');
+  const usage = useAssistantUsage();
+  const liveRef = useRef(false);
+  liveRef.current = live;
+  /** Mossa che ha portato alla posizione in analisi, con l'analisi di prima (per il giudizio del tutor). */
+  const pendingMove = useRef<{ move: TutorMove; previous: Analysis | null } | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [liveState, setLiveState] = useState<'watching' | 'moving'>('watching');
   const [readSeconds, setReadSeconds] = useState<number | null>(null);
@@ -162,6 +172,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
     setLive(false);
+    stopSpeaking();
     setCorners(null);
     snapshot.current = null;
   }, [stream, setCorners]);
@@ -174,6 +185,30 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   }, [stream]);
 
   useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
+
+  /** Spiegazione di Claude per la posizione analizzata (breve nella modalità tutor). */
+  const runExplanation = useCallback(
+    async (pos: EditorPosition, result: Analysis, id: number, brief: boolean) => {
+      if (!apiKey) return;
+      const fen = result.fen;
+      setExplanation({ status: 'busy' });
+      try {
+        const text = await explainPosition({
+          fen,
+          evaluation: formatScore(result.score, pos.turn === 'w'),
+          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, brief ? 6 : 8)))),
+          playerSide: myColorRef.current,
+          brief,
+        });
+        if (id !== evalId.current) return;
+        setExplanation({ status: 'done', value: text });
+        if (liveRef.current) speak(text, 'tutor');
+      } catch (error) {
+        if (id === evalId.current) setExplanation({ status: 'error', error: errorText(error) });
+      }
+    },
+    [apiKey],
+  );
 
   // ───── Valutazione: Stockfish, poi (quando tocca a te) la spiegazione di Claude ─────
   const evaluate = useCallback(
@@ -200,21 +235,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         return;
       }
       // La spiegazione riguarda la propria mossa: quando tocca all'avversario non serve (e non costa).
-      if (result.lines.length === 0 || !apiKey || pos.turn !== myColorRef.current) return;
-      setExplanation({ status: 'busy' });
-      try {
-        const text = await explainPosition({
-          fen,
-          evaluation: formatScore(result.score, pos.turn === 'w'),
-          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, 8)))),
-          playerSide: myColorRef.current,
-        });
-        if (id === evalId.current) setExplanation({ status: 'done', value: text });
-      } catch (error) {
-        if (id === evalId.current) setExplanation({ status: 'error', error: errorText(error) });
-      }
+      // Nella modalità tutor arriva solo se la chiedi («Perché?»): il tutor parla già da solo, senza token.
+      if (result.lines.length === 0 || pos.turn !== myColorRef.current || liveRef.current) return;
+      await runExplanation(pos, result, id, false);
     },
-    [apiKey, profile.settings.analysisDepth],
+    [runExplanation, profile.settings.analysisDepth],
   );
 
   // ───── Lettura della scacchiera con Claude ─────
@@ -263,6 +288,13 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const next = fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
         if (fromCamera && previous && result.moves.length > 0) {
           setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source: 'claude', before: previous }]);
+          const lastSan = result.moves[result.moves.length - 1]!;
+          pendingMove.current = {
+            move: { san: lastSan, color: next.turn === 'w' ? 'b' : 'w' },
+            previous: result.moves.length === 1 && doneRef.current?.fen === positionToFen(previous) ? doneRef.current : null,
+          };
+        } else {
+          pendingMove.current = null;
         }
         userEdited.current = false;
         setPosition(next);
@@ -314,6 +346,10 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       const next = fenToPosition(result.fen);
       if (!next) return false;
       setHistory((h) => [...h, { san: sanToLocal(result.san), source: 'local', before: pos }]);
+      pendingMove.current = {
+        move: { san: result.san, color: pos.turn },
+        previous: doneRef.current?.fen === positionToFen(pos) ? doneRef.current : null,
+      };
       lastPlacement.current = result.fen.split(' ')[0] ?? null;
       lastRaw.current = null;
       userEdited.current = false;
@@ -457,6 +493,47 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const doneRef = useRef<Analysis | null>(null);
   doneRef.current = done;
 
+  // Il tutor parla a ogni nuova posizione analizzata: frase costruita sul dispositivo, zero token.
+  const spokenFor = useRef<Analysis | null>(null);
+  useEffect(() => {
+    if (!live || !done || !fen || spokenFor.current === done) return;
+    spokenFor.current = done;
+    const pending = pendingMove.current;
+    pendingMove.current = null;
+    const text = tutorSpeech({
+      fen,
+      analysis: done,
+      myColor,
+      lastMove: pending?.move ?? null,
+      previous: pending?.previous ?? null,
+      hideBest: practice,
+    });
+    setTutorText(text);
+    speak(text, 'tutor');
+  }, [live, done, fen, myColor, practice]);
+
+  const startTutor = () => {
+    pendingMove.current = null;
+    spokenFor.current = null;
+    setTutorText('');
+    // Il tutor parla: se la voce era spenta la si accende (si spegne dall'altoparlante in alto).
+    if (speechSupported()) setVoiceEnabled(true);
+    setLive(true);
+  };
+
+  const stopTutor = () => {
+    setLive(false);
+    stopSpeaking();
+  };
+
+  /** «Perché?»: spiegazione breve di Claude, solo su richiesta (è l'unica parte del tutor che costa token). */
+  const askWhy = () => {
+    const pos = positionRef.current;
+    const current = doneRef.current;
+    if (pos && current) void runExplanation(pos, current, evalId.current, true);
+  };
+  const localMoves = history.filter((h) => h.source === 'local').length;
+
   const arrows = useMemo<BoardArrow[]>(() => {
     const out: BoardArrow[] = [];
     if (!myTurn) {
@@ -512,8 +589,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           : analysis.status === 'busy'
             ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
             : myTurn
-              ? { text: bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove, tone: 'mine' }
-              : { text: t.analyze.live.banner.theirs, tone: 'theirs' };
+              ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
+              : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
+  const tutorSpeaking = banner.tone === 'mine' || banner.tone === 'theirs';
   const winExtra = win?.kind === 'mate' ? t.analyze.win.mate(win.mateIn ?? 1) : win?.kind === 'check' ? t.analyze.win.check(win.checkIn ?? 1) : '';
 
   return (
@@ -536,12 +614,37 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           role="status"
           data-testid="live-banner"
           data-tone={banner.tone}
-          className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3 font-display text-xl font-semibold ${
-            banner.tone === 'mine' ? 'border-ok bg-ok-soft text-ok' : banner.tone === 'theirs' ? 'border-line bg-surface-2' : 'border-line bg-surface'
+          className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3 ${
+            banner.tone === 'mine' ? 'border-ok bg-ok-soft' : banner.tone === 'theirs' ? 'border-line bg-surface-2' : 'border-line bg-surface'
           }`}
         >
-          <span>{banner.text}</span>
-          {banner.tone === 'mine' && bestLocal && <SpeakButton text={t.analyze.live.speak(bestLocal, winExtra)} auto />}
+          <span className={`font-display text-xl font-semibold ${banner.tone === 'mine' ? 'text-ok' : ''}`}>{banner.text}</span>
+          {tutorSpeaking && (
+            <span className="flex flex-wrap gap-2">
+              {tutorText && (
+                <Button variant="secondary" size="sm" icon={<Icon name="speaker" size={16} />} onClick={() => speak(tutorText, 'tutor')} data-testid="tutor-repeat">
+                  {t.analyze.live.repeat}
+                </Button>
+              )}
+              {banner.tone === 'mine' && !practice && apiKey && best && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon name="chat" size={16} />}
+                  onClick={askWhy}
+                  disabled={explanation.status === 'busy'}
+                  data-testid="tutor-why"
+                >
+                  {explanation.status === 'busy' ? t.analyze.explaining : t.analyze.live.why}
+                </Button>
+              )}
+            </span>
+          )}
+          {explanation.status === 'done' && banner.tone === 'mine' && (
+            <p className="w-full text-base" data-testid="tutor-explanation">
+              {explanation.value}
+            </p>
+          )}
         </div>
       )}
 
@@ -615,12 +718,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           {stream && apiKey && (
             <div className="space-y-2 rounded-xl border border-line p-3">
               {live ? (
-                <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={() => setLive(false)} data-testid="live-toggle">
+                <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={stopTutor} data-testid="live-toggle">
                   {t.analyze.live.stop}
                 </Button>
               ) : (
                 <>
-                  <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={() => setLive(true)} data-testid="live-toggle">
+                  <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={startTutor} data-testid="live-toggle">
                     {t.analyze.live.start}
                   </Button>
                   <p className="text-sm font-semibold">{t.analyze.live.stepsTitle}</p>
@@ -630,6 +733,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                     ))}
                   </ol>
                 </>
+              )}
+              {(live || usage.readings > 0) && (
+                <p className="text-xs text-muted" data-testid="tutor-usage">
+                  {t.analyze.live.usage(usage.readings, usage.explanations, usage.input + usage.output, usage.cached, localMoves)}
+                </p>
               )}
             </div>
           )}
