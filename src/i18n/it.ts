@@ -290,7 +290,7 @@ export const it = {
   analyze: {
     title: 'Analizza la partita',
     intro:
-      'Inquadra la scacchiera della partita che stai giocando: Claude riconosce i pezzi, tu controlli la posizione, Stockfish la valuta e Claude ti spiega la mossa migliore (anche a voce).',
+      'Inquadra la scacchiera: Claude riconosce i pezzi, Stockfish calcola le mosse migliori e le disegna sulla scacchiera, Claude ti spiega l’idea (anche a voce). Puoi anche provare prima tu una mossa e vedere come la giudica il motore: serve ad allenare il tuo occhio, non a giocare al posto tuo.',
     homeCardTitle: 'Analizza dal vivo con la fotocamera',
     homeCardText: 'Inquadra la scacchiera: valutazione e mossa migliore spiegate a voce.',
     key: {
@@ -330,10 +330,10 @@ export const it = {
       unchanged: 'Posizione invariata.',
     },
     reading: 'Claude sta leggendo la scacchiera…',
-    readDone: 'Posizione letta. Controllala e correggi i pezzi sbagliati prima di valutarla.',
+    readDone: 'Posizione letta. Controlla che i pezzi siano giusti: se qualcosa non torna, correggili e rivaluta.',
     readTime: (s: number) => `${s.toLocaleString('it-IT', { maximumFractionDigits: 1 })} s`,
     confidence: { high: 'Lettura sicura', medium: 'Lettura abbastanza sicura', low: 'Lettura incerta: controlla bene' } as Record<string, string>,
-    sideUnknown: 'Chi deve muovere? Indicalo qui sotto.',
+    sideUnknown: 'Non so chi deve muovere: ho fatto un’ipotesi, cambiala con il pulsante sopra la scacchiera.',
     myColor: 'Io gioco con',
     myColors: { w: 'Bianco', b: 'Nero', none: 'Non indicare' } as Record<string, string>,
     turn: 'Tocca a',
@@ -359,6 +359,58 @@ export const it = {
       engine: 'Il motore di analisi non è disponibile su questo dispositivo.',
     } as Record<string, string>,
     manual: 'Sistema i pezzi a mano',
+    fixPieces: 'Correggi i pezzi',
+    changeTurn: 'Cambia chi muove',
+    turnIs: (side: string) => `Tocca a ${side}`,
+    flipBoard: 'Gira la scacchiera',
+    orientation: {
+      label: 'Dove stanno i pezzi bianchi nella foto?',
+      help: 'Di solito si capisce da solo. Se la posizione risulta ruotata o speculare scegli il lato giusto: resta valido per le prossime letture.',
+      auto: 'Riconoscilo da solo',
+      options: { bottom: 'In basso', top: 'In alto', left: 'A sinistra', right: 'A destra' } as Record<string, string>,
+      rotate: 'Ruota la lettura',
+      detected: (side: string) => `Pezzi bianchi ${side} nella foto.`,
+      sides: { bottom: 'in basso', top: 'in alto', left: 'a sinistra', right: 'a destra' } as Record<string, string>,
+    },
+    fixed: (n: number, squares: string[]) =>
+      `Ho corretto ${n === 1 ? '1 casa' : `${n} case`} (${squares.join(', ')}): la lettura della foto non era una posizione possibile, ho scelto quella legale più vicina alla precedente.`,
+    moveFound: (san: string) => `Mossa riconosciuta: ${san}.`,
+    candidates: {
+      title: 'Mosse consigliate',
+      help: 'Le frecce sulla scacchiera sono le tre mosse migliori secondo Stockfish: più è marcata la freccia, migliore è la mossa. Tocca un tuo pezzo per vedere dove può andare.',
+      ranks: ['Migliore', 'Seconda scelta', 'Terza scelta'],
+      continuation: 'Poi',
+      showLine: 'Vedi sulla scacchiera',
+      hideLine: 'Torna alla posizione',
+      viewing: (move: string) => `Variante: ${move}. Scorrila con le frecce.`,
+    },
+    coach: {
+      toggle: 'Prima prova tu',
+      help: 'Nasconde le frecce: scegli la mossa che giocheresti (tocca un pezzo e poi la casa), poi Stockfish la valuta e ti mostra le mosse migliori.',
+      prompt: (side: string) => `Tocca a ${side}. Che mossa giocheresti? Tocca un pezzo per vedere dove può andare, poi la casa di arrivo.`,
+      reveal: 'Mostra i suggerimenti',
+      hide: 'Nascondi i suggerimenti',
+      judging: 'Stockfish sta valutando la tua mossa…',
+      yourMove: 'La tua mossa',
+      retry: 'Prova un’altra mossa',
+      grades: {
+        best: 'Ottima scelta!',
+        good: 'Buona mossa',
+        inaccuracy: 'Imprecisione',
+        mistake: 'Errore',
+        blunder: 'Grave errore',
+      } as Record<string, string>,
+      text: (grade: string, san: string, best: string, rank: number | null, loss: number) => {
+        if (grade === 'best') return `${san} è proprio la mossa migliore secondo Stockfish.`;
+        if (grade === 'good') {
+          return rank
+            ? `${san} è la ${rank === 2 ? 'seconda' : 'terza'} scelta del motore: perde pochissimo rispetto a ${best}.`
+            : `${san} è quasi equivalente alla migliore (${best}): perde solo ${(loss / 100).toLocaleString('it-IT', { maximumFractionDigits: 2 })} pedoni.`;
+        }
+        return `${san} fa perdere circa ${(loss / 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })} pedoni rispetto a ${best}. Guarda la freccia della mossa migliore e prova a capire perché è più forte.`;
+      },
+      afterEval: 'Valutazione dopo la tua mossa',
+    },
   },
   games: {
     title: 'Partite famose',

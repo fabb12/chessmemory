@@ -63,6 +63,89 @@ export function placementProblems(placement: string): string[] {
   return problems;
 }
 
+/**
+ * Orientamento della scacchiera nella foto: da quale lato dell'immagine stanno i
+ * pezzi del Bianco (la sua prima traversa).
+ *
+ * Claude trascrive le 64 case ESATTAMENTE come le vede (riga in alto per prima,
+ * da sinistra a destra) senza dover ruotare nulla a mente: la rotazione, dove
+ * è facile sbagliare, la fa questo codice.
+ */
+export type BoardView = 'bottom' | 'top' | 'left' | 'right';
+export const BOARD_VIEWS: readonly BoardView[] = ['bottom', 'top', 'left', 'right'];
+
+export function isBoardView(value: unknown): value is BoardView {
+  return value === 'bottom' || value === 'top' || value === 'left' || value === 'right';
+}
+
+/** Orientamento successivo (per il pulsante «ruota»). */
+export function nextView(view: BoardView): BoardView {
+  return BOARD_VIEWS[(BOARD_VIEWS.indexOf(view) + 1) % BOARD_VIEWS.length] ?? 'bottom';
+}
+
+/** Verifica e normalizza la griglia letta: 8 righe di 8 caratteri, oppure null. */
+export function normalizeGrid(raw: readonly unknown[]): string[] | null {
+  if (raw.length !== 8) return null;
+  const rows: string[] = [];
+  for (const row of raw) {
+    if (typeof row !== 'string') return null;
+    const rank = normalizeRank(row);
+    if (!RANK.test(rank)) return null;
+    rows.push(rank);
+  }
+  return rows;
+}
+
+/**
+ * Dalla griglia vista nella foto (riga 0 = in alto, colonna 0 = a sinistra) alle
+ * 8 traverse dal punto di vista del Bianco (dall'ottava alla prima, colonne a→h).
+ *
+ * Con il Bianco a sinistra la prima traversa è il bordo sinistro dell'immagine e
+ * la colonna «a» è la riga in alto; con il Bianco a destra è il contrario.
+ */
+export function gridToRanks(grid: readonly string[], view: BoardView): string[] {
+  const at = (r: number, f: number): string => {
+    switch (view) {
+      case 'bottom':
+        return grid[r]?.[f] ?? '.';
+      case 'top':
+        return grid[7 - r]?.[7 - f] ?? '.';
+      case 'left':
+        return grid[f]?.[7 - r] ?? '.';
+      case 'right':
+        return grid[7 - f]?.[r] ?? '.';
+    }
+  };
+  return Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, f) => at(r, f)).join(''));
+}
+
+/** Operazione inversa: come apparirebbe la posizione in una foto con quell'orientamento. */
+export function ranksToGrid(ranks: readonly string[], view: BoardView): string[] {
+  const at = (i: number, j: number): string => {
+    switch (view) {
+      case 'bottom':
+        return ranks[i]?.[j] ?? '.';
+      case 'top':
+        return ranks[7 - i]?.[7 - j] ?? '.';
+      case 'left':
+        return ranks[7 - j]?.[i] ?? '.';
+      case 'right':
+        return ranks[j]?.[7 - i] ?? '.';
+    }
+  };
+  return Array.from({ length: 8 }, (_, i) => Array.from({ length: 8 }, (_, j) => at(i, j)).join(''));
+}
+
+export function gridToPlacement(grid: readonly string[], view: BoardView): string | null {
+  return ranksToPlacement(gridToRanks(grid, view));
+}
+
+/** Quanti pezzi bianchi e neri ci sono nella griglia. */
+export function countPieces(grid: readonly string[]): { white: number; black: number } {
+  const all = grid.join('');
+  return { white: all.replace(/[^PNBRQK]/g, '').length, black: all.replace(/[^pnbrqk]/g, '').length };
+}
+
 /** Case che cambiano tra due posizioni (per descrivere la differenza a Claude o all'utente). */
 export function changedSquares(before: string, after: string): string[] {
   const a = placementToRanks(before);
