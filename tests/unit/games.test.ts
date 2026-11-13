@@ -35,6 +35,7 @@ describe('partite famose', () => {
     it('ha commenti e testi didattici', () => {
       expect(parsed.moves.filter((m) => m.comment).length).toBeGreaterThanOrEqual(3);
       expect(game.summary.length).toBeGreaterThan(40);
+      expect(game.intro.length).toBeGreaterThan(250);
       expect(game.lessons.length).toBeGreaterThanOrEqual(2);
       expect(game.themes.length).toBeGreaterThan(0);
     });

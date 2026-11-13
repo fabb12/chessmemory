@@ -126,19 +126,21 @@ export function GamePage({ profile }: { profile: Profile }) {
           <Card aria-live="polite" data-testid="game-comment">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-muted tabular-nums">
-                {current ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}` : t.games.commentTitle}
+                {current ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}` : t.games.introTitle}
               </h2>
               <SpeakButton
                 text={
                   current
                     ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}. ${current.comment ?? ''}`
-                    : game.summary
+                    : `${game.title}. ${game.intro}`
                 }
-                auto={Boolean(current?.comment)}
+                auto={current ? Boolean(current.comment) : true}
                 delay={450}
               />
             </div>
-            <p className="mt-1.5">{current ? (current.comment ?? t.games.noComment) : game.summary}</p>
+            <p className="mt-1.5" data-testid={current ? undefined : 'game-intro'}>
+              {current ? (current.comment ?? t.games.noComment) : game.intro}
+            </p>
             {!current && <p className="mt-2 text-sm text-muted">{t.games.startPosition}</p>}
             {index === total && (
               <p className="mt-2 font-semibold" data-testid="game-result">

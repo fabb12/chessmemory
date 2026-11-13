@@ -10,6 +10,12 @@ export interface PreparedImage {
 }
 
 export const MAX_PHOTO_SIDE = 1280;
+/**
+ * Lato massimo delle foto inviate a Claude per leggere la scacchiera: a 1024 px
+ * ogni casa misura ancora ~100 px, abbastanza per riconoscere i pezzi, ma
+ * l'immagine pesa meno della metà e la risposta arriva prima.
+ */
+export const READING_PHOTO_SIDE = 1024;
 const JPEG_QUALITY = 0.82;
 /** File più grandi vengono rifiutati prima ancora di essere letti. */
 export const MAX_INPUT_BYTES = 30 * 1024 * 1024;
@@ -43,14 +49,14 @@ function draw(
 }
 
 /** Legge un file immagine (fotocamera o galleria) e lo riduce a una dimensione ragionevole. */
-export async function prepareImage(file: File): Promise<PreparedImage> {
+export async function prepareImage(file: File, maxSide = MAX_PHOTO_SIDE): Promise<PreparedImage> {
   if (!file.type.startsWith('image/')) throw new Error('il file non è un’immagine');
   if (file.size > MAX_INPUT_BYTES) throw new Error('immagine troppo grande');
   const url = URL.createObjectURL(file);
   try {
     // L'orientamento EXIF delle foto del telefono è applicato dal browser (image-orientation: from-image).
     const img = await loadImage(url);
-    const scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
     const width = Math.max(1, Math.round(img.naturalWidth * scale));
     const height = Math.max(1, Math.round(img.naturalHeight * scale));
     return draw(img, width, height);
