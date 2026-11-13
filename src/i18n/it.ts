@@ -731,6 +731,8 @@ export const it = {
         { name: 'Dexie', license: 'Apache-2.0', url: 'https://github.com/dexie/Dexie.js' },
         { name: 'Supabase JS', license: 'MIT', url: 'https://github.com/supabase/supabase-js' },
         { name: 'Anthropic SDK', license: 'Apache-2.0', url: 'https://github.com/anthropics/anthropic-sdk-typescript' },
+        { name: 'ONNX Runtime Web', license: 'MIT', url: 'https://github.com/microsoft/onnxruntime' },
+        { name: 'Modello YOLO dei pezzi (wojciechc1/AI_Chess, Ultralytics YOLOv8)', license: 'MIT / AGPL-3.0', url: 'https://github.com/wojciechc1/AI_Chess' },
         { name: 'Inter, Fraunces (caratteri)', license: 'SIL OFL 1.1', url: 'https://github.com/fontsource/fontsource' },
       ],
       stockfish:

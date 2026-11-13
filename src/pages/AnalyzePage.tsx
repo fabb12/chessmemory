@@ -15,8 +15,9 @@ import type { Profile } from '../db/schema';
 import { judgeMove, type MoveFeedback } from '../features/analysis/moveCoach';
 import { tutorSpeech, type TutorMove } from '../features/analysis/tutor';
 import { winningLine } from '../features/analysis/winningLine';
-import { gridToPlacement, isBoardView, nextView, type BoardView } from '../features/assistant/boardReading';
-import { inferTurn } from '../features/assistant/boardResolve';
+import { gridToPlacement, isBoardView, nextView, placementToRanks, ranksToGrid, type BoardView } from '../features/assistant/boardReading';
+import { inferTurn, resolveReading } from '../features/assistant/boardResolve';
+import { gridEvidence, informative } from '../features/vision/evidence';
 import {
   AssistantError,
   explainPosition,
@@ -277,6 +278,10 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             vision = null;
           }
         }
+        // YOLO vede pochi dei pezzi che ci sono (pezzi diversi da quelli dell'addestramento, luce…):
+        // la sua lettura quasi vuota non conta, né per le regole né come indizio per Claude.
+        const expected = known ? Object.keys(known.placement).length : 0;
+        if (vision?.evidence && known && !informative(vision.evidence, expected)) vision = { ...vision, evidence: null };
         // 2. Se YOLO e le regole bastano, niente Claude: zero token e risposta immediata.
         let result: BoardReading | null = null;
         if (vision?.evidence) {
@@ -290,6 +295,18 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           // La mossa vista confrontando le case e confermata da YOLO vale anche con qualche casa incerta.
           const agrees = localGuess !== null && local.placement === localGuess && (local.fitCost ?? Infinity) <= 1.5;
           if (trustLocal(local, vision.evidence) || agrees) result = localBoardReading(local, vision.evidence, vision.corners);
+        } else if (localGuess && reference && lastView.current) {
+          // YOLO non aiuta su questa scena: vale la mossa vista confrontando le case, come senza modello.
+          const guessGrid = ranksToGrid(placementToRanks(localGuess), lastView.current);
+          const guessed = resolveReading({
+            grid: guessGrid,
+            claimedView: lastView.current,
+            forcedView: lastView.current,
+            reference,
+          });
+          if (guessed.moves.length > 0 && guessed.corrected.length === 0) {
+            result = localBoardReading(guessed, gridEvidence(guessGrid), vision?.corners ?? quad);
+          }
         }
         // 3. Altrimenti Claude, con la lettura di YOLO come indizio e fusa casa per casa.
         if (!result) {

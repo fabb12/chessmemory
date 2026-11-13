@@ -1,9 +1,22 @@
 # Modello YOLO per il riconoscimento dei pezzi
 
-La modalità tutor e «Analizza» usano, se presente, un modello YOLO eseguito sul
-dispositivo (onnxruntime-web, WebAssembly) per riconoscere i pezzi senza
-chiamare Claude. Il modello **non è incluso** nel repository: va addestrato (o
-scaricato) ed esportato in ONNX.
+La modalità tutor e «Analizza» usano un modello YOLO eseguito sul dispositivo
+(onnxruntime-web, WebAssembly) per riconoscere i pezzi senza chiamare Claude.
+Gira nel browser di chi usa l'app: non serve installare nulla.
+
+## Modello incluso
+
+`chess-pieces.onnx` (10,6 MB) è YOLOv8n esportato dai pesi pubblici di
+[wojciechc1/AI_Chess](https://github.com/wojciechc1/AI_Chess) (licenza MIT;
+dettagli e avvertenza sulla licenza AGPL di Ultralytics in
+`LICENSE-chess-pieces.txt`).
+
+Limiti misurati: sulla scacchiera usata per l'addestramento è preciso
+(confidenze 0,7–0,98); su scacchiere e pezzi molto diversi (es. legno
+chiaro/scuro) sbaglia spesso colore e tipo. L'app ne tiene conto: YOLO da solo
+non smentisce mai Claude, e senza Claude basta solo quando tutta la scacchiera
+corrisponde a una mossa legale con poche case incerte. Per la massima
+affidabilità conviene riaddestrarlo con foto della propria scacchiera (sotto).
 
 File attesi in questa cartella:
 
@@ -34,9 +47,8 @@ python scripts/yolo/train_export.py --weights best.pt
 
 Dataset consigliati: «Chess Pieces» (Roboflow Universe) o foto proprie della
 propria scacchiera etichettate (anche 100–200 foto migliorano molto il
-riconoscimento sui propri pezzi). Il file `.onnx` è escluso da git
-(`.gitignore`): per pubblicarlo con l'app su GitHub Pages copialo nel workflow
-di deploy oppure rimuovi la riga dal `.gitignore`.
+riconoscimento sui propri pezzi). Il nuovo `.onnx` sostituisce quello
+incluso: aggiorna anche `LICENSE-chess-pieces.txt`.
 
 In alternativa si può indicare un modello ospitato altrove impostando nel
 browser `localStorage['cm.vision.modelUrl']` (accanto deve esserci il `.json`).

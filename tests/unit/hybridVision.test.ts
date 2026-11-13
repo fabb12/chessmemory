@@ -8,7 +8,10 @@ import {
   evidenceGrid,
   fuseEvidence,
   gridEvidence,
+  temper,
+  YOLO_WEIGHT,
   hintGrid,
+  informative,
   peaked,
   uncertainCount,
   type Evidence,
@@ -130,11 +133,18 @@ describe('fusione YOLO + Claude + mosse legali', () => {
     expect(fuseEvidence(null, undefined)).toBeNull();
   });
 
-  it('dove Claude sbaglia un pezzo e YOLO è sicuro, vince YOLO', () => {
+  it('un YOLO sicuro ma sbagliato non smentisce da solo Claude', () => {
+    // YOLO dice «cavallo bianco 0,73» dove Claude vede un pedone nero.
+    const yoloCell = { N: 0.73, '.': 0.135, p: 0.0113 };
+    const fused = fuseEvidence(gridEvidence(['p'.repeat(8), ...Array(7).fill('.'.repeat(8))]), temper(Array(64).fill(yoloCell), YOLO_WEIGHT))!;
+    expect(bestSymbol(fused[0]!).symbol).toBe('p');
+  });
+
+  it('dove Claude sbaglia un pezzo e YOLO è sicuro, le mosse legali danno ragione a YOLO', () => {
     const after = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
     // Claude legge il pedone in e4 come alfiere e l'alfiere in c1 come pedone.
     const claude = photo(after).map((row, i) => (i === 4 ? row.replace('P', 'B') : i === 7 ? 'RNPQKBNR' : row));
-    const fused = fuseEvidence(gridEvidence(claude), yolo(after))!;
+    const fused = fuseEvidence(gridEvidence(claude), temper(yolo(after), YOLO_WEIGHT))!;
     const result = resolveReading({ grid: claude, evidence: fused, claimedView: 'bottom', reference: { fen: START_FEN, locked: false } });
     expect(result.placement).toBe(after);
     expect(result.moves).toEqual(['e4']);
@@ -168,6 +178,12 @@ describe('fusione YOLO + Claude + mosse legali', () => {
     expect(uncertainCount(evidence)).toBe(5);
     const local = resolveLocal({ evidence, reference: null, forcedView: null, lastView: 'bottom', lastRawPlacement: null });
     expect(trustLocal(local, evidence)).toBe(false);
+  });
+
+  it('una lettura YOLO quasi vuota (pezzi che il modello non conosce) viene ignorata', () => {
+    const blind = yolo('8/8/8/8/8/8/8/8', 0.9);
+    expect(informative(blind, 32)).toBe(false);
+    expect(informative(yolo(START), 32)).toBe(true);
   });
 
   it('nel suggerimento per Claude le case incerte sono «?»', () => {
