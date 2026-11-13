@@ -51,17 +51,23 @@ test('analizza: foto → lettura con Claude (simulato) → Stockfish → spiegaz
 
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByText('Lettura sicura')).toBeVisible();
-  await expect(page.getByTestId('analyze-turn')).toContainText('Tocca a Nero');
+  // Foto dal lato del Bianco → sei il Bianco; muove il Nero → tocca all'avversario: si vede la sua minaccia, niente consigli.
+  await expect(page.getByTestId('analyze-turn')).toContainText('Tocca all’avversario (Nero)');
+  await expect(page.getByTestId('opponent-turn')).toContainText('mossa più pericolosa', { timeout: 30_000 });
+  await expect(page.getByTestId('candidate-moves')).toHaveCount(0);
+  expect(bodies).toHaveLength(1);
 
-  // Nessun clic su «Valuta»: le mosse migliori compaiono da sole sulla scacchiera.
+  // Lettura veloce: sforzo basso, modalità rapida, nessuna seconda lettura perché la posizione è valida.
+  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', speed: 'fast', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+
+  // «Io sono: Nero» → ora tocca a te: mosse consigliate, linea vincente e spiegazione.
+  await page.getByTestId('my-color').getByRole('button', { name: 'Nero' }).click();
+  await expect(page.getByTestId('analyze-turn')).toContainText('Tocca a te (Nero)');
   await expect(page.getByTestId('analyze-best')).not.toBeEmpty({ timeout: 30_000 });
   await expect(page.getByTestId('candidate-1')).toBeVisible();
-  await expect(page.getByTestId('candidate-3')).toBeVisible();
+  await expect(page.getByTestId('winning-line')).toBeVisible();
   await expect(page.getByTestId('analyze-explanation')).toContainText(EXPLANATION);
-
   expect(bodies).toHaveLength(2);
-  // Lettura singola: sforzo medio, nessuna seconda lettura perché la posizione è valida.
-  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'medium', format: { type: 'json_schema' } } });
   expect(String((bodies[1]!.messages as { content: string }[])[0]!.content)).toContain(`${PLACEMENT} b`);
 });
 
@@ -96,11 +102,10 @@ test('analizza: una lettura impossibile viene ripetuta con più attenzione', asy
   await page.getByRole('button', { name: 'Salva la chiave' }).click();
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByText('Lettura sicura')).toBeVisible();
-  await expect(page.getByTestId('analyze-turn')).toBeVisible();
-  await expect(page.getByTestId('analyze-explanation')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('opponent-turn')).toBeVisible({ timeout: 30_000 });
 
-  // Lettura sbagliata, seconda lettura corretta, poi la spiegazione.
-  expect(bodies).toHaveLength(3);
+  // Lettura sbagliata, poi seconda lettura corretta (nessuna spiegazione: tocca all'avversario).
+  expect(bodies).toHaveLength(2);
   expect(bodies[1]).toMatchObject({ output_config: { effort: 'medium' } });
   expect(JSON.stringify(bodies[1]!.messages)).toContain('White has 2 kings');
 });
@@ -144,7 +149,10 @@ test('analizza: una foto scattata dal lato del Nero viene raddrizzata dal codice
   await mockClaude(page, rotated, { white_side: 'top' });
   await openAnalyze(page);
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
+  // Foto dal lato del Nero → sei il Nero, e tocca proprio a te.
   await expect(page.getByTestId('analyze-best')).not.toBeEmpty({ timeout: 30_000 });
+  await expect(page.getByTestId('my-color').getByRole('button', { name: 'Nero' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('analyze-turn')).toContainText('Tocca a te (Nero)');
   await expect(page.getByTestId('chessboard')).toHaveAttribute('data-fen', new RegExp(`^${PLACEMENT.replace(/\//g, '\\/')} b`));
   await expect(page.getByText('Pezzi bianchi in alto nella foto.')).toBeVisible();
 });
@@ -155,7 +163,7 @@ test('analizza: l\'orientamento sbagliato si corregge senza rileggere la foto', 
   const counter = await mockClaude(page, rotated, { white_side: 'bottom' });
   await openAnalyze(page);
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
-  await expect(page.getByTestId('analyze-best')).not.toBeEmpty({ timeout: 30_000 });
+  await expect(page.getByTestId('analyze-turn')).toBeVisible({ timeout: 30_000 });
   // Con l'orientamento sbagliato la posizione risulta ruotata.
   await expect(page.getByTestId('chessboard')).not.toHaveAttribute('data-fen', new RegExp(`^${PLACEMENT.replace(/\//g, '\\/')} `));
   await page.getByTestId('photo-orientation').selectOption('top');
@@ -165,7 +173,8 @@ test('analizza: l\'orientamento sbagliato si corregge senza rileggere la foto', 
 });
 
 test('analizza: allenamento — prima provi una mossa, poi vedi il giudizio e le mosse migliori', async ({ page }) => {
-  await mockClaude(page, RANKS);
+  // Foto dal lato del Nero: sei il Nero e tocca a te.
+  await mockClaude(page, [...RANKS].reverse().map((row) => [...row].reverse().join('')), { white_side: 'top' });
   await openAnalyze(page);
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByTestId('candidate-1')).toBeVisible({ timeout: 30_000 });
@@ -180,4 +189,139 @@ test('analizza: allenamento — prima provi una mossa, poi vedi il giudizio e le
   await expect(page.getByTestId('move-feedback')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('move-feedback')).toHaveAttribute('data-grade', /best|good/);
   await expect(page.getByTestId('candidate-moves')).toBeVisible();
+});
+
+test('analizza: se c\'è un matto forzato mostra la sequenza fino al matto', async ({ page }) => {
+  // Il Bianco (che sei tu: foto dal suo lato) ha il matto del barbiere: Dxf7#.
+  const mate = 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR'.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
+  await mockClaude(page, mate, { side_to_move: 'w' });
+  await openAnalyze(page);
+  await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByTestId('winning-line')).toHaveAttribute('data-kind', 'mate', { timeout: 30_000 });
+  await expect(page.getByTestId('winning-line')).toContainText('Matto in 1!');
+  await expect(page.getByTestId('winning-line')).toContainText('Dxf7#');
+  await page.getByTestId('winning-line').getByRole('button').click();
+  await expect(page.getByTestId('analyze-line')).toBeVisible();
+});
+
+test('analizza: la lettura rapida si può spegnere', async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    bodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: 'msg_test',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5',
+        content: [{ type: 'text', text: reading(RANKS) }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+  await openAnalyze(page);
+  await page.getByTestId('fast-toggle').uncheck();
+  await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByTestId('analyze-turn')).toBeVisible({ timeout: 30_000 });
+  expect(bodies[0]).not.toHaveProperty('speed');
+});
+
+/**
+ * Fotocamera finta: un canvas che disegna una scacchiera (vista dall'alto, Bianco in basso)
+ * con i pezzi della disposizione in window.__board; window.__hand = true fa passare una «mano».
+ */
+const FAKE_CAMERA = `
+(() => {
+  const W = 640, H = 480, X0 = 120, Y0 = 40, S = 50;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  window.__board = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  window.__hand = false;
+  const ctx = canvas.getContext('2d');
+  function draw() {
+    ctx.fillStyle = '#5a6b4a'; ctx.fillRect(0, 0, W, H);
+    const rows = window.__board.split('/');
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+      const dark = (f + (8 - r)) % 2 === 1;
+      ctx.fillStyle = dark ? 'rgb(181,136,99)' : 'rgb(240,217,181)';
+      ctx.fillRect(X0 + f * S, Y0 + r * S, S, S);
+    }
+    for (let r = 0; r < 8; r++) {
+      let f = 0;
+      for (const ch of rows[r]) {
+        if (/\\d/.test(ch)) { f += Number(ch); continue; }
+        const white = ch === ch.toUpperCase();
+        ctx.beginPath();
+        ctx.arc(X0 + f * S + S / 2, Y0 + r * S + S / 2, 20, 0, Math.PI * 2);
+        ctx.fillStyle = white ? '#ffffff' : '#1e1e1e';
+        ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.stroke();
+        f++;
+      }
+    }
+    if (window.__hand) {
+      ctx.fillStyle = 'rgb(224,172,105)';
+      ctx.beginPath();
+      ctx.ellipse(250 + Math.random() * 120, 200 + Math.random() * 120, 150, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  setInterval(draw, 50);
+  draw();
+  canvas.style.cssText = 'position:fixed;left:-10000px;top:0';
+  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(canvas));
+  const stream = canvas.captureStream(20);
+  navigator.mediaDevices.getUserMedia = async () => stream;
+})();
+`;
+
+test('analizza dal vivo: prima lettura con Claude, poi le mosse riconosciute subito senza Claude', async ({ page }) => {
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  const startGrid = START.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
+  // Nel quadrato centrale inviato (480×480 da x=80) la scacchiera va da 40 a 440 px: 83–917 su 1000.
+  const counter = await mockClaude(page, startGrid, {
+    side_to_move: 'unknown',
+    board_corners: { top_left: { x: 83, y: 83 }, top_right: { x: 917, y: 83 }, bottom_right: { x: 917, y: 917 }, bottom_left: { x: 83, y: 917 } },
+  });
+  await page.addInitScript(FAKE_CAMERA);
+  await openAnalyze(page);
+  await page.getByTestId('camera-start').click();
+  await expect(page.getByTestId('camera-video')).toBeVisible();
+  await page.waitForFunction(() => (document.querySelector('[data-testid=camera-video]') as HTMLVideoElement | null)?.videoWidth === 640);
+
+  await page.getByTestId('live-toggle').click();
+  // Prima lettura: posizione iniziale, griglia sulla scacchiera, e tocca a te (Bianco).
+  await expect(page.getByTestId('board-overlay')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'mine', { timeout: 30_000 });
+  await expect(page.getByTestId('live-banner')).toContainText('Tocca a te: gioca');
+  expect(counter.readings).toBe(1);
+
+  const play = async (placement: string) => {
+    await page.evaluate(() => ((window as unknown as { __hand: boolean }).__hand = true));
+    await expect(page.getByTestId('live-banner')).toContainText('Mano sulla scacchiera');
+    await page.evaluate((p) => {
+      const w = window as unknown as { __hand: boolean; __board: string };
+      w.__board = p;
+      w.__hand = false;
+    }, placement);
+  };
+
+  // 1.e4: vista senza Claude, ora tocca all'avversario.
+  await play('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
+  await expect(page.getByTestId('live-history')).toContainText('e4', { timeout: 10_000 });
+  await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'theirs', { timeout: 30_000 });
+  await expect(page.getByTestId('opponent-turn')).toBeVisible();
+
+  // 1…e5: di nuovo senza Claude, e torna il tuo turno con la mossa consigliata.
+  await play('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
+  await expect(page.getByTestId('live-history')).toContainText('e5', { timeout: 10_000 });
+  await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'mine', { timeout: 30_000 });
+  await expect(page.getByTestId('chessboard')).toHaveAttribute('data-fen', /^rnbqkbnr\/pppp1ppp\/8\/4p3\/4P3\/8\/PPPP1PPP\/RNBQKBNR w /);
+  // Nessuna nuova lettura della foto: le due mosse sono state riconosciute in locale.
+  expect(counter.readings).toBe(1);
 });
