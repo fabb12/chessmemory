@@ -125,13 +125,13 @@ src/
     training/     PhaseStepper, ObservePhase, MoveTask, QuestionCard, ConceptRunner, SessionSummary
     dashboard/    CategoryCard, TrendChart
     layout/ ui/   AppShell, navigazione, componenti di base
-  pages/          Onboarding, Home, Allenati, Strategie, Concetto, Memory DNA, Profilo
+  pages/          Home, Allenati, Strategie, Concetto, Analizza, Partite, Progressi, Profilo, Informazioni
   features/
     learning/     evaluateMove, moveTask (scala degli aiuti), sessionBuilder
     memory/       scheduler (ts-fsrs), rating (regole di valutazione)
-    adaptation/   difficulty (livello adattivo e valutazione iniziale)
+    adaptation/   difficulty (livello adattivo)
     onboarding/   scelta degli esercizi di valutazione
-    progress/     stats (Memory DNA), streak
+    progress/     stats (Progressi), streak
   data/exercises/ concetti ed esercizi (dataset)
   db/             schema e database Dexie
   services/       progress (scritture), backup (export/import/reset), mistakes (errori delle partite),
