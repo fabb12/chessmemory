@@ -16,6 +16,8 @@ import { samplePoints, SAMPLES_PER_SIDE } from '../features/vision/localMove';
 
 /** Lato massimo dell'immagine inviata a Claude: ~100 px per casa. */
 export const BOARD_FRAME_SIDE = 896;
+/** Lato massimo quando si invia solo la scacchiera ritagliata. */
+export const CROPPED_FRAME_SIDE = 768;
 const JPEG_QUALITY = 0.8;
 const SIGNATURE_SIDE = 48;
 /** Differenza di luminosità (0–255) oltre la quale un pixel della miniatura è «cambiato». */
@@ -69,7 +71,10 @@ export function captureFrame(video: HTMLVideoElement, corners: Corners | null): 
   if (!rect) return null;
   const sw = rect.w * w;
   const sh = rect.h * h;
-  const scale = Math.min(1, BOARD_FRAME_SIDE / Math.max(sw, sh));
+  // Con gli angoli noti il ritaglio contiene quasi solo la scacchiera: bastano meno pixel
+  // (meno token per immagine) per avere lo stesso dettaglio per casa.
+  const maxSide = corners ? CROPPED_FRAME_SIDE : BOARD_FRAME_SIDE;
+  const scale = Math.min(1, maxSide / Math.max(sw, sh));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(sw * scale));
   canvas.height = Math.max(1, Math.round(sh * scale));

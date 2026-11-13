@@ -112,11 +112,13 @@ test('analizza: una lettura impossibile viene ripetuta con più attenzione', asy
 
 /** Risposta simulata dell'API: la lettura per le foto, il testo per la spiegazione. */
 async function mockClaude(page: import('@playwright/test').Page, grid: string[], extra: Record<string, unknown> = {}) {
-  const counter = { readings: 0 };
+  const counter = { readings: 0, explanations: 0, bodies: [] as Record<string, unknown>[] };
   await page.route('https://api.anthropic.com/**', async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const isReading = JSON.stringify(body.messages).includes('"image"');
     if (isReading) counter.readings++;
+    else counter.explanations++;
+    counter.bodies.push(body);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -280,7 +282,7 @@ const FAKE_CAMERA = `
 })();
 `;
 
-test('analizza dal vivo: prima lettura con Claude, poi le mosse riconosciute subito senza Claude', async ({ page }) => {
+test('modalità tutor: legge una volta, poi riconosce le mosse senza Claude e parla a ogni mossa', async ({ page }) => {
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
   const startGrid = START.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
   // Nel quadrato centrale inviato (480×480 da x=80) la scacchiera va da 40 a 440 px: 83–917 su 1000.
@@ -289,6 +291,15 @@ test('analizza dal vivo: prima lettura con Claude, poi le mosse riconosciute sub
     board_corners: { top_left: { x: 83, y: 83 }, top_right: { x: 917, y: 83 }, bottom_right: { x: 917, y: 917 }, bottom_left: { x: 83, y: 917 } },
   });
   await page.addInitScript(FAKE_CAMERA);
+  // Sintesi vocale finta: registra le frasi pronunciate.
+  await page.addInitScript(() => {
+    const spoken: string[] = [];
+    (window as unknown as { __spoken: string[] }).__spoken = spoken;
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { speak: (u: SpeechSynthesisUtterance) => spoken.push(u.text), cancel: () => undefined, getVoices: () => [] },
+    });
+  });
   await openAnalyze(page);
   await page.getByTestId('camera-start').click();
   await expect(page.getByTestId('camera-video')).toBeVisible();
@@ -298,8 +309,10 @@ test('analizza dal vivo: prima lettura con Claude, poi le mosse riconosciute sub
   // Prima lettura: posizione iniziale, griglia sulla scacchiera, e tocca a te (Bianco).
   await expect(page.getByTestId('board-overlay')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'mine', { timeout: 30_000 });
-  await expect(page.getByTestId('live-banner')).toContainText('Tocca a te: gioca');
+  await expect(page.getByTestId('live-banner')).toContainText('Tocca a te: ti consiglio');
   expect(counter.readings).toBe(1);
+  // Le istruzioni fisse della lettura sono nel prompt di sistema, in cache; nella richiesta resta solo la foto.
+  expect(counter.bodies[0]).toMatchObject({ system: [{ type: 'text', cache_control: { type: 'ephemeral' } }] });
 
   const play = async (placement: string) => {
     await page.evaluate(() => ((window as unknown as { __hand: boolean }).__hand = true));
@@ -311,17 +324,33 @@ test('analizza dal vivo: prima lettura con Claude, poi le mosse riconosciute sub
     }, placement);
   };
 
-  // 1.e4: vista senza Claude, ora tocca all'avversario.
+  // 1.e4: vista senza Claude; il tutor giudica la tua mossa e passa la parola all'avversario.
   await play('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('live-history')).toContainText('e4', { timeout: 10_000 });
   await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'theirs', { timeout: 30_000 });
+  await expect(page.getByTestId('live-banner')).toContainText(/mossa.*Tocca all’avversario|Imprecisione|Errore/);
   await expect(page.getByTestId('opponent-turn')).toBeVisible();
 
   // 1…e5: di nuovo senza Claude, e torna il tuo turno con la mossa consigliata.
   await play('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('live-history')).toContainText('e5', { timeout: 10_000 });
   await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'mine', { timeout: 30_000 });
+  await expect(page.getByTestId('live-banner')).toContainText('Il Nero ha giocato e5. Tocca a te: ti consiglio');
   await expect(page.getByTestId('chessboard')).toHaveAttribute('data-fen', /^rnbqkbnr\/pppp1ppp\/8\/4p3\/4P3\/8\/PPPP1PPP\/RNBQKBNR w /);
-  // Nessuna nuova lettura della foto: le due mosse sono state riconosciute in locale.
+  // Nessuna nuova lettura della foto e nessuna spiegazione automatica: zero token dopo la prima lettura.
   expect(counter.readings).toBe(1);
+  expect(counter.explanations).toBe(0);
+  await expect(page.getByTestId('tutor-usage')).toContainText('1 lettura, 0 spiegazioni');
+  await expect(page.getByTestId('tutor-usage')).toContainText('Mosse riconosciute senza Claude: 2');
+
+  // «Perché?»: solo ora una spiegazione, breve.
+  await page.getByTestId('tutor-why').click();
+  await expect(page.getByTestId('tutor-explanation')).toContainText(EXPLANATION);
+  expect(counter.explanations).toBe(1);
+
+  // Il tutor ha parlato a voce, con le mosse pronunciate per esteso.
+  const spoken = await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
+  expect(spoken.some((text) => text.startsWith('Il Nero ha giocato e5. Tocca a te: ti consiglio'))).toBe(true);
+  expect(spoken.at(-1)).toContain('Il Bianco minaccia matto');
+  expect(JSON.stringify(counter.bodies.at(-1))).toContain('2–3 frasi');
 });
