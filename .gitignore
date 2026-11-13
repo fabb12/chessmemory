@@ -8,4 +8,3 @@ playwright-report
 .DS_Store
 *.tsbuildinfo
 public/engine
-public/models/*.onnx

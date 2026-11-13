@@ -1,0 +1,36 @@
+Modello: chess-pieces.onnx (YOLOv8n, 12 classi di pezzi)
+
+Origine: pesi «runs/detect/train4/weights/best.pt» del progetto
+https://github.com/wojciechc1/AI_Chess (commit 1e4ae889405f71ca3d83a922c867f1118a0b52ab),
+esportati in ONNX con scripts/yolo/train_export.py.
+
+Il progetto di origine è distribuito con la licenza MIT riportata sotto.
+
+ATTENZIONE: il modello è stato addestrato con Ultralytics YOLOv8, distribuito
+con licenza AGPL-3.0; secondo Ultralytics anche i modelli addestrati con il
+loro software ricadono sotto AGPL-3.0, salvo una licenza commerciale
+(https://www.ultralytics.com/license). Prima di vendere l'app verificare con un
+consulente, oppure addestrare un modello con uno strumento a licenza permissiva.
+
+----------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2025 wojciechc1
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -92,6 +92,24 @@ export function detectionsToEvidence(detections: readonly Detection[], corners: 
   });
 }
 
+/**
+ * Peso di YOLO nella fusione con Claude. Le confidenze di YOLO non sono
+ * probabilità tarate: su pezzi diversi da quelli dell'addestramento il modello
+ * può dire «cavallo bianco 0,73» per un pedone nero. Con l'esponente 0,5 YOLO da
+ * solo non smentisce mai Claude: lo conferma, lo aiuta sulle case dubbie e,
+ * insieme alle mosse legali, decide tra le posizioni candidate.
+ */
+export const YOLO_WEIGHT = 0.5;
+
+/** Evidenza «ammorbidita»: probabilità elevate a `weight` e rinormalizzate. */
+export function temper(evidence: Evidence, weight: number): Evidence {
+  return evidence.map((p) => {
+    const out: CellProbs = {};
+    for (const s of SYMBOLS) out[s] = Math.pow(Math.max(FLOOR, p[s] ?? 0), weight);
+    return normalize(out);
+  });
+}
+
 /** Combina fonti indipendenti (prodotto delle probabilità, poi normalizzato). */
 export function fuseEvidence(...sources: (Evidence | null | undefined)[]): Evidence | null {
   const valid = sources.filter((s): s is Evidence => !!s && s.length === 64);
@@ -128,6 +146,25 @@ export function hintGrid(evidence: Evidence, threshold = 0.7): string[] {
       return best.probability >= threshold ? best.symbol : '?';
     }).join(''),
   );
+}
+
+/** Quanti pezzi YOLO vede con almeno questa sicurezza. */
+export function detectedPieces(evidence: Evidence, threshold = 0.5): number {
+  return evidence.filter((p) => {
+    const best = bestSymbol(p);
+    return best.symbol !== '.' && best.probability >= threshold;
+  }).length;
+}
+
+/**
+ * YOLO è utile su questa foto solo se vede buona parte dei pezzi che ci sono
+ * (`expected`, dalla posizione nota o dalla lettura di Claude). Con pezzi molto
+ * diversi da quelli dell'addestramento, o con luce e inquadratura difficili, ne
+ * vede pochissimi: allora una sua lettura quasi vuota non deve far credere che le
+ * case siano vuote, né a Claude né alle regole, e viene ignorata.
+ */
+export function informative(evidence: Evidence, expected: number): boolean {
+  return detectedPieces(evidence) >= Math.max(2, 0.6 * expected);
 }
 
 /** Quante case hanno un'evidenza incerta. */

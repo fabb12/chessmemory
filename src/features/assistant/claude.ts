@@ -10,7 +10,7 @@ import {
 } from './boardReading';
 import { plausibleCorners, type Corners } from '../vision/geometry';
 import { resolveReading, type ReadingReference, type ResolvedReading } from './boardResolve';
-import { fuseEvidence, gridEvidence, hintGrid, uncertainCount, type Evidence } from '../vision/evidence';
+import { fuseEvidence, gridEvidence, hintGrid, informative, temper, uncertainCount, YOLO_WEIGHT, type Evidence } from '../vision/evidence';
 import type { VisionResult } from '../vision/hybrid';
 
 /**
@@ -417,8 +417,13 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
         return message;
       });
 
-    const evidenceFor = (reading: RawReading): Evidence | null =>
-      reading.grid && vision?.evidence ? fuseEvidence(gridEvidence(reading.grid), vision.evidence) : null;
+    // YOLO entra nella fusione solo se vede buona parte dei pezzi letti da Claude.
+    const evidenceFor = (reading: RawReading): Evidence | null => {
+      if (!reading.grid || !vision?.evidence) return null;
+      const seen = countPieces(reading.grid);
+      if (!informative(vision.evidence, seen.white + seen.black)) return null;
+      return fuseEvidence(gridEvidence(reading.grid), temper(vision.evidence, YOLO_WEIGHT));
+    };
     const interpret = (reading: RawReading): ResolvedReading | null =>
       reading.grid
         ? resolveReading({
