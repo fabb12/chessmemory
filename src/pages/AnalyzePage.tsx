@@ -20,6 +20,7 @@ import { inferTurn } from '../features/assistant/boardResolve';
 import {
   AssistantError,
   explainPosition,
+  getApiKey,
   readBoardFromImage,
   setFastMode,
   useApiKey,
@@ -32,7 +33,9 @@ import { formatScore } from '../features/engine/uci';
 import { fenToPosition, positionToFen, startPosition, validatePosition, type EditorPosition } from '../features/mistakes/position';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
-import { fromCrop, type Corners, type Rect } from '../features/vision/geometry';
+import { fromCrop, toCrop, type Corners, type Rect } from '../features/vision/geometry';
+import { analyzeImage, localBoardReading, resolveLocal, trustLocal, type VisionResult } from '../features/vision/hybrid';
+import { loadDetector, useDetectorStatus } from '../features/vision/pieceDetector';
 import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
 import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
@@ -48,6 +51,7 @@ const MIN_READ_GAP_MS = 1500;
 
 interface HistoryEntry {
   san: string;
+  /** local = riconosciuta sul dispositivo (case cambiate o YOLO), claude = letta da Claude. */
   source: 'local' | 'claude';
   /** Posizione prima della mossa: serve a rileggere se la mossa era sbagliata. */
   before: EditorPosition;
@@ -104,6 +108,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const pendingMove = useRef<{ move: TutorMove; previous: Analysis | null } | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [liveState, setLiveState] = useState<'watching' | 'moving'>('watching');
+  // Lettura che non corrisponde a nessuna mossa legale: va confermata da una seconda lettura prima che il tutor ne parli.
+  const [verifying, setVerifying] = useState(false);
+  const unconfirmed = useRef<string | null>(null);
+  const detector = useDetectorStatus();
+  const detectorReady = useRef(false);
+  detectorReady.current = detector === 'ready';
   const [readSeconds, setReadSeconds] = useState<number | null>(null);
   const [videoAspect, setVideoAspect] = useState(4 / 3);
   const [viewPref, setViewPref] = useState<BoardView | 'auto'>(() => {
@@ -163,6 +173,8 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         audio: false,
       });
       setStream(media);
+      // Il modello YOLO (se installato) si carica intanto, così è pronto alla prima mossa.
+      void loadDetector();
     } catch {
       setCameraError(true);
     }
@@ -244,7 +256,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   // ───── Lettura della scacchiera con Claude ─────
   const read = useCallback(
-    async (image: string, rect: Rect | null, auto: boolean, fromCamera: boolean) => {
+    async (image: string, rect: Rect | null, auto: boolean, fromCamera: boolean, localGuess: string | null = null) => {
       if (busy.current) return;
       busy.current = true;
       setReading({ status: 'busy' });
@@ -254,12 +266,43 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         // tra due letture di solito è cambiata una sola mossa.
         const known = positionRef.current && !validatePosition(positionRef.current) ? positionRef.current : null;
         const forced = viewPrefRef.current === 'auto' ? null : viewPrefRef.current;
-        const result = await readBoardFromImage(image, {
-          reference: fromCamera && known ? { fen: positionToFen(known), locked: userEdited.current } : null,
-          view: forced,
-          lastView: lastView.current,
-          lastRawPlacement: lastRaw.current,
-        });
+        const reference = fromCamera && known ? { fen: positionToFen(known), locked: userEdited.current } : null;
+        // 1. Visione locale (angoli rifiniti + YOLO), se la scacchiera è già stata trovata.
+        const quad = fromCamera && rect && cornersRef.current ? toCrop(rect, cornersRef.current) : null;
+        let vision: VisionResult | null = null;
+        if (quad) {
+          try {
+            vision = await analyzeImage(image, quad);
+          } catch {
+            vision = null;
+          }
+        }
+        // 2. Se YOLO e le regole bastano, niente Claude: zero token e risposta immediata.
+        let result: BoardReading | null = null;
+        if (vision?.evidence) {
+          const local = resolveLocal({
+            evidence: vision.evidence,
+            reference,
+            forcedView: forced,
+            lastView: lastView.current,
+            lastRawPlacement: lastRaw.current,
+          });
+          // La mossa vista confrontando le case e confermata da YOLO vale anche con qualche casa incerta.
+          const agrees = localGuess !== null && local.placement === localGuess && (local.fitCost ?? Infinity) <= 1.5;
+          if (trustLocal(local, vision.evidence) || agrees) result = localBoardReading(local, vision.evidence, vision.corners);
+        }
+        // 3. Altrimenti Claude, con la lettura di YOLO come indizio e fusa casa per casa.
+        if (!result) {
+          if (!getApiKey()) throw new AssistantError('no-key');
+          result = await readBoardFromImage(image, {
+            reference,
+            view: forced,
+            lastView: lastView.current,
+            lastRawPlacement: lastRaw.current,
+            vision,
+            analyze: vision ? undefined : (found) => analyzeImage(image, found),
+          });
+        }
         setReadSeconds((performance.now() - started) / 1000);
         setReading({ status: 'done', value: result });
         setLastUpdate(Date.now());
@@ -268,15 +311,34 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         // Angoli della scacchiera: servono al ritaglio delle prossime foto e alle mosse viste senza Claude.
         if (fromCamera && rect && result.corners && !cornersByUser.current) {
           const mapped = result.corners.map((p) => fromCrop(rect, p)) as Corners;
+          const before = cornersRef.current;
           setCorners(mapped);
           const video = videoRef.current;
-          if (video && !snapshot.current) snapshot.current = sampleSquares(video, mapped);
+          // Griglia spostata (rifinita con gli incroci): i colori delle case vanno ricampionati.
+          const moved = !before || mapped.some((p, k) => Math.hypot(p.x - before[k]!.x, p.y - before[k]!.y) > 0.004);
+          if (video && (!snapshot.current || moved)) snapshot.current = sampleSquares(video, mapped);
         }
         // Chi sei: dal lato del Bianco sei il Bianco, dal lato del Nero sei il Nero.
         if (colorSourceRef.current !== 'user' && (result.view === 'bottom' || result.view === 'top')) {
           chooseColor(result.view === 'bottom' ? 'w' : 'b', 'photo');
         }
-        if (auto && result.placement === lastPlacement.current) return;
+        if (auto && result.placement === lastPlacement.current) {
+          unconfirmed.current = null;
+          setVerifying(false);
+          return;
+        }
+        // Nel tutor una lettura che nessuna mossa legale spiega (pezzo urtato, mano, riflesso…)
+        // non sostituisce subito la posizione: si rilegge e la si accetta solo se è confermata.
+        if (auto && fromCamera && known && result.moves.length === 0 && !result.turnKnown && unconfirmed.current !== result.placement) {
+          unconfirmed.current = result.placement;
+          setVerifying(true);
+          window.setTimeout(() => {
+            if (liveRef.current) captureAndReadRef.current(true);
+          }, MIN_READ_GAP_MS);
+          return;
+        }
+        unconfirmed.current = null;
+        setVerifying(false);
         const changed = lastPlacement.current !== null && result.placement !== lastPlacement.current;
         lastPlacement.current = result.placement;
         const previous = positionRef.current;
@@ -285,9 +347,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const guessed: Side =
           result.sideToMove !== 'unknown' ? result.sideToMove : auto && changed && previous ? (previous.turn === 'w' ? 'b' : 'w') : (previous?.turn ?? 'w');
         const turn: Side = result.turnKnown ? guessed : inferTurn(result.placement, guessed);
-        const next = fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
+        // Posizione raggiunta con mosse legali: si tiene la FEN vera (arrocchi già persi, en passant).
+        const next = (result.turnKnown && result.fen ? fenToPosition(result.fen) : null) ?? fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
         if (fromCamera && previous && result.moves.length > 0) {
-          setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source: 'claude', before: previous }]);
+          const source = result.source === 'local' ? 'local' : 'claude';
+          setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source, before: previous }]);
           const lastSan = result.moves[result.moves.length - 1]!;
           pendingMove.current = {
             move: { san: lastSan, color: next.turn === 'w' ? 'b' : 'w' },
@@ -311,7 +375,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   );
 
   const captureAndRead = useCallback(
-    (auto: boolean) => {
+    (auto: boolean, localGuess: string | null = null) => {
       const video = videoRef.current;
       if (!video || busy.current) return;
       const frame = captureFrame(video, cornersRef.current);
@@ -319,10 +383,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       readSignature.current = frameSignature(video);
       snapshot.current = cornersRef.current ? sampleSquares(video, cornersRef.current) : null;
       lastReadAt.current = Date.now();
-      void read(frame.data, frame.rect, auto, true);
+      void read(frame.data, frame.rect, auto, true, localGuess);
     },
     [read],
   );
+  const captureAndReadRef = useRef(captureAndRead);
+  captureAndReadRef.current = captureAndRead;
 
   /**
    * Prova a riconoscere la mossa confrontando le case con il fotogramma della
@@ -340,6 +406,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       if (!now) return false;
       const result = inferMove(positionToFen(pos), changesBySquare(cellChanges(before, now), view));
       if (result.kind === 'unsure') return false;
+      if (result.kind === 'move' && detectorReady.current) {
+        // Con YOLO disponibile la mossa vista dai colori delle case viene verificata sui pezzi
+        // (sul dispositivo, senza costi) prima che il tutor ne parli.
+        captureAndRead(true, result.fen.split(' ')[0] ?? null);
+        return true;
+      }
       snapshot.current = now;
       readSignature.current = signature;
       if (result.kind === 'none') return true;
@@ -359,7 +431,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       void evaluate(next);
       return true;
     },
-    [evaluate],
+    [evaluate, captureAndRead],
   );
 
   /** L'ultima mossa vista è sbagliata: si torna alla posizione prima e Claude rilegge la scacchiera. */
@@ -376,6 +448,8 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   const recalibrate = () => {
     cornersByUser.current = false;
+    unconfirmed.current = null;
+    setVerifying(false);
     setCorners(null);
     snapshot.current = null;
     captureAndRead(live);
@@ -408,7 +482,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     lastPlacement.current = placement;
     lastRaw.current = placement;
     userEdited.current = false;
-    setReading({ status: 'done', value: { ...reading.value, view: choice, placement, rawPlacement: placement, corrected: [], moves: [] } });
+    setReading({ status: 'done', value: { ...reading.value, view: choice, placement, rawPlacement: placement, corrected: [], moves: [], fen: null } });
     setPosition(next);
     void evaluate(next);
   };
@@ -582,15 +656,17 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const banner =
     reading.status === 'busy'
       ? { text: t.analyze.live.banner.reading, tone: 'neutral' }
-      : liveState === 'moving'
-        ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
-        : !position
-          ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
-          : analysis.status === 'busy'
-            ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
-            : myTurn
-              ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
-              : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
+      : verifying
+        ? { text: t.analyze.live.banner.verifying, tone: 'neutral' }
+        : liveState === 'moving'
+          ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
+          : !position
+            ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
+            : analysis.status === 'busy'
+              ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
+              : myTurn
+                ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
+                : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
   const tutorSpeaking = banner.tone === 'mine' || banner.tone === 'theirs';
   const winExtra = win?.kind === 'mate' ? t.analyze.win.mate(win.mateIn ?? 1) : win?.kind === 'check' ? t.analyze.win.check(win.checkIn ?? 1) : '';
 
@@ -701,6 +777,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 {t.analyze.live.recalibrate}
               </Button>
             </div>
+          )}
+          {stream && detector !== 'idle' && (
+            <p className={`text-xs ${detector === 'ready' ? 'text-ok' : 'text-muted'}`} data-testid="detector-status">
+              {t.analyze.live.detector[detector]}
+            </p>
           )}
           <details className="rounded-xl bg-surface-2 px-3 py-2 text-sm" data-testid="camera-tips">
             <summary className="cursor-pointer font-semibold">{t.analyze.camera.tipsTitle}</summary>

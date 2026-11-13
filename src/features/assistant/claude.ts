@@ -10,6 +10,8 @@ import {
 } from './boardReading';
 import { plausibleCorners, type Corners } from '../vision/geometry';
 import { resolveReading, type ReadingReference, type ResolvedReading } from './boardResolve';
+import { fuseEvidence, gridEvidence, hintGrid, uncertainCount, type Evidence } from '../vision/evidence';
+import type { VisionResult } from '../vision/hybrid';
 
 /**
  * Assistente con Claude (API Anthropic), usato da «Analizza»:
@@ -216,8 +218,12 @@ export interface BoardReading {
   corrected: string[];
   /** Mosse (SAN) riconosciute rispetto alla posizione precedente. */
   moves: string[];
-  /** Angoli dell'area di gioco nell'immagine inviata (frazioni 0–1), se plausibili. */
+  /** Angoli dell'area di gioco nell'immagine inviata (frazioni 0–1), se plausibili (rifiniti con la geometria quando possibile). */
   corners: Corners | null;
+  /** FEN completa quando la posizione è stata raggiunta con mosse legali (conserva arrocchi ed en passant). */
+  fen: string | null;
+  /** Chi ha letto la posizione: solo Claude, Claude + YOLO, o solo la visione locale (YOLO + regole). */
+  source: 'claude' | 'hybrid' | 'local';
 }
 
 export interface ReadOptions {
@@ -233,6 +239,10 @@ export interface ReadOptions {
   lastView?: BoardView | null;
   /** Lettura grezza precedente. */
   lastRawPlacement?: string | null;
+  /** Visione locale già fatta su questa foto (angoli noti): l'evidenza YOLO entra nel prompt e nella fusione. */
+  vision?: VisionResult | null;
+  /** Visione locale da fare dopo, con gli angoli trovati da Claude (prima lettura o foto dalla galleria). */
+  analyze?: (corners: Corners) => Promise<VisionResult>;
 }
 
 const CORNER = {
@@ -381,6 +391,12 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
       referencePlacement && hintView && FEN_PLACEMENT.test(referencePlacement)
         ? `\n\nFor reference, if the board has not been moved, the previous position would look like this in the photo (rows top to bottom):\n${ranksToGrid(placementToRanks(referencePlacement), hintView).join('\n')}\nUsually only one move has been played since (two squares change; four for castling). Use it to resolve doubtful pieces, but the photo is what counts: report what you see.`
         : '';
+    let vision = options.vision ?? null;
+    const local = vision?.evidence ?? null;
+    // Che cosa ha visto YOLO: Claude conferma le case sicure e si concentra su quelle incerte («?»).
+    const detectorHint = local
+      ? `\n\nA local piece detector read the board like this (same orientation as the photo, rows top to bottom; '?' = unsure):\n${hintGrid(local).join('\n')}\nIt is often right on clear squares but can confuse bishops/pawns and kings/queens and miss pieces. Check every square, especially the '?' ones; the photo is what counts.`
+      : '';
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
@@ -393,16 +409,21 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
         // Le istruzioni fisse vanno nel prompt di sistema, in cache: dalla seconda lettura
         // (entro 5 minuti) costano circa un ventesimo. Dopo, solo la foto e il poco che cambia.
         system: [{ type: 'text', text: READING_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: hint + extra ? [image, { type: 'text', text: (hint + extra).trim() }] : [image] }],
+        messages: [
+          { role: 'user', content: hint + detectorHint + extra ? [image, { type: 'text', text: (hint + detectorHint + extra).trim() }] : [image] },
+        ],
       }).then((message) => {
         recordUsage('reading', message);
         return message;
       });
 
+    const evidenceFor = (reading: RawReading): Evidence | null =>
+      reading.grid && vision?.evidence ? fuseEvidence(gridEvidence(reading.grid), vision.evidence) : null;
     const interpret = (reading: RawReading): ResolvedReading | null =>
       reading.grid
         ? resolveReading({
             grid: reading.grid,
+            evidence: evidenceFor(reading),
             claimedView: reading.whiteSide,
             forcedView,
             reference,
@@ -412,6 +433,15 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
 
     // Sforzo basso: la lettura è rapida, e gli errori isolati li corregge il codice con le regole.
     let reading = parseReading(await ask('low', ''));
+    // Prima lettura (angoli ignoti): ora che Claude ha trovato la scacchiera, la geometria
+    // rifinisce gli angoli e YOLO legge i pezzi sulla stessa foto.
+    if (!vision && options.analyze && reading.corners) {
+      try {
+        vision = await options.analyze(reading.corners);
+      } catch {
+        vision = null;
+      }
+    }
     let resolved = interpret(reading);
     let problems = readingProblems(reading, resolved);
     if (problems.length > 0) {
@@ -432,18 +462,21 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
       }
     }
     if (!reading.grid || !resolved) throw new AssistantError('unreadable');
+    const fused = evidenceFor(reading);
     return {
       placement: resolved.placement,
+      fen: resolved.fen,
       sideToMove: resolved.turn ?? reading.sideToMove,
       turnKnown: resolved.turn !== null,
-      confidence: problems.length > 0 ? 'low' : reading.confidence,
+      confidence: problems.length > 0 ? 'low' : fused && uncertainCount(fused) > 3 && reading.confidence === 'high' ? 'medium' : reading.confidence,
       notes: reading.notes,
       grid: reading.grid,
       view: resolved.view,
       rawPlacement: resolved.rawPlacement,
       corrected: resolved.corrected,
       moves: resolved.moves,
-      corners: reading.corners,
+      corners: vision?.corners ?? reading.corners,
+      source: fused ? 'hybrid' : 'claude',
     };
   } catch (error) {
     throw mapError(error, sdk);
