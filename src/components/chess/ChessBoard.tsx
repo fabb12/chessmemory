@@ -10,7 +10,8 @@ import { PromotionDialog } from './PromotionDialog';
 export interface BoardArrow {
   from: string;
   to: string;
-  tone?: 'teach' | 'bad';
+  /** teach = mossa migliore, second/third = alternative, good/bad = giudizio sulla mossa dell'utente. */
+  tone?: 'teach' | 'bad' | 'good' | 'second' | 'third';
 }
 
 export interface ChessBoardProps {
@@ -29,7 +30,13 @@ export interface ChessBoardProps {
 }
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
-const ARROW_COLORS = { teach: '#2557e9', bad: '#b3402f' } as const;
+export const ARROW_COLORS = {
+  teach: '#2557e9',
+  second: 'rgba(37, 87, 233, 0.62)',
+  third: 'rgba(37, 87, 233, 0.38)',
+  good: '#2f8f4e',
+  bad: '#b3402f',
+} as const;
 const LIGHT = '#e9edf5';
 const DARK = '#7389ad';
 
