@@ -6,6 +6,9 @@ import type { Side, Uci } from '../../types';
 import { kingSquareInCheck, legalTargets, pieceAt, sideToMove } from '../../utils/chess';
 import { BoardCoordinates } from './BoardCoordinates';
 import { PromotionDialog } from './PromotionDialog';
+import { flipSquare, squaresFlipped } from '../../utils/notation';
+
+const flippedLabel = (square: string): string => (squaresFlipped() ? flipSquare(square) : square);
 
 export interface BoardArrow {
   from: string;
@@ -222,7 +225,7 @@ export function ChessBoard({
           data-sq={square}
           role={interactive ? 'button' : 'img'}
           tabIndex={interactive && square === focusSquare ? 0 : -1}
-          aria-label={[t.board.square(square, pieceLabel), ...extra].join(', ')}
+          aria-label={[t.board.square(flippedLabel(square), pieceLabel), ...extra].join(', ')}
           aria-pressed={interactive ? square === selected : undefined}
           onFocus={() => setFocusSquare(square)}
           onKeyDown={(e) => handleKeyDown(e, square)}

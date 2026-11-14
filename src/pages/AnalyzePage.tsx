@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CANDIDATE_TONES, CandidateMoves, type Candidate } from '../components/analyze/CandidateMoves';
-import { BoardOverlay } from '../components/analyze/BoardOverlay';
+import { BoardOverlay } from '../components/vision/BoardOverlay';
 import { MoveFeedbackCard } from '../components/analyze/MoveFeedbackCard';
 import { WinningLineCard } from '../components/analyze/WinningLineCard';
 import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
@@ -37,10 +37,11 @@ import type { Side, Uci } from '../types';
 import { fromCrop, toCrop, type Corners, type Rect } from '../features/vision/geometry';
 import { analyzeImage, localBoardReading, resolveLocal, trustLocal, type VisionResult } from '../features/vision/hybrid';
 import { loadDetector, useDetectorStatus } from '../features/vision/pieceDetector';
+import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
 import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
-import { formatLine, sanToLocal } from '../utils/notation';
+import { formatLine, localSquares, sanToLocal, setFlippedSquares } from '../utils/notation';
 import { setVoiceEnabled, speak, speechSupported, stopSpeaking } from '../features/voice/speech';
 
 /** Analisi continua: ogni quanto si controlla se la scacchiera si muove (nessun costo, è locale). */
@@ -51,7 +52,8 @@ const STILL_SAMPLES = 2;
 const MIN_READ_GAP_MS = 1500;
 
 interface HistoryEntry {
-  san: string;
+  /** Mosse in SAN inglese (si traducono quando si mostrano, con la numerazione scelta). */
+  sans: string[];
   /** local = riconosciuta sul dispositivo (case cambiate o YOLO), claude = letta da Claude. */
   source: 'local' | 'claude';
   /** Posizione prima della mossa: serve a rileggere se la mossa era sbagliata. */
@@ -62,6 +64,11 @@ type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; valu
 
 const VIEW_KEY = 'cm.analyze.view';
 const PRACTICE_KEY = 'cm.analyze.practice';
+const TUTOR_MODE_KEY = 'cm.analyze.tutorMode';
+const FLIP_SQUARES_KEY = 'cm.analyze.flipSquares';
+
+/** video = osserva di continuo la scacchiera; photo = legge solo quando scatti una foto dopo ogni mossa. */
+type TutorMode = 'video' | 'photo';
 
 function loadPref(key: string): string | null {
   try {
@@ -102,6 +109,19 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   // Modalità tutor: osserva di continuo la scacchiera e dice (a voce) la mossa migliore.
   const [live, setLive] = useState(false);
   const [tutorText, setTutorText] = useState('');
+  // Numerazione invertita: il Nero sta sulle righe 1-2 della scacchiera fisica.
+  const [flipSquares, setFlipSquares] = useState(() => loadPref(FLIP_SQUARES_KEY) === '1');
+  // Vale già per questo render (anche per le scacchiere e le liste dei figli); si spegne lasciando la pagina.
+  setFlippedSquares(flipSquares);
+  useEffect(() => {
+    setFlippedSquares(flipSquares);
+    return () => setFlippedSquares(false);
+  }, [flipSquares]);
+  const flipSquaresRef = useRef(flipSquares);
+  flipSquaresRef.current = flipSquares;
+  const [tutorMode, setTutorModeState] = useState<TutorMode>(() => (loadPref(TUTOR_MODE_KEY) === 'photo' ? 'photo' : 'video'));
+  /** Modalità foto: l'ultima foto non mostrava mosse nuove. */
+  const [noChange, setNoChange] = useState(false);
   const usage = useAssistantUsage();
   const liveRef = useRef(false);
   liveRef.current = live;
@@ -209,13 +229,14 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const text = await explainPosition({
           fen,
           evaluation: formatScore(result.score, pos.turn === 'w'),
-          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, brief ? 6 : 8)))),
+          // A Claude le mosse con i nomi veri delle case (come nella FEN); la risposta si rinomina dopo.
+          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, brief ? 6 : 8)), false)),
           playerSide: myColorRef.current,
           brief,
         });
         if (id !== evalId.current) return;
         setExplanation({ status: 'done', value: text });
-        if (liveRef.current) speak(text, 'tutor');
+        if (liveRef.current) speak(localSquares(text), 'tutor');
       } catch (error) {
         if (id === evalId.current) setExplanation({ status: 'error', error: errorText(error) });
       }
@@ -317,6 +338,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             lastView: lastView.current,
             lastRawPlacement: lastRaw.current,
             vision,
+            flippedCoordinates: flipSquaresRef.current,
             analyze: vision ? undefined : (found) => analyzeImage(image, found),
           });
         }
@@ -342,6 +364,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         if (auto && result.placement === lastPlacement.current) {
           unconfirmed.current = null;
           setVerifying(false);
+          setNoChange(true);
           return;
         }
         // Nel tutor una lettura che nessuna mossa legale spiega (pezzo urtato, mano, riflesso…)
@@ -356,6 +379,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         }
         unconfirmed.current = null;
         setVerifying(false);
+        setNoChange(false);
         const changed = lastPlacement.current !== null && result.placement !== lastPlacement.current;
         lastPlacement.current = result.placement;
         const previous = positionRef.current;
@@ -368,7 +392,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const next = (result.turnKnown && result.fen ? fenToPosition(result.fen) : null) ?? fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
         if (fromCamera && previous && result.moves.length > 0) {
           const source = result.source === 'local' ? 'local' : 'claude';
-          setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source, before: previous }]);
+          setHistory((h) => [...h, { sans: result.moves, source, before: previous }]);
           const lastSan = result.moves[result.moves.length - 1]!;
           pendingMove.current = {
             move: { san: lastSan, color: next.turn === 'w' ? 'b' : 'w' },
@@ -412,7 +436,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
    * posizione precedente, senza chiamare Claude. Restituisce false se non è sicuro.
    */
   const tryLocalMove = useCallback(
-    (signature: Uint8Array): boolean => {
+    (signature: Uint8Array): boolean | 'none' => {
       const video = videoRef.current;
       const quad = cornersRef.current;
       const before = snapshot.current;
@@ -431,10 +455,10 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       }
       snapshot.current = now;
       readSignature.current = signature;
-      if (result.kind === 'none') return true;
+      if (result.kind === 'none') return 'none';
       const next = fenToPosition(result.fen);
       if (!next) return false;
-      setHistory((h) => [...h, { san: sanToLocal(result.san), source: 'local', before: pos }]);
+      setHistory((h) => [...h, { sans: [result.san], source: 'local', before: pos }]);
       pendingMove.current = {
         move: { san: result.san, color: pos.turn },
         previous: doneRef.current?.fen === positionToFen(pos) ? doneRef.current : null,
@@ -442,6 +466,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       lastPlacement.current = result.fen.split(' ')[0] ?? null;
       lastRaw.current = null;
       userEdited.current = false;
+      setNoChange(false);
       positionRef.current = next;
       setPosition(next);
       setLastUpdate(Date.now());
@@ -529,7 +554,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   // si toglie e qualcosa è cambiato: prima si prova a riconoscere la mossa confrontando
   // le case (istantaneo, senza costi); solo se il risultato è dubbio si chiama Claude.
   useEffect(() => {
-    if (!live || !stream) return;
+    if (!live || !stream || tutorMode !== 'video') return;
     lastSample.current = null;
     stillCount.current = 0;
     setLiveState('watching');
@@ -558,7 +583,36 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       captureAndRead(true);
     }, SAMPLE_MS);
     return () => window.clearInterval(id);
-  }, [live, stream, captureAndRead, tryLocalMove]);
+  }, [live, stream, tutorMode, captureAndRead, tryLocalMove]);
+
+  /**
+   * Modalità foto: un solo fotogramma per mossa, quando lo decide l'utente.
+   * Come nel video, prima il confronto delle case (gratis), poi YOLO/Claude solo se serve.
+   */
+  const shootPhoto = () => {
+    if (busy.current) return;
+    setNoChange(false);
+    const video = videoRef.current;
+    const sample = video ? frameSignature(video) : null;
+    if (sample && positionRef.current && snapshot.current) {
+      if (readSignature.current && frameDifference(readSignature.current, sample) < MOTION.changed) {
+        setNoChange(true);
+        return;
+      }
+      const local = tryLocalMove(sample);
+      if (local === 'none') {
+        setNoChange(true);
+        return;
+      }
+      if (local) return;
+    }
+    captureAndRead(true);
+  };
+
+  const chooseTutorMode = (mode: TutorMode) => {
+    setTutorModeState(mode);
+    savePref(TUTOR_MODE_KEY, mode);
+  };
 
   const positionError = position ? validatePosition(position) : null;
   const fen = position && !positionError ? positionToFen(position) : null;
@@ -607,9 +661,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     pendingMove.current = null;
     spokenFor.current = null;
     setTutorText('');
+    setNoChange(false);
     // Il tutor parla: se la voce era spenta la si accende (si spegne dall'altoparlante in alto).
     if (speechSupported()) setVoiceEnabled(true);
     setLive(true);
+    // In modalità foto la prima foto si scatta subito: è la posizione di partenza.
+    if (tutorMode === 'photo') captureAndRead(true);
   };
 
   const stopTutor = () => {
@@ -675,15 +732,17 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       ? { text: t.analyze.live.banner.reading, tone: 'neutral' }
       : verifying
         ? { text: t.analyze.live.banner.verifying, tone: 'neutral' }
-        : liveState === 'moving'
-          ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
-          : !position
-            ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
-            : analysis.status === 'busy'
-              ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
-              : myTurn
-                ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
-                : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
+        : noChange && tutorMode === 'photo'
+          ? { text: t.analyze.live.banner.noChange, tone: 'neutral' }
+            : liveState === 'moving' && tutorMode === 'video'
+            ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
+            : !position
+              ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
+              : analysis.status === 'busy'
+                ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
+                : myTurn
+                  ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
+                  : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
   const tutorSpeaking = banner.tone === 'mine' || banner.tone === 'theirs';
   const winExtra = win?.kind === 'mate' ? t.analyze.win.mate(win.mateIn ?? 1) : win?.kind === 'check' ? t.analyze.win.check(win.checkIn ?? 1) : '';
 
@@ -735,7 +794,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           )}
           {explanation.status === 'done' && banner.tone === 'mine' && (
             <p className="w-full text-base" data-testid="tutor-explanation">
-              {explanation.value}
+              {localSquares(explanation.value)}
             </p>
           )}
         </div>
@@ -752,7 +811,15 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   muted
                   onLoadedMetadata={(e) => {
                     const v = e.currentTarget;
-                    if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
+                    if (!v.videoWidth || !v.videoHeight) return;
+                    const ratio = v.videoWidth / v.videoHeight;
+                    setVideoAspect(ratio);
+                    // Calibrazione salvata (stessa fotocamera, non spostata): la griglia è già al suo posto.
+                    const saved = cornersRef.current ? null : loadCalibration(ratio);
+                    if (saved) {
+                      cornersByUser.current = true;
+                      setCorners(saved);
+                    }
                   }}
                   className="absolute inset-0 size-full object-contain"
                   data-testid="camera-video"
@@ -761,6 +828,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   <BoardOverlay
                     corners={corners}
                     view={viewPref === 'auto' ? (reading.status === 'done' ? reading.value.view : null) : viewPref}
+                    onChangeEnd={(next) => saveCalibration(next, videoAspect)}
                     onChange={(next) => {
                       cornersByUser.current = true;
                       setCorners(next);
@@ -816,17 +884,49 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           {stream && apiKey && (
             <div className="space-y-2 rounded-xl border border-line p-3">
               {live ? (
-                <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={stopTutor} data-testid="live-toggle">
-                  {t.analyze.live.stop}
-                </Button>
+                <>
+                  {tutorMode === 'photo' && (
+                    <Button
+                      size="lg"
+                      block
+                      icon={<Icon name="camera" size={18} />}
+                      onClick={shootPhoto}
+                      disabled={reading.status === 'busy'}
+                      data-testid="tutor-shoot"
+                    >
+                      {reading.status === 'busy' ? t.analyze.live.banner.reading : t.analyze.live.shoot}
+                    </Button>
+                  )}
+                  <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={stopTutor} data-testid="live-toggle">
+                    {t.analyze.live.stop}
+                  </Button>
+                </>
               ) : (
                 <>
+                  <fieldset>
+                    <legend className="mb-1 text-sm font-semibold">{t.analyze.live.mode.label}</legend>
+                    <div className="grid grid-cols-2 gap-2" data-testid="tutor-mode">
+                      {(['video', 'photo'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          aria-pressed={tutorMode === mode}
+                          onClick={() => chooseTutorMode(mode)}
+                          className={`min-h-11 rounded-xl border-2 px-3 py-1.5 text-left text-sm ${tutorMode === mode ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+                          data-testid={`tutor-mode-${mode}`}
+                        >
+                          <span className="block font-semibold">{t.analyze.live.mode[mode]}</span>
+                          <span className="block text-xs text-muted">{t.analyze.live.mode.help[mode]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={startTutor} data-testid="live-toggle">
                     {t.analyze.live.start}
                   </Button>
                   <p className="text-sm font-semibold">{t.analyze.live.stepsTitle}</p>
                   <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
-                    {t.analyze.live.steps.map((step) => (
+                    {(tutorMode === 'photo' ? t.analyze.live.photoSteps : t.analyze.live.steps).map((step) => (
                       <li key={step}>{step}</li>
                     ))}
                   </ol>
@@ -903,6 +1003,22 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 <span className="block text-xs text-muted">{t.analyze.fast.help}</span>
               </span>
             </label>
+            <label className="flex cursor-pointer items-start gap-3 pt-1 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={flipSquares}
+                onChange={(e) => {
+                  setFlipSquares(e.target.checked);
+                  savePref(FLIP_SQUARES_KEY, e.target.checked ? '1' : '0');
+                }}
+                className="mt-1 size-5 accent-[var(--accent)]"
+                data-testid="flip-squares"
+              />
+              <span>
+                <span className="block text-sm font-semibold">{t.analyze.flipSquares.label}</span>
+                <span className="block text-xs text-muted">{t.analyze.flipSquares.help}</span>
+              </span>
+            </label>
           </div>
           <div aria-live="polite" className="space-y-1 text-sm">
             {reading.status === 'busy' && !live && <p className="font-semibold">{t.analyze.reading}</p>}
@@ -919,7 +1035,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 </p>
                 {reading.value.moves.length > 0 && !live && (
                   <p className="text-muted" data-testid="read-moves">
-                    {t.analyze.moveFound(reading.value.moves.map(sanToLocal).join(' '))}
+                    {t.analyze.moveFound(reading.value.moves.map((san) => sanToLocal(san)).join(' '))}
                   </p>
                 )}
                 {reading.value.corrected.length > 0 && (
@@ -950,7 +1066,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               <ol className="flex flex-wrap gap-1 text-sm">
                 {history.slice(-12).map((entry, index) => (
                   <li key={`${history.length}-${index}`} className="rounded-lg bg-surface px-2 py-0.5 tabular-nums" title={t.analyze.live.sources[entry.source]}>
-                    {entry.san}
+                    {entry.sans.map((san) => sanToLocal(san)).join(' ')}
                     {entry.source === 'local' && <span aria-hidden className="ml-1 text-ok">⚡</span>}
                   </li>
                 ))}
@@ -1166,9 +1282,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             <div className="rounded-xl border border-l-4 border-line border-l-accent bg-surface p-3.5" data-testid="analyze-explanation">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-accent-strong">{t.analyze.explanation}</p>
-                {!live && <SpeakButton text={`${verdict} ${explanation.value}`} auto />}
+                {!live && <SpeakButton text={`${verdict} ${localSquares(explanation.value)}`} auto />}
               </div>
-              <p className="mt-1 whitespace-pre-line">{explanation.value}</p>
+              <p className="mt-1 whitespace-pre-line">{localSquares(explanation.value)}</p>
             </div>
           )}
         </Card>

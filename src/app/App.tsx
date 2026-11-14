@@ -8,6 +8,7 @@ import { t } from '../i18n';
 import { AnalyzePage } from '../pages/AnalyzePage';
 import { ConceptPage } from '../pages/ConceptPage';
 import { GamePage } from '../pages/GamePage';
+import { GameTutorPage } from '../pages/GameTutorPage';
 import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { InfoPage } from '../pages/InfoPage';
@@ -104,6 +105,7 @@ export function App() {
             <Route path="/analizza" element={<AnalyzePage profile={profile} />} />
             <Route path="/partite" element={<GamesPage />} />
             <Route path="/partite/:id" element={<GamePage profile={profile} />} />
+            <Route path="/partite/:id/tutor" element={<GameTutorPage />} />
             <Route path="/progressi" element={<MemoryDnaPage />} />
             <Route path="/memory-dna" element={<Navigate to="/progressi" replace />} />
             <Route path="/informazioni" element={<InfoPage />} />
