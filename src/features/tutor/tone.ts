@@ -6,13 +6,14 @@ import { useSyncExternalStore } from 'react';
  * Le spiegazioni restano sempre corrette: cambia solo il modo di dirle.
  */
 
-export type Tone = 'formal' | 'friendly' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
+export type Tone = 'formal' | 'friendly' | 'playful' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
 
-export const TONES: readonly Tone[] = ['formal', 'friendly', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
+export const TONES: readonly Tone[] = ['formal', 'friendly', 'playful', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
 
 export const TONE_LABELS: Record<Tone, string> = {
   formal: 'Formale',
   friendly: 'Amichevole',
+  playful: 'Simpatico e scherzoso',
   normal: 'Normale',
   youthful: 'Giovanile',
   rude: 'Sgarbato',
@@ -67,6 +68,17 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Che bella partita, {n}! Finita: {r}.',
     whyTo: 'Ti spiego, {n}:',
     aligned: 'Perfetto {n}, ci siamo!',
+  },
+  playful: {
+    hello: 'Ciao {n}! Pronto a far ballare i pezzi?',
+    nice: 'Piacere {n}! Io porto le battute, tu le mosse. Si parte!',
+    call: ['{n}, ', 'Occhio {n}: ', 'Tocca a te, campione {n}! ', 'Su {n}, niente pisolini: '],
+    praise: ['Bravo {n}, applausi dalla tribuna!', 'Che colpo, {n}! Morphy approverebbe.', 'Giusta, {n}! Anche i pedoni applaudono.', 'Ottimo {n}, stai diventando pericoloso!'],
+    reminder: '{n}, i pezzi non si muovono da soli… purtroppo! Tocca a te.',
+    wrong: 'Ops {n}, mossa fantasiosa ma non è quella! Rimetti il pezzo e gioca: ',
+    finished: 'Finita, {n}: {r}. Inchino e applausi!',
+    whyTo: 'Ecco il trucco, {n}:',
+    aligned: 'Perfetto {n}, tutto in ordine!',
   },
   youthful: {
     hello: 'Ehi {n}!',
@@ -130,6 +142,7 @@ export const TONE_PROMPTS: Record<Tone, string> = {
   normal: '',
   formal: 'Dai del Lei all’allievo, con un tono formale e cortese.',
   friendly: 'Tono caldo, amichevole e incoraggiante; dai del tu.',
+  playful: 'Tono simpatico e scherzoso: al massimo una battuta leggera o un paragone buffo, sempre gentile; dai del tu. La battuta non allunga la spiegazione, che resta corretta e chiara.',
   youthful: 'Tono giovanile e informale, con qualche espressione da ragazzi, senza esagerare.',
   rude: 'Tono sgarbato e brusco, sbrigativo; la spiegazione però resta corretta e chiara.',
   unpleasant: 'Tono antipatico e saccente, con qualche frecciatina all’allievo; la spiegazione resta corretta e utile.',

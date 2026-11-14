@@ -12,7 +12,10 @@ export type VoiceCommand =
   | { kind: 'why' }
   | { kind: 'repeat' }
   | { kind: 'back' }
+  /** Basta parlare: il tutor tace e aspetta la richiesta successiva. */
   | { kind: 'stop' }
+  /** Dopo uno stop: si riprende la lezione da dove era rimasta. */
+  | { kind: 'resume' }
   /** «Pronto»: i pezzi sulla scacchiera vera sono stati sistemati. */
   | { kind: 'ready' }
   /** Vai a una mossa: numero della mossa (1 = prima) e colore, oppure inizio/fine della partita. */
@@ -73,11 +76,31 @@ const ordinalDigits = (text: string) => text.replace(/(\d+)\s*(?:ª|º|°|a)(?=\
 const FILLER_START = /^(?:(?:ok|okay|dai|allora|va bene|si|ehi|ascolta|senti|ora|adesso|e|tutor|insegnante)\s+)+/;
 const FILLER_END = /(?:\s+(?:per favore|grazie|adesso|ora|subito|dai))+$/;
 
+/**
+ * Modi di dire «smetti di parlare» (o «fammi parlare»): «basta», «stop», «aspetta un attimo»,
+ * «scusa», «ho una domanda», «fammi parlare»… anche ripetuti («stop stop», «aspetta aspetta»).
+ */
+const STOP_WORD =
+  '(?:basta(?: cosi)?|stop|alt|stai zitt[oai]|zitt[oai]|silenzio|fermati|fermo|ferma|aspetta|attendi|un attimo|un momento|un secondo|taci|smettila|smetti(?: di parlare)?|interrompi|pausa|metti in pausa|frena|scusami|scusa|posso parlare|fammi parlare|lasciami parlare|non parlare|ho una domanda|una domanda|shh|sst|ssh|sh)';
+const STOP_TAIL = '(?: (?:un attimo|un momento|un secondo|un po|per un attimo|tutor|subito|ti prego|pure))*';
+const STOP_AT_START = new RegExp(`^${STOP_WORD}${STOP_TAIL}(?: ${STOP_WORD}${STOP_TAIL})*(?=\\s|$)`);
+
+/** Frasi per riprendere dopo uno stop. */
+const RESUME = /^(continua|continuiamo|riprendi|riprendiamo|prosegui|proseguiamo|vai pure|puoi continuare|puoi andare avanti|riparti da qui|dove eravamo)$/;
+
 /** Interpreta una frase ascoltata. null = rumore o frase troppo corta per essere una domanda. */
 export function parseCommand(heard: string): VoiceCommand | null {
   const full = normalize(ordinalDigits(heard));
   const text = full.replace(FILLER_START, '').replace(FILLER_END, '').trim() || full;
   if (!text) return null;
+  // «Aspetta, vai alla quinta mossa», «scusa, che apertura è?»: prima si interrompe, poi conta il resto.
+  const stop = STOP_AT_START.exec(text);
+  if (stop) {
+    const rest = text.slice(stop[0].length).replace(FILLER_START, '').trim();
+    const after = rest ? parseCommand(rest) : null;
+    if (!after || after.kind === 'stop') return { kind: 'stop' };
+    return after.kind === 'question' ? { kind: 'question', text: heard.trim() } : after;
+  }
   const words = text.split(' ').length;
   const goto = parseGoto(text);
   if (goto) return goto;
@@ -87,7 +110,7 @@ export function parseCommand(heard: string): VoiceCommand | null {
   if (/^(ripeti|ripetere|puoi ripetere|cosa hai detto)\b/.test(text) && words <= 4) return { kind: 'repeat' };
   if (/^(indietro|torna indietro|mossa precedente)$/.test(text)) return { kind: 'back' };
   if (/^(pronto|pronta|fatto|ho fatto|sistemato|sistemata|ho sistemato|pezzi sistemati|ho sistemato i pezzi)$/.test(text)) return { kind: 'ready' };
-  if (/^(basta|stop|zitto|zitta|zitti|silenzio|fermati|ferma|aspetta|un attimo|taci|stai zitt[oa])\b/.test(text) && words <= 3) return { kind: 'stop' };
+  if (RESUME.test(text)) return { kind: 'resume' };
   // Una domanda vera: almeno due parole (una parola isolata è quasi sempre rumore).
   if (words >= 2) return { kind: 'question', text: heard.trim() };
   return null;
@@ -106,6 +129,17 @@ export function commandAtEnd(heard: string): { command: VoiceCommand; phrase: st
     if (command && BARGE_IN_KINDS.has(command.kind)) return { command, phrase };
   }
   return null;
+}
+
+/**
+ * Un'interruzione all'INIZIO di ciò che il microfono sente («scusa, che apertura è?»,
+ * «aspetta un attimo, perché…»): il tutor deve tacere anche se il resto è una domanda.
+ */
+export function interruptAtStart(heard: string): { command: VoiceCommand; phrase: string } | null {
+  const text = normalize(ordinalDigits(heard)).replace(FILLER_START, '');
+  const stop = STOP_AT_START.exec(text);
+  if (!stop) return null;
+  return { command: parseCommand(heard) ?? { kind: 'stop' }, phrase: stop[0] };
 }
 
 interface RecognitionLike {

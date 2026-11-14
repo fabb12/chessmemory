@@ -634,8 +634,11 @@ function systemWithTone(text: string, tone?: string): Anthropic.Beta.BetaTextBlo
 }
 
 const MASTER_SYSTEM = `Sei un istruttore di scacchi che accompagna un allievo (principiante o intermedio) mentre rigioca sulla scacchiera una partita storica di un grande maestro.
-L'allievo ha appena eseguito la mossa sulla scacchiera: sei il suo insegnante e vuoi che impari la strategia dei grandi campioni.
-Spiega in italiano semplice, in 3–4 frasi brevi, senza elenchi né titoli: PERCHÉ il maestro ha giocato la mossa (l'idea concreta, la minaccia o il piano, che cosa ottiene o che cosa impedisce all'avversario) e chiudi con il principio strategico da ricordare, introdotto da «La lezione:».
+L'allievo ha appena eseguito la mossa: spiegagli PERCHÉ il maestro l'ha giocata, in modo sintetico e chiaro.
+Formato: due frasi brevi, al massimo 35 parole in tutto, senza elenchi né titoli.
+1) L'idea concreta della mossa in parole semplici: che cosa ottiene, minaccia o impedisce.
+2) «La lezione:» e il principio da ricordare, in poche parole.
+Niente premesse («Ottima domanda», «Questa mossa…»), niente ripetere la mossa per intero, niente gergo difficile né varianti lunghe. Il tono scelto non deve allungare il testo.
 Le mosse della partita sono storiche e corrette: non contraddirle e non inventare varianti diverse. Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
 
 /** Spiegazione breve di una mossa di una partita famosa (generata in anticipo e messa in cache). */
@@ -699,7 +702,7 @@ export async function explainDeviation(input: DeviationInput): Promise<string> {
 L'allievo, al posto di ${input.player}, ha giocato ${input.played} invece della mossa del maestro ${input.master}.
 Stockfish: dopo ${input.played} la valutazione è ${input.playedEval}, dopo ${input.master} è ${input.masterEval} (dal punto di vista di chi muove).
 Migliore risposta dopo ${input.played}: ${input.refutation || 'nessuna variante'}.
-Rispondi in 2–3 frasi brevi: che cosa non va nella mossa dell'allievo (o, se è buona anche lei, dillo) e perché ${input.master} è migliore.`,
+Rispondi in modo sintetico e chiaro, in 2 frasi brevi (al massimo 35 parole): che cosa non va nella mossa dell'allievo (o, se è buona anche lei, dillo) e perché ${input.master} è migliore.`,
         },
       ],
     });
