@@ -166,7 +166,7 @@ export function phrases(tone: Tone): TonePhrases {
   return {
     hello: (n) => fill(l.hello, n),
     nice: (n) => fill(l.nice, n),
-    call: (n, turn) => (n ? fill(l.call[turn % l.call.length]!, n) : ''),
+    call: (n, turn) => (n || tone !== 'normal' ? fill(l.call[turn % l.call.length]!, n) : ''),
     wellDone: (m, n, turn) => (tone === 'normal' && !n ? `Bene, ${m}.` : `${fill(l.praise[turn % l.praise.length]!, n)} ${m}.`),
     reminder: (n) => fill(l.reminder, n),
     wrong: (instruction, n) => `${fill(l.wrong, n)}${instruction}`,
@@ -174,6 +174,42 @@ export function phrases(tone: Tone): TonePhrases {
     whyTo: (n) => fill(l.whyTo, n),
     aligned: (n) => fill(l.aligned, n),
   };
+}
+
+// ───── Quando dire il nome ─────
+
+/**
+ * Momento in cui il tutor potrebbe chiamare l'allievo per nome:
+ * - `greet`: saluto o presentazione → sempre;
+ * - `attention`: errore, richiamo, mossa indovinata al primo colpo, fine partita →
+ *   quasi sempre, ma non se il nome è appena stato detto;
+ * - `routine`: indicazioni e lodi di ogni mossa → solo ogni tanto.
+ */
+export type NameMoment = 'greet' | 'attention' | 'routine';
+
+/** Frasi da lasciar passare (senza nome) prima di poter ridire il nome. */
+const NAME_GAP: Record<NameMoment, number> = { greet: 0, attention: 2, routine: 6 };
+
+/**
+ * Dosa il nome dell'allievo: un insegnante vero lo dice per salutare, per richiamare
+ * l'attenzione o sottolineare un momento, non in ogni frase. Ogni chiamata a `use`
+ * è una frase detta; restituisce il nome da usare in quella frase oppure ''.
+ */
+export class NamePacer {
+  private since = Number.POSITIVE_INFINITY;
+
+  use(name: string, moment: NameMoment): string {
+    if (!name) return '';
+    this.since++;
+    if (this.since <= NAME_GAP[moment]) return '';
+    this.since = 0;
+    return name;
+  }
+
+  /** Nuovo inizio (nuovo nome, nuovo tono): il prossimo momento utile usa il nome. */
+  reset(): void {
+    this.since = Number.POSITIVE_INFINITY;
+  }
 }
 
 // ───── Preferenza (sul dispositivo) ─────

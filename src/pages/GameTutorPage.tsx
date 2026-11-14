@@ -32,7 +32,7 @@ import {
   type UserSide,
 } from '../features/tutor/gameSession';
 import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
-import { phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type Tone } from '../features/tutor/tone';
+import { NamePacer, phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type NameMoment, type Tone } from '../features/tutor/tone';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
@@ -187,8 +187,11 @@ export function GameTutorPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(name);
   const greetedRef = useRef(false);
-  /** Il tutor chiama spesso l'allievo per nome, alternando le frasi per non suonare ripetitivo. */
+  /** Alterna le frasi del tutor (richiami, lodi) per non suonare ripetitivo. */
   const nameTurnRef = useRef(0);
+  /** Il nome si dice al momento giusto (saluto, errori, richiami), non in ogni frase. */
+  const pacerRef = useRef(new NamePacer());
+  const nameFor = useCallback((moment: NameMoment) => pacerRef.current.use(nameRef.current, moment), []);
   // Tono di parlata scelto dall'allievo (frasi del tutor e istruzioni per Claude).
   const tone = useTone();
   const toneRef = useRef<Tone>(tone);
@@ -197,6 +200,7 @@ export function GameTutorPage() {
   const setName = useCallback((value: string) => {
     const clean = value.trim().slice(0, 40);
     nameRef.current = clean;
+    pacerRef.current.reset();
     setNameState(clean);
     saveText(NAME_KEY, clean);
   }, []);
@@ -356,18 +360,17 @@ export function GameTutorPage() {
       setRunning(true);
       setTeaching(null);
       speechTokenRef.current++;
-      const who = nameRef.current;
       // La prima volta si saluta per nome.
-      const hello = who && !greetedRef.current ? `${ph().hello(who)} ` : '';
-      if (who) greetedRef.current = true;
+      const hello = nameRef.current && !greetedRef.current ? `${ph().hello(nameFor('greet'))} ` : '';
+      if (nameRef.current) greetedRef.current = true;
       const say = (text: string) => speak(`${hello}${prefix} ${text}`.trim(), 'game-tutor');
-      if (isFinished(parsed, state)) return say(ph().finished(t.games.result[game.result] ?? game.result, who));
+      if (isFinished(parsed, state)) return say(ph().finished(t.games.result[game.result] ?? game.result, nameFor('attention')));
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
-      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, who));
+      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, nameFor('routine')));
       const what = moveInstruction(state.fen, move);
-      // Quasi sempre il nome, con frasi che si alternano.
-      const call = ph().call(who, nameTurnRef.current++);
+      // Il nome solo ogni tanto (o se non è appena stato detto), con frasi che si alternano.
+      const call = ph().call(nameFor('routine'), nameTurnRef.current++);
       const instruction = call.endsWith(', ') ? what.charAt(0).toLowerCase() + what.slice(1) : what;
       say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${call}${instruction}`);
     },
@@ -482,7 +485,8 @@ export function GameTutorPage() {
     const text = ply > 0 ? explanationFor(ply) : t.gameTutor.whyNothing;
     speechTokenRef.current++;
     setAnswer({ question: t.gameTutor.whyQuestion, phase: { status: 'done', value: text } });
-    speak(nameRef.current || toneRef.current !== 'normal' ? `${ph().whyTo(nameRef.current)} ${text}` : text, 'game-tutor');
+    const who = nameFor('routine');
+    speak(who || toneRef.current !== 'normal' ? `${ph().whyTo(who)} ${text}` : text, 'game-tutor');
   }, [parsed, explanationFor]);
 
   /** Domanda libera sulla partita: risponde Claude, con il contesto della posizione. */
@@ -598,7 +602,7 @@ export function GameTutorPage() {
         awaitingNameRef.current = false;
         setName(heardName);
         greetedRef.current = true;
-        if (sessionRef.current) announce(sessionRef.current, ph().nice(heardName));
+        if (sessionRef.current) announce(sessionRef.current, ph().nice(nameFor('greet')));
         return;
       }
       // Un comando o una domanda: il nome si potrà dire (o scrivere) più tardi.
@@ -709,7 +713,7 @@ export function GameTutorPage() {
     if (!s) return;
     if (trackerRef.current) {
       setRemaining(autoSeconds);
-      announce(s, ph().reminder(nameRef.current));
+      announce(s, ph().reminder(nameFor('attention')));
     } else advance();
   };
   const advanceRef = useRef(onTimeout);
@@ -762,10 +766,13 @@ export function GameTutorPage() {
         setJudgement({ status: 'idle' });
         setShowHint(false);
         // Mossa vista: subito il perché, poi (dopo la pausa) la mossa successiva.
-        const who = nameRef.current;
         teach(
           state,
-          !guess ? ph().wellDone(label, who, nameTurnRef.current++) : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label),
+          !guess
+            ? ph().wellDone(label, nameFor('routine'), nameTurnRef.current++)
+            : outcome.firstTry
+              ? t.gameTutor.correct(label, nameFor('attention'))
+              : t.gameTutor.correctLater(label),
         );
         return;
       }
@@ -774,7 +781,7 @@ export function GameTutorPage() {
         setShowHint(true);
         if (!guess) {
           const expected = expectedMove(parsed, current)!;
-          const text = ph().wrong(moveInstruction(current.fen, expected), nameRef.current);
+          const text = ph().wrong(moveInstruction(current.fen, expected), nameFor('attention'));
           setFeedback({ tone: 'bad', text });
           speechTokenRef.current++;
           speak(text, 'game-tutor');
@@ -1041,7 +1048,7 @@ export function GameTutorPage() {
     setShowHint(false);
     // Con la fotocamera la scacchiera vera resta dov'è finché non la si sistema (o si fanno le mosse).
     if (trackerRef.current) {
-      if (physicalRef.current !== target.ply) prefix = `${prefix} ${t.gameTutor.arrange(nameRef.current)}`.trim();
+      if (physicalRef.current !== target.ply) prefix = `${prefix} ${t.gameTutor.arrange(nameFor('attention'))}`.trim();
     } else commitBoard(target);
     announce(target, prefix);
   };
@@ -1067,8 +1074,9 @@ export function GameTutorPage() {
 
   /** Scacchiera vera di nuovo allineata alla partita (vista dalla fotocamera o con «pronto»). */
   const onAligned = () => {
-    setFeedback({ tone: 'good', text: ph().aligned(nameRef.current) });
-    if (!teaching) announce(sessionRef.current ?? session, ph().aligned(nameRef.current));
+    const text = ph().aligned(nameFor('routine'));
+    setFeedback({ tone: 'good', text });
+    if (!teaching) announce(sessionRef.current ?? session, text);
   };
   alignedRef.current = onAligned;
 
@@ -1244,7 +1252,7 @@ export function GameTutorPage() {
               greetedRef.current = false;
               if (wasWaiting && sessionRef.current) {
                 greetedRef.current = true;
-                announce(sessionRef.current, ph().nice(value));
+                announce(sessionRef.current, ph().nice(nameFor('greet')));
               }
             }}
           >
@@ -1308,6 +1316,7 @@ export function GameTutorPage() {
             onChange={(e) => {
               setTone(e.target.value as Tone);
               greetedRef.current = false;
+              pacerRef.current.reset();
             }}
             className="min-h-10 rounded-xl border border-line bg-surface px-3"
             data-testid="tutor-tone"
