@@ -33,6 +33,8 @@ export interface TrackerSource {
   preferred?: () => string | null;
   /** La transizione attesa è stata indicata all'utente: si riconosce con soglie più tolleranti. */
   lenient?: () => boolean;
+  /** In pausa (es. l'utente sta sistemando i pezzi): si segue solo il movimento, senza leggere mosse. */
+  paused?: () => boolean;
 }
 
 export interface TrackerEvents {
@@ -163,6 +165,10 @@ export class BoardTracker {
     const { state } = this.motion.push(frame.thumb, performance.now());
     if (state !== 'stable') {
       this.setStatus(state);
+      return;
+    }
+    if (this.source.paused?.()) {
+      this.setStatus('stable');
       return;
     }
     if (this.syncRequested || !this.baseline) {

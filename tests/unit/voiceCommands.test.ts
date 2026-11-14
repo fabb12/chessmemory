@@ -64,3 +64,29 @@ describe('vai a una mossa', () => {
     expect(parseCommand('perché la quinta mossa è forte')?.kind).toBe('question');
   });
 });
+
+describe('dialogo dinamico', () => {
+  it('capisce le varianti naturali dei comandi', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    expect(parseCommand('vai alla 5ª mossa')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('vai alla 5° mossa')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('vai alla 5 mossa')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('vai alla 5')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('ok vai alla prossima')).toEqual({ kind: 'next' });
+    expect(parseCommand('dai, prossima mossa per favore')).toEqual({ kind: 'next' });
+    expect(parseCommand('zitta per favore')).toEqual({ kind: 'stop' });
+    expect(parseCommand('stai zitta')).toEqual({ kind: 'stop' });
+  });
+
+  it('trova il comando alla fine di ciò che sente mentre il tutor parla', async () => {
+    const { commandAtEnd, isEcho } = await import('../../src/features/voice/listen');
+    expect(commandAtEnd('il cavallo sviluppa verso il centro zitta')?.command).toEqual({ kind: 'stop' });
+    expect(commandAtEnd('la lezione è chi controlla il centro vai alla prossima')?.command).toEqual({ kind: 'next' });
+    expect(commandAtEnd('arrocca presto vai alla quinta mossa')?.command).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(commandAtEnd('il cavallo sviluppa verso il centro')).toBeNull();
+    // L'eco della voce del tutor non conta.
+    const spoken = 'Siamo alla mossa 5 del Bianco. Il Bianco cattura in f3.';
+    const echo = commandAtEnd('siamo alla mossa 5 del bianco')!;
+    expect(isEcho(echo.phrase, spoken)).toBe(true);
+  });
+});

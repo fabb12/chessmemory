@@ -45,6 +45,11 @@ function numberWord(word: string): number | null {
 function parseGoto(text: string): VoiceCommand | null {
   if (/^(vai |torna |ricomincia |riparti )?(all |dall )?(inizio|da capo|dall inizio)$|^ricomincia$|^riparti$/.test(text)) return { kind: 'goto', where: 'start' };
   if (/^(vai |salta )?(alla |all )?(fine|ultima mossa)( della partita)?$/.test(text)) return { kind: 'goto', where: 'end' };
+  const bare = /^(?:vai|torna|andiamo|salta|portami|passa)\s+(?:alla|al|a)\s+(\S+)(?:\s+del\s+(bianco|nero))?$/.exec(text);
+  if (bare) {
+    const n = numberWord(bare[1]!);
+    if (n) return { kind: 'goto', move: n, color: bare[2] === 'nero' ? 'b' : 'w' };
+  }
   const m = /^(?:(?:vai|torna|andiamo|salta|portami|passa)\s+)?(?:a\s+|alla\s+|al\s+)?(?:(\S+)\s+mossa|mossa\s+(?:numero\s+)?(\S+))(?:\s+del\s+(bianco|nero))?$/.exec(text);
   if (!m) return null;
   const n = numberWord(m[1] ?? m[2] ?? '');
@@ -61,9 +66,17 @@ const normalize = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/** «5ª», «5°», «5a» → «5» (prima di togliere la punteggiatura). */
+const ordinalDigits = (text: string) => text.replace(/(\d+)\s*(?:ª|º|°|a)(?=\s|$)/gi, '$1');
+
+/** Parole di contorno che non cambiano il comando: «ok, vai alla prossima», «zitta per favore». */
+const FILLER_START = /^(?:(?:ok|okay|dai|allora|va bene|si|ehi|ascolta|senti|ora|adesso|e|tutor|insegnante)\s+)+/;
+const FILLER_END = /(?:\s+(?:per favore|grazie|adesso|ora|subito|dai))+$/;
+
 /** Interpreta una frase ascoltata. null = rumore o frase troppo corta per essere una domanda. */
 export function parseCommand(heard: string): VoiceCommand | null {
-  const text = normalize(heard);
+  const full = normalize(ordinalDigits(heard));
+  const text = full.replace(FILLER_START, '').replace(FILLER_END, '').trim() || full;
   if (!text) return null;
   const words = text.split(' ').length;
   const goto = parseGoto(text);
@@ -72,10 +85,25 @@ export function parseCommand(heard: string): VoiceCommand | null {
   if (/^(e )?(perche|come mai)( (questa|questa mossa|la mossa))?$/.test(text)) return { kind: 'why' };
   if (/^(ripeti|ripetere|puoi ripetere|cosa hai detto)\b/.test(text) && words <= 4) return { kind: 'repeat' };
   if (/^(indietro|torna indietro|mossa precedente)$/.test(text)) return { kind: 'back' };
-  if (/^(pronto|pronta|fatto|ho fatto|sistemato|sistemata|ho sistemato|pezzi sistemati)$/.test(text)) return { kind: 'ready' };
-  if (/^(basta|stop|zitto|zitta|silenzio|fermati|ferma|aspetta|un attimo)\b/.test(text) && words <= 3) return { kind: 'stop' };
+  if (/^(pronto|pronta|fatto|ho fatto|sistemato|sistemata|ho sistemato|pezzi sistemati|ho sistemato i pezzi)$/.test(text)) return { kind: 'ready' };
+  if (/^(basta|stop|zitto|zitta|zitti|silenzio|fermati|ferma|aspetta|un attimo|taci|stai zitt[oa])\b/.test(text) && words <= 3) return { kind: 'stop' };
   // Una domanda vera: almeno due parole (una parola isolata è quasi sempre rumore).
   if (words >= 2) return { kind: 'question', text: heard.trim() };
+  return null;
+}
+
+/**
+ * Un comando breve alla FINE di quello che il microfono sta sentendo (anche a frase non
+ * conclusa): mentre il tutor parla, il riconoscimento mescola la sua voce e la nostra.
+ * Restituisce il comando e le parole che lo esprimono (per scartare l'eco).
+ */
+export function commandAtEnd(heard: string): { command: VoiceCommand; phrase: string } | null {
+  const words = normalize(ordinalDigits(heard)).split(' ').filter(Boolean);
+  for (let n = Math.min(7, words.length); n >= 1; n--) {
+    const phrase = words.slice(-n).join(' ');
+    const command = parseCommand(phrase);
+    if (command && command.kind !== 'question' && command.kind !== 'repeat') return { command, phrase };
+  }
   return null;
 }
 
@@ -105,6 +133,8 @@ export function listeningSupported(): boolean {
 
 export interface ListenerOptions {
   onHeard: (text: string) => void;
+  /** Trascrizione provvisoria mentre si parla: serve a interrompere il tutor senza aspettare la fine della frase. */
+  onInterim?: (text: string) => void;
   /** Errore definitivo (permesso negato prima ancora di cominciare). */
   onError?: (error: string) => void;
 }
@@ -135,7 +165,7 @@ export class VoiceListener {
     const rec = new Ctor();
     rec.lang = 'it-IT';
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = true;
     (rec as unknown as { onstart: (() => void) | null }).onstart = () => {
       this.running = true;
       this.everStarted = true;
@@ -143,9 +173,10 @@ export class VoiceListener {
     rec.onresult = (event) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]!;
-        if (!result.isFinal) continue;
         const text = result[0]?.transcript ?? '';
-        if (text.trim()) this.options.onHeard(text);
+        if (!text.trim()) continue;
+        if (result.isFinal) this.options.onHeard(text);
+        else this.options.onInterim?.(text);
       }
     };
     rec.onerror = (event) => {
