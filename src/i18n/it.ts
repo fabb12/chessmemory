@@ -371,6 +371,22 @@ export const it = {
         'Gioca normalmente. Fatta una mossa, togli la mano: il tutor la riconosce da solo (quasi sempre senza interpellare Claude).',
         'A ogni mossa il tutor ti parla: quando tocca a te ti dice la mossa migliore, dopo la tua ti dice com’era, e ti avvisa delle minacce dell’avversario. «Perché?» chiede a Claude una spiegazione breve.',
       ],
+      photoSteps: [
+        'Inquadra tutta la scacchiera (meglio con il telefono su un supporto, sempre dallo stesso punto).',
+        'Avvia il tutor: scatta subito la prima foto. Se la griglia verde non combacia con le case, trascina i 4 angoli.',
+        'Dopo ogni mossa (tua o dell’avversario), togli la mano e premi «Scatta foto»: il tutor legge solo quella foto.',
+        'A ogni foto il tutor ti parla: quando tocca a te ti dice la mossa migliore, dopo la tua ti dice com’era. Tra una foto e l’altra non legge nulla.',
+      ],
+      mode: {
+        label: 'Come osserva la scacchiera',
+        video: 'Video continuo',
+        photo: 'Foto a ogni mossa',
+        help: {
+          video: 'Riconosce le mosse da solo, mentre giochi.',
+          photo: 'Legge solo quando scatti tu: meno batteria e più controllo.',
+        },
+      },
+      shoot: 'Scatta foto',
       repeat: 'Ripeti',
       why: 'Perché?',
       usage: (reads: number, explains: number, tokens: number, cached: number, local: number) =>
@@ -386,6 +402,7 @@ export const it = {
         theirs: 'Tocca all’avversario: aspetto la sua mossa',
         waiting: 'Inquadra tutta la scacchiera…',
         verifying: 'Non sono sicuro della posizione: ricontrollo…',
+        noChange: 'Nessuna mossa nuova nella foto: fai la mossa, togli la mano e scatta di nuovo.',
       },
       history: 'Mosse viste',
       sources: { local: 'vista sul dispositivo', claude: 'letta da Claude' } as Record<string, string>,

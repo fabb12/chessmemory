@@ -62,6 +62,10 @@ type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; valu
 
 const VIEW_KEY = 'cm.analyze.view';
 const PRACTICE_KEY = 'cm.analyze.practice';
+const TUTOR_MODE_KEY = 'cm.analyze.tutorMode';
+
+/** video = osserva di continuo la scacchiera; photo = legge solo quando scatti una foto dopo ogni mossa. */
+type TutorMode = 'video' | 'photo';
 
 function loadPref(key: string): string | null {
   try {
@@ -102,6 +106,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   // Modalità tutor: osserva di continuo la scacchiera e dice (a voce) la mossa migliore.
   const [live, setLive] = useState(false);
   const [tutorText, setTutorText] = useState('');
+  const [tutorMode, setTutorModeState] = useState<TutorMode>(() => (loadPref(TUTOR_MODE_KEY) === 'photo' ? 'photo' : 'video'));
+  /** Modalità foto: l'ultima foto non mostrava mosse nuove. */
+  const [noChange, setNoChange] = useState(false);
   const usage = useAssistantUsage();
   const liveRef = useRef(false);
   liveRef.current = live;
@@ -342,6 +349,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         if (auto && result.placement === lastPlacement.current) {
           unconfirmed.current = null;
           setVerifying(false);
+          setNoChange(true);
           return;
         }
         // Nel tutor una lettura che nessuna mossa legale spiega (pezzo urtato, mano, riflesso…)
@@ -356,6 +364,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         }
         unconfirmed.current = null;
         setVerifying(false);
+        setNoChange(false);
         const changed = lastPlacement.current !== null && result.placement !== lastPlacement.current;
         lastPlacement.current = result.placement;
         const previous = positionRef.current;
@@ -412,7 +421,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
    * posizione precedente, senza chiamare Claude. Restituisce false se non è sicuro.
    */
   const tryLocalMove = useCallback(
-    (signature: Uint8Array): boolean => {
+    (signature: Uint8Array): boolean | 'none' => {
       const video = videoRef.current;
       const quad = cornersRef.current;
       const before = snapshot.current;
@@ -431,7 +440,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       }
       snapshot.current = now;
       readSignature.current = signature;
-      if (result.kind === 'none') return true;
+      if (result.kind === 'none') return 'none';
       const next = fenToPosition(result.fen);
       if (!next) return false;
       setHistory((h) => [...h, { san: sanToLocal(result.san), source: 'local', before: pos }]);
@@ -442,6 +451,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       lastPlacement.current = result.fen.split(' ')[0] ?? null;
       lastRaw.current = null;
       userEdited.current = false;
+      setNoChange(false);
       positionRef.current = next;
       setPosition(next);
       setLastUpdate(Date.now());
@@ -529,7 +539,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   // si toglie e qualcosa è cambiato: prima si prova a riconoscere la mossa confrontando
   // le case (istantaneo, senza costi); solo se il risultato è dubbio si chiama Claude.
   useEffect(() => {
-    if (!live || !stream) return;
+    if (!live || !stream || tutorMode !== 'video') return;
     lastSample.current = null;
     stillCount.current = 0;
     setLiveState('watching');
@@ -558,7 +568,36 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       captureAndRead(true);
     }, SAMPLE_MS);
     return () => window.clearInterval(id);
-  }, [live, stream, captureAndRead, tryLocalMove]);
+  }, [live, stream, tutorMode, captureAndRead, tryLocalMove]);
+
+  /**
+   * Modalità foto: un solo fotogramma per mossa, quando lo decide l'utente.
+   * Come nel video, prima il confronto delle case (gratis), poi YOLO/Claude solo se serve.
+   */
+  const shootPhoto = () => {
+    if (busy.current) return;
+    setNoChange(false);
+    const video = videoRef.current;
+    const sample = video ? frameSignature(video) : null;
+    if (sample && positionRef.current && snapshot.current) {
+      if (readSignature.current && frameDifference(readSignature.current, sample) < MOTION.changed) {
+        setNoChange(true);
+        return;
+      }
+      const local = tryLocalMove(sample);
+      if (local === 'none') {
+        setNoChange(true);
+        return;
+      }
+      if (local) return;
+    }
+    captureAndRead(true);
+  };
+
+  const chooseTutorMode = (mode: TutorMode) => {
+    setTutorModeState(mode);
+    savePref(TUTOR_MODE_KEY, mode);
+  };
 
   const positionError = position ? validatePosition(position) : null;
   const fen = position && !positionError ? positionToFen(position) : null;
@@ -607,9 +646,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     pendingMove.current = null;
     spokenFor.current = null;
     setTutorText('');
+    setNoChange(false);
     // Il tutor parla: se la voce era spenta la si accende (si spegne dall'altoparlante in alto).
     if (speechSupported()) setVoiceEnabled(true);
     setLive(true);
+    // In modalità foto la prima foto si scatta subito: è la posizione di partenza.
+    if (tutorMode === 'photo') captureAndRead(true);
   };
 
   const stopTutor = () => {
@@ -675,15 +717,17 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       ? { text: t.analyze.live.banner.reading, tone: 'neutral' }
       : verifying
         ? { text: t.analyze.live.banner.verifying, tone: 'neutral' }
-        : liveState === 'moving'
-          ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
-          : !position
-            ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
-            : analysis.status === 'busy'
-              ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
-              : myTurn
-                ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
-                : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
+        : noChange && tutorMode === 'photo'
+          ? { text: t.analyze.live.banner.noChange, tone: 'neutral' }
+            : liveState === 'moving' && tutorMode === 'video'
+            ? { text: t.analyze.live.banner.moving, tone: 'neutral' }
+            : !position
+              ? { text: t.analyze.live.banner.waiting, tone: 'neutral' }
+              : analysis.status === 'busy'
+                ? { text: t.analyze.live.banner.thinking, tone: 'neutral' }
+                : myTurn
+                  ? { text: tutorText || (bestLocal ? t.analyze.live.banner.mine(bestLocal) : t.analyze.live.banner.mineNoMove), tone: 'mine' }
+                  : { text: tutorText || t.analyze.live.banner.theirs, tone: 'theirs' };
   const tutorSpeaking = banner.tone === 'mine' || banner.tone === 'theirs';
   const winExtra = win?.kind === 'mate' ? t.analyze.win.mate(win.mateIn ?? 1) : win?.kind === 'check' ? t.analyze.win.check(win.checkIn ?? 1) : '';
 
@@ -816,17 +860,49 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           {stream && apiKey && (
             <div className="space-y-2 rounded-xl border border-line p-3">
               {live ? (
-                <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={stopTutor} data-testid="live-toggle">
-                  {t.analyze.live.stop}
-                </Button>
+                <>
+                  {tutorMode === 'photo' && (
+                    <Button
+                      size="lg"
+                      block
+                      icon={<Icon name="camera" size={18} />}
+                      onClick={shootPhoto}
+                      disabled={reading.status === 'busy'}
+                      data-testid="tutor-shoot"
+                    >
+                      {reading.status === 'busy' ? t.analyze.live.banner.reading : t.analyze.live.shoot}
+                    </Button>
+                  )}
+                  <Button variant="secondary" block icon={<Icon name="stop" size={18} />} onClick={stopTutor} data-testid="live-toggle">
+                    {t.analyze.live.stop}
+                  </Button>
+                </>
               ) : (
                 <>
+                  <fieldset>
+                    <legend className="mb-1 text-sm font-semibold">{t.analyze.live.mode.label}</legend>
+                    <div className="grid grid-cols-2 gap-2" data-testid="tutor-mode">
+                      {(['video', 'photo'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          aria-pressed={tutorMode === mode}
+                          onClick={() => chooseTutorMode(mode)}
+                          className={`min-h-11 rounded-xl border-2 px-3 py-1.5 text-left text-sm ${tutorMode === mode ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+                          data-testid={`tutor-mode-${mode}`}
+                        >
+                          <span className="block font-semibold">{t.analyze.live.mode[mode]}</span>
+                          <span className="block text-xs text-muted">{t.analyze.live.mode.help[mode]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={startTutor} data-testid="live-toggle">
                     {t.analyze.live.start}
                   </Button>
                   <p className="text-sm font-semibold">{t.analyze.live.stepsTitle}</p>
                   <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
-                    {t.analyze.live.steps.map((step) => (
+                    {(tutorMode === 'photo' ? t.analyze.live.photoSteps : t.analyze.live.steps).map((step) => (
                       <li key={step}>{step}</li>
                     ))}
                   </ol>

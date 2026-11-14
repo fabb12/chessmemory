@@ -354,3 +354,37 @@ test('modalità tutor: legge una volta, poi riconosce le mosse senza Claude e pa
   expect(spoken.at(-1)).toContain('Il Bianco minaccia matto');
   expect(JSON.stringify(counter.bodies.at(-1))).toContain('2–3 frasi');
 });
+
+test('modalità tutor con foto: legge solo quando scatti, una foto per mossa', async ({ page }) => {
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  const startGrid = START.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
+  const counter = await mockClaude(page, startGrid, {
+    side_to_move: 'unknown',
+    board_corners: { top_left: { x: 83, y: 83 }, top_right: { x: 917, y: 83 }, bottom_right: { x: 917, y: 917 }, bottom_left: { x: 83, y: 917 } },
+  });
+  await page.addInitScript(FAKE_CAMERA);
+  await openAnalyze(page);
+  await page.getByTestId('camera-start').click();
+  await page.waitForFunction(() => (document.querySelector('[data-testid=camera-video]') as HTMLVideoElement | null)?.videoWidth === 640);
+
+  await page.getByTestId('tutor-mode-photo').click();
+  await expect(page.getByTestId('tutor-mode-photo')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('live-toggle').click();
+  // Avvio: prima foto subito.
+  await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'mine', { timeout: 30_000 });
+  expect(counter.readings).toBe(1);
+
+  // La mossa sulla scacchiera non viene vista finché non si scatta.
+  await page.evaluate(() => ((window as unknown as { __board: string }).__board = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR'));
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('live-history')).toHaveCount(0);
+
+  await page.getByTestId('tutor-shoot').click();
+  await expect(page.getByTestId('live-history')).toContainText('e4', { timeout: 10_000 });
+  await expect(page.getByTestId('live-banner')).toHaveAttribute('data-tone', 'theirs', { timeout: 30_000 });
+
+  // Foto senza mosse nuove: lo dice, senza chiamare Claude.
+  await page.getByTestId('tutor-shoot').click();
+  await expect(page.getByTestId('live-banner')).toContainText('Nessuna mossa nuova');
+  expect(counter.readings).toBe(1);
+});
