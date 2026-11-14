@@ -62,6 +62,34 @@ const CALIBRATION = JSON.stringify({
   savedAt: 0,
 });
 
+/** Voce e microfono finti: la sintesi «parla» all'istante, il riconoscimento ascolta window.__say(testo). */
+const FAKE_VOICE = `
+(() => {
+  window.__said = [];
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    value: {
+      speak: (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); },
+      cancel: () => {},
+      getVoices: () => [],
+      addEventListener: () => {},
+    },
+  });
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  window.SpeechRecognition = class {
+    start() { window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
+    stop() {}
+    abort() {}
+  };
+})();
+`;
+
+async function say(page: Page, text: string) {
+  // Si aspetta che il tutor abbia finito di parlare (e la breve pausa anti-eco).
+  await page.waitForTimeout(1100);
+  await page.evaluate((t) => (window as unknown as { __say: (t: string) => void }).__say(t), text);
+}
+
 async function play(page: Page, placement: string) {
   await page.evaluate(() => ((window as unknown as { __hand: boolean }).__hand = true));
   await page.waitForTimeout(400);
@@ -72,14 +100,16 @@ async function play(page: Page, placement: string) {
   }, placement);
 }
 
-async function openTutor(page: Page, withKey: boolean) {
+async function openTutor(page: Page, withKey: boolean, nextDelay = '0') {
   await page.addInitScript(FAKE_CAMERA);
+  await page.addInitScript(FAKE_VOICE);
   await page.addInitScript(
-    ([calibration, key]) => {
+    ([calibration, key, delay]) => {
       localStorage.setItem('cm.vision.calibration.v1', calibration);
+      localStorage.setItem('cm.tutor.nextDelay', delay);
       if (key) localStorage.setItem('cm.anthropic.apiKey', key);
     },
-    [CALIBRATION, withKey ? `sk-ant-api03-${'x'.repeat(40)}` : ''] as const,
+    [CALIBRATION, withKey ? `sk-ant-api03-${'x'.repeat(40)}` : '', nextDelay] as const,
   );
   await page.goto('./');
   await page.goto('./#/partite/opera-game');
@@ -87,7 +117,9 @@ async function openTutor(page: Page, withKey: boolean) {
   await expect(page.getByTestId('game-tutor')).toBeVisible();
 }
 
-test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e gestisce gli errori', async ({ page }) => {
+const said = (page: Page) => page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+
+test('tutor grandi partite: segue le mosse sulla scacchiera e spiega subito il perché', async ({ page }) => {
   // Spiegazioni di Claude simulate: si contano le richieste per verificare il pre-fetching.
   const asked: string[] = [];
   await page.route('https://api.anthropic.com/**', async (route) => {
@@ -117,9 +149,9 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
 
   // Prima ancora di accendere la fotocamera la coda ha preparato le prime mosse.
   await expect.poll(() => asked.slice(0, 3)).toEqual(['1.e4', '1…e5', '2.Cf3']);
-  // Modalità guidata (predefinita): indica pezzo, case e perché anche per il Bianco.
+  // Modalità guidata (predefinita): quale pezzo, da dove e dove. Il perché arriva dopo la mossa.
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
-  await expect(page.getByTestId('tutor-why-move')).toContainText('Spiegazione preparata per 1.e4.');
+  await expect(page.getByTestId('tutor-explanation')).toHaveCount(0);
   await page.getByTestId('tutor-side').getByRole('button', { name: 'Indovina il Bianco' }).click();
   await expect(page.getByTestId('tutor-next')).toContainText('qual è la mossa di Paul Morphy');
 
@@ -132,18 +164,20 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
   // L'elaborazione dei pixel avviene nel Web Worker della visione, non sul thread dell'interfaccia.
   expect(workers.some((url) => url.includes('cv.worker'))).toBe(true);
 
-  // 1.e4: la mossa del Maestro, trovata al primo colpo; spiegazione già in cache.
+  // 1.e4: la mossa del Maestro, trovata al primo colpo; subito il perché (già in cache).
   await play(page, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Esatto! 1.e4', { timeout: 10_000 });
-  await expect(page.getByTestId('tutor-explanation')).toHaveText('Spiegazione preparata per 1.e4.');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Spiegazione preparata per 1.e4.');
   await expect(page.getByTestId('tutor-score')).toContainText('al primo colpo: 1 su');
 
-  // 1…e5 tocca al Nero: il tutor la indica, con il perché, (freccia sulla griglia AR) e l'utente la esegue.
-  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
-  await expect(page.getByTestId('tutor-why-move')).toContainText('Spiegazione preparata per 1…e5.');
+  // Poi la mossa del Nero, da eseguire su indicazione (freccia sulla griglia AR).
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.', { timeout: 10_000 });
   await expect(page.getByTestId('overlay-arrow')).toHaveAttribute('data-move', 'e7e5');
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
-  await expect(page.getByTestId('tutor-feedback')).toHaveText('1…e5.', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 1…e5.', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Spiegazione preparata per 1…e5.');
+  await expect.poll(async () => (await said(page)).some((t) => t.startsWith('Bene') && t.includes('Spiegazione preparata per'))).toBe(true);
+  await expect(page.getByTestId('tutor-next')).toContainText('qual è la mossa di Paul Morphy', { timeout: 10_000 });
 
   // 2.d4 invece di 2.Cf3: deviazione, giudizio di Stockfish, richiesta di riprovare.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR');
@@ -158,21 +192,23 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
   // 2.Cf3: giusta, ma non al primo colpo.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Giusto, 2.Cf3.', { timeout: 10_000 });
-  await expect(page.getByTestId('tutor-explanation')).toHaveText('Spiegazione preparata per 2.Cf3.');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Spiegazione preparata per 2.Cf3.');
   await expect(page.getByTestId('tutor-score')).toContainText('al primo colpo: 1 su');
 });
 
 test('tutor grandi partite: modalità guidata sulla scacchiera 2D, con le spiegazioni locali', async ({ page }) => {
-  await openTutor(page, false);
+  await openTutor(page, false, '1');
   const click = async (square: string) => page.locator(`[data-square="${square}"]`).first().click();
-  // Senza chiave: istruzione e perché ricavati dalla posizione.
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
-  await expect(page.getByTestId('tutor-why-move')).toContainText('centro');
   await click('e2');
   await click('e4');
-  await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.');
-  // Subito la mossa successiva, per l'altro colore.
-  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+  // Appena fatta la mossa: il perché (senza chiave, ricavato dalla posizione) e la lezione.
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 1.e4.');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('centro');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('La lezione:');
+  await expect(page.getByTestId('tutor-reveal')).toBeVisible();
+  // Dopo la pausa, la mossa successiva per l'altro colore.
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.', { timeout: 6_000 });
   // Mossa sbagliata: si chiede di rimettere il pezzo e si ripete la mossa giusta.
   await click('d7');
   await click('d5');
@@ -180,10 +216,14 @@ test('tutor grandi partite: modalità guidata sulla scacchiera 2D, con le spiega
   await page.getByTestId('tutor-takeback').click();
   await click('e7');
   await click('e5');
-  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.', { timeout: 6_000 });
+  // «Avanti»: la mossa si considera fatta (perché, poi la successiva); «Mossa successiva» salta la pausa.
+  await page.getByTestId('tutor-skip').click();
+  await page.getByTestId('tutor-reveal').click();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da d7 a d6.');
   await page.getByTestId('tutor-skip').click();
   // 2…d6 ha un commento nel PGN: è il perché della mossa.
-  await expect(page.getByTestId('tutor-why-move')).toContainText('Philidor');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Philidor');
 });
 
 test('tutor grandi partite: modalità «Indovina tutto» sulla scacchiera 2D', async ({ page }) => {
@@ -196,44 +236,17 @@ test('tutor grandi partite: modalità «Indovina tutto» sulla scacchiera 2D', a
   await expect(page.getByTestId('tutor-explanation')).toContainText('centro');
 });
 
-/** Voce e microfono finti: la sintesi «parla» all'istante, il riconoscimento ascolta window.__say(testo). */
-const FAKE_VOICE = `
-(() => {
-  window.__said = [];
-  Object.defineProperty(window, 'speechSynthesis', {
-    configurable: true,
-    value: {
-      speak: (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); },
-      cancel: () => {},
-      getVoices: () => [],
-      addEventListener: () => {},
-    },
-  });
-  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
-  window.SpeechRecognition = class {
-    start() { window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
-    stop() {}
-    abort() {}
-  };
-})();
-`;
 
-async function say(page: Page, text: string) {
-  // Si aspetta che il tutor abbia finito di parlare (e la breve pausa anti-eco).
-  await page.waitForTimeout(1100);
-  await page.evaluate((t) => (window as unknown as { __say: (t: string) => void }).__say(t), text);
-}
-
-test('tutor grandi partite: dopo N secondi passa da solo alla mossa successiva', async ({ page }) => {
-  await page.addInitScript(FAKE_VOICE);
-  await page.goto('./#/partite/opera-game/tutor');
+test('tutor grandi partite: senza fotocamera, dopo N secondi passa da solo alla mossa successiva', async ({ page }) => {
+  await openTutor(page, false, '1');
   await page.getByTestId('tutor-auto-seconds').fill('2');
   await page.getByTestId('tutor-repeat').click();
   await expect(page.getByTestId('tutor-countdown')).toBeVisible();
+  // Tempo scaduto: 1.e4 si considera fatta, si spiega, poi la mossa del Nero.
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.', { timeout: 6_000 });
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.', { timeout: 6_000 });
-  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.', { timeout: 6_000 });
-  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
-  expect(said.some((s) => s.startsWith('Il Nero muove il pedone da e7 a e5.'))).toBe(true);
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.', { timeout: 10_000 });
+  expect((await said(page)).some((s) => s.includes('Il Nero muove il pedone da e7 a e5.'))).toBe(true);
   // 0 = mai: il conto alla rovescia sparisce.
   await page.getByTestId('tutor-auto-seconds').fill('0');
   await expect(page.getByTestId('tutor-countdown')).toHaveCount(0);
@@ -262,15 +275,17 @@ test('tutor grandi partite: comandi a voce e domande sulla partita', async ({ pa
       }),
     });
   });
-  await page.addInitScript(FAKE_VOICE);
-  await page.addInitScript(() => localStorage.setItem('cm.anthropic.apiKey', `sk-ant-api03-${'x'.repeat(40)}`));
-  await page.goto('./#/partite/opera-game/tutor');
+  await openTutor(page, true, '60');
   await page.getByTestId('tutor-auto-seconds').fill('0');
   await page.getByTestId('tutor-mic').click();
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
 
+  // «Prossima mossa» con l'indicazione in vista: la mossa si considera fatta e si spiega…
   await say(page, 'prossima mossa');
   await expect(page.getByTestId('tutor-heard')).toContainText('prossima mossa');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Spiegazione di Claude.');
+  // … e durante la spiegazione fa arrivare subito la successiva.
+  await say(page, 'prossima mossa');
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
 
   await say(page, 'perché?');
@@ -281,19 +296,25 @@ test('tutor grandi partite: comandi a voce e domande sulla partita', async ({ pa
   expect(questions[0]).toContain('Mosse giocate finora: 1.e4');
   expect(questions[0]).toContain('chi ha vinto');
 
-  // La domanda si può anche scrivere.
+  // I comandi si possono anche scrivere.
   await page.getByTestId('tutor-question').fill('avanti');
   await page.getByTestId('tutor-ask').click();
-  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('1…e5.');
 });
 
-test('tutor grandi partite: se il tutor avanza da solo, la fotocamera aspetta le mosse in ordine', async ({ page }) => {
+test('tutor grandi partite: con la fotocamera il tempo scaduto ripete l’indicazione e le mosse si recuperano in ordine', async ({ page }) => {
   await openTutor(page, false);
-  await page.getByTestId('tutor-auto-seconds').fill('0');
   await page.getByTestId('tutor-camera-start').click();
   await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
+  // Tempo scaduto con la fotocamera: non si va avanti da soli, si ripete la mossa da fare.
+  await page.getByTestId('tutor-auto-seconds').fill('2');
+  await expect.poll(async () => (await said(page)).some((t) => t.startsWith('Tocca ancora a te.')), { timeout: 8_000 }).toBe(true);
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+
   // «Avanti» due volte: sulla scacchiera vera mancano 1.e4 e 1…e5.
   await page.getByTestId('tutor-skip').click();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
   await page.getByTestId('tutor-skip').click();
   await expect(page.getByTestId('tutor-behind')).toContainText('mancano 2 mosse');
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
@@ -301,7 +322,8 @@ test('tutor grandi partite: se il tutor avanza da solo, la fotocamera aspetta le
   await expect(page.getByTestId('tutor-behind')).toContainText('manca 1 mossa', { timeout: 10_000 });
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('tutor-behind')).toHaveCount(0, { timeout: 10_000 });
-  // Allineati: la mossa indicata viene riconosciuta come sempre.
+  // Allineati: la mossa indicata viene riconosciuta e spiegata subito.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
-  await expect(page.getByTestId('tutor-feedback')).toHaveText('2.Cf3.', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 2.Cf3.', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-explanation')).toContainText('La lezione:');
 });

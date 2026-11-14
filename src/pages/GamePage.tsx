@@ -65,7 +65,7 @@ export function GamePage({ profile }: { profile: Profile }) {
 
   const current = index === 0 ? null : parsed.moves[index - 1]!;
   const fen = current?.fen ?? parsed.startFen;
-  const reason = current ? reasonOf(index === 1 ? parsed.startFen : parsed.moves[index - 2]!.fen, current, parsed.moves[index - 2]) : '';
+  const reason = current ? reasonOf(index === 1 ? parsed.startFen : parsed.moves[index - 2]!.fen, current, parsed.moves[index - 2], parsed) : '';
 
   return (
     <div className="space-y-4" data-testid="game-viewer" data-index={index}>

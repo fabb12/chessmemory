@@ -22,7 +22,7 @@ class TutorCacheDb extends Dexie {
 }
 
 /** Versione del prompt: cambiandola le vecchie spiegazioni vengono ignorate. */
-const PROMPT_VERSION = 1;
+const PROMPT_VERSION = 2;
 
 export function explanationKey(gameId: string, ply: number): string {
   return `${gameId}:${ply}:v${PROMPT_VERSION}`;

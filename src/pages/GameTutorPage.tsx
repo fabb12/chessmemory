@@ -52,26 +52,31 @@ const SPEECH_WAIT_MS = 3500;
 /** Dopo quanti secondi il tutor passa da solo alla mossa successiva (0 = mai). Modificabile nella pagina. */
 const AUTO_SECONDS_KEY = 'cm.tutor.autoSeconds';
 const DEFAULT_AUTO_SECONDS = 30;
+/** Pausa (secondi) tra la spiegazione della mossa appena fatta e l'indicazione della successiva. */
+const NEXT_DELAY_KEY = 'cm.tutor.nextDelay';
+const DEFAULT_NEXT_DELAY = 4;
 /** Dopo che la voce del tutor tace, per un attimo il microfono ignora ciò che sente (la coda della sua frase). */
 const ECHO_GRACE_MS = 900;
 
-function loadAutoSeconds(): number {
+function loadSeconds(key: string, fallback: number): number {
   try {
-    const raw = localStorage.getItem(AUTO_SECONDS_KEY);
+    const raw = localStorage.getItem(key);
     const n = raw === null ? NaN : Number(raw);
-    return Number.isFinite(n) && n >= 0 && n <= 600 ? Math.round(n) : DEFAULT_AUTO_SECONDS;
+    return Number.isFinite(n) && n >= 0 && n <= 600 ? Math.round(n) : fallback;
   } catch {
-    return DEFAULT_AUTO_SECONDS;
+    return fallback;
   }
 }
 
-function saveAutoSeconds(n: number): void {
+function saveSeconds(key: string, n: number): void {
   try {
-    localStorage.setItem(AUTO_SECONDS_KEY, String(n));
+    localStorage.setItem(key, String(n));
   } catch {
     // archivio non disponibile: vale solo per questa visita
   }
 }
+
+const clampSeconds = (n: number) => Math.max(0, Math.min(600, Math.round(Number.isFinite(n) ? n : 0)));
 
 type Feedback = { tone: 'good' | 'bad' | 'info'; text: string } | null;
 type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; value: T } | { status: 'error' };
@@ -221,7 +226,7 @@ export function GameTutorPage() {
       return (
         queueRef.current?.peek(ply) ??
         (game ? getExplanationCache().peek(explanationKey(game.id, ply)) : undefined) ??
-        reasonOf(fenAt(parsed, ply - 1), move, parsed.moves[ply - 2])
+        reasonOf(fenAt(parsed, ply - 1), move, parsed.moves[ply - 2], parsed)
       );
     },
     [parsed, game],
@@ -234,34 +239,62 @@ export function GameTutorPage() {
     queueRef.current?.advance(session.ply + 1);
   }, [parsed, session, side, analysisOf]);
 
-  /**
-   * Dice a voce che cosa fare adesso: la mossa da eseguire (pezzo, casa di partenza
-   * e di arrivo) con il perché, oppure «tocca a te» se la mossa va indovinata.
-   * `prefix` è il riscontro sulla mossa appena fatta. Se la spiegazione di Claude
-   * è in arrivo la si aspetta un poco, poi si legge quella locale.
-   */
   /** Il conto alla rovescia parte solo dopo la prima indicazione (sempre dopo un gesto dell'utente). */
   const [running, setRunning] = useState(false);
+  /**
+   * Fase «insegnante» dopo una mossa: 'explain' = si sta preparando/dicendo il perché,
+   * 'pause' = il perché è stato detto, tra poco si indica la mossa successiva.
+   */
+  const [teaching, setTeaching] = useState<'explain' | 'pause' | null>(null);
+
+  /**
+   * Dice a voce che cosa fare adesso: quale pezzo muovere e da dove a dove
+   * (il perché arriva DOPO, appena la mossa è fatta), oppure «tocca a te» se la
+   * mossa va indovinata. `prefix` precede l'indicazione (es. «Posizione ripristinata»).
+   */
   const announce = useCallback(
     (state: SessionState, prefix = '') => {
       if (!parsed || !game) return;
       setRunning(true);
-      const token = ++speechTokenRef.current;
-      const say = (text: string) => {
-        if (token === speechTokenRef.current) speak(`${prefix} ${text}`.trim(), 'game-tutor');
-      };
+      setTeaching(null);
+      speechTokenRef.current++;
+      const say = (text: string) => speak(`${prefix} ${text}`.trim(), 'game-tutor');
       if (isFinished(parsed, state)) return say(t.gameTutor.finished(t.games.result[game.result] ?? game.result));
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
       if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black));
-      const ply = state.ply + 1;
-      const what = moveInstruction(state.fen, move);
-      const queue = queueRef.current;
-      if (!queue || queue.peek(ply) !== undefined) return say(`${what} ${t.gameTutor.why}: ${explanationFor(ply)}`);
-      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SPEECH_WAIT_MS));
-      void Promise.race([queue.get(ply), timeout]).then(() => say(`${what} ${t.gameTutor.why}: ${explanationFor(ply)}`));
+      say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${moveInstruction(state.fen, move)}`);
     },
-    [parsed, game, explanationFor],
+    [parsed, game],
+  );
+
+  /**
+   * La mossa `state.ply` è appena stata fatta: subito il perché (a voce e scritto),
+   * poi — dopo la pausa — l'indicazione della mossa successiva. Se la spiegazione
+   * di Claude è in arrivo la si aspetta un poco, poi si usa quella locale.
+   */
+  const teach = useCallback(
+    (state: SessionState, head: string, tone: 'good' | 'info' = 'good') => {
+      if (!parsed) return;
+      const ply = state.ply;
+      setRunning(true);
+      setFeedback({ tone, text: head });
+      setExplanation({ ply, text: explanationFor(ply) });
+      setTeaching('explain');
+      const token = ++speechTokenRef.current;
+      const say = () => {
+        if (token !== speechTokenRef.current) return;
+        const text = explanationFor(ply);
+        setExplanation({ ply, text });
+        setTeaching('pause');
+        speak(`${head} ${text}`, 'game-tutor');
+      };
+      const queue = queueRef.current;
+      if (!queue || queue.peek(ply) !== undefined) return say();
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SPEECH_WAIT_MS));
+      void Promise.race([queue.get(ply), timeout]).then(say);
+    },
+    [parsed, explanationFor],
   );
 
   const setSide = (next: UserSide) => {
@@ -271,7 +304,7 @@ export function GameTutorPage() {
   };
 
   // ───── Avanzamento automatico: dopo N secondi il tutor passa da solo alla mossa successiva ─────
-  const [autoSeconds, setAutoSecondsState] = useState(loadAutoSeconds);
+  const [autoSeconds, setAutoSecondsState] = useState(() => loadSeconds(AUTO_SECONDS_KEY, DEFAULT_AUTO_SECONDS));
   const [remaining, setRemaining] = useState(autoSeconds);
   const [paused, setPaused] = useState(false);
   const speaking = useSpeakingId() === 'game-tutor';
@@ -281,10 +314,10 @@ export function GameTutorPage() {
   }, [speaking]);
 
   const setAutoSeconds = (n: number) => {
-    const value = Math.max(0, Math.min(600, Math.round(Number.isFinite(n) ? n : 0)));
+    const value = clampSeconds(n);
     setAutoSecondsState(value);
     setRemaining(value);
-    saveAutoSeconds(value);
+    saveSeconds(AUTO_SECONDS_KEY, value);
   };
 
   /**
@@ -304,20 +337,21 @@ export function GameTutorPage() {
     setShowHint(false);
     setJudgement({ status: 'idle' });
     setWhy({ status: 'idle' });
-    setRunning(true);
-    if (guess) {
-      // La mossa da indovinare non è stata trovata: si rivela, con il perché.
-      const head = t.gameTutor.wasMove(moveLabel(move));
-      const text = explanationFor(next.ply);
-      setFeedback({ tone: 'info', text: head });
-      setExplanation({ ply: next.ply, text });
-      announce(next, `${head} ${text}`);
-    } else {
-      setFeedback({ tone: 'info', text: t.gameTutor.played(moveLabel(move)) });
-      setExplanation(null);
-      announce(next);
-    }
-  }, [parsed, setSession, setPhysicalPly, explanationFor, announce]);
+    // La mossa si considera fatta: subito il perché, poi la successiva.
+    teach(next, guess ? t.gameTutor.wasMove(moveLabel(move)) : t.gameTutor.played(moveLabel(move)), 'info');
+  }, [parsed, setSession, setPhysicalPly, teach]);
+
+  /** Fine della pausa dopo la spiegazione: si indica la mossa successiva. */
+  const revealNext = useCallback(() => {
+    if (sessionRef.current) announce(sessionRef.current);
+  }, [announce]);
+
+  const [nextDelay, setNextDelayState] = useState(() => loadSeconds(NEXT_DELAY_KEY, DEFAULT_NEXT_DELAY));
+  const setNextDelay = (n: number) => {
+    const value = clampSeconds(n);
+    setNextDelayState(value);
+    saveSeconds(NEXT_DELAY_KEY, value);
+  };
 
   // Nuova posizione (o nuova durata): il conto riparte da capo.
   useEffect(() => {
@@ -390,7 +424,10 @@ export function GameTutorPage() {
     const command = parseCommand(text);
     if (!command) return;
     setRunning(true);
-    if (command.kind === 'next') advance();
+    if (command.kind === 'next') {
+      if (teaching) revealNext();
+      else advance();
+    }
     else if (command.kind === 'why') answerWhy();
     else if (command.kind === 'repeat' && sessionRef.current) announce(sessionRef.current);
     else if (command.kind === 'back' && parsed && sessionRef.current) jumpRef.current(undoMove(parsed, sessionRef.current));
@@ -431,9 +468,30 @@ export function GameTutorPage() {
   // non mentre il tutor parla, la mano è sulla scacchiera o si aspetta una risposta.
   const finishedNow = parsed && session ? isFinished(parsed, session) : true;
   const handBusy = status === 'moving' || status === 'settling';
-  const ticking = running && !paused && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && answer?.phase.status !== 'busy';
-  const advanceRef = useRef(advance);
-  advanceRef.current = advance;
+  const answering = answer?.phase.status === 'busy';
+  const ticking = running && !paused && !teaching && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && !answering;
+  /**
+   * Tempo scaduto senza che la mossa sia stata fatta. Con la fotocamera il tutor segue
+   * la scacchiera vera: non va avanti da solo, ripete l'indicazione. Senza fotocamera
+   * la mossa si considera fatta (perché, pausa, mossa successiva).
+   */
+  const onTimeout = () => {
+    const s = sessionRef.current;
+    if (!s) return;
+    if (trackerRef.current) {
+      setRemaining(autoSeconds);
+      announce(s, t.gameTutor.reminder);
+    } else advance();
+  };
+  const advanceRef = useRef(onTimeout);
+  advanceRef.current = onTimeout;
+
+  // Dopo il perché: finita la voce e la pausa, la mossa successiva.
+  useEffect(() => {
+    if (teaching !== 'pause' || speaking || answering || paused) return;
+    const timer = setTimeout(revealNext, nextDelay * 1000);
+    return () => clearTimeout(timer);
+  }, [teaching, speaking, answering, paused, nextDelay, revealNext]);
   useEffect(() => {
     if (!ticking) return;
     const timer = setInterval(() => {
@@ -471,22 +529,11 @@ export function GameTutorPage() {
       setSession(state);
       commitBoard(state);
       if (outcome.kind === 'match') {
-        const ply = state.ply;
         const label = moveLabel(outcome.move);
         setJudgement({ status: 'idle' });
         setShowHint(false);
-        if (!guess) {
-          // Mossa eseguita su indicazione: il perché è già stato detto, si passa alla prossima.
-          setFeedback({ tone: 'good', text: t.gameTutor.played(label) });
-          setExplanation(null);
-          announce(state, t.gameTutor.done);
-          return;
-        }
-        const head = outcome.firstTry ? t.gameTutor.correct(label) : t.gameTutor.correctLater(label);
-        const text = explanationFor(ply);
-        setFeedback({ tone: 'good', text: head });
-        setExplanation({ ply, text });
-        announce(state, `${head} ${text}`);
+        // Mossa vista: subito il perché, poi (dopo la pausa) la mossa successiva.
+        teach(state, !guess ? t.gameTutor.wellDone(label) : outcome.firstTry ? t.gameTutor.correct(label) : t.gameTutor.correctLater(label));
         return;
       }
       if (outcome.kind === 'deviation') {
@@ -524,7 +571,7 @@ export function GameTutorPage() {
           .catch(() => setJudgement({ status: 'error' }));
       }
     },
-    [parsed, game, side, setSession, explanationFor, analysisOf, announce],
+    [parsed, game, side, setSession, commitBoard, analysisOf, announce, teach],
   );
   const applyRef = useRef(applyTransition);
   applyRef.current = applyTransition;
@@ -587,6 +634,8 @@ export function GameTutorPage() {
         fen: () => (behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
         extraTransitions: () => (sessionRef.current && !behind() ? extraTransitions(sessionRef.current) : []),
         preferred: () => (behind() ? pendingUci() : sessionRef.current ? preferredTransition(parsed, sessionRef.current) : null),
+        // La mossa indicata (non da indovinare) si riconosce con soglie più tolleranti.
+        lenient: () => behind() || (sessionRef.current !== null && !isGuessTurn(parsed, sessionRef.current, sideRef.current)),
       },
       {
         onStatus: setStatus,
@@ -599,11 +648,16 @@ export function GameTutorPage() {
             if (result.kind === 'match' && pending && result.transition.uci && sameMove(result.transition.uci, pending.uci)) {
               setPhysicalPly(physicalRef.current + 1);
               trackerRef.current?.commit(fenAt(parsed, physicalRef.current));
+              setFeedback({ tone: 'good', text: t.gameTutor.caughtUp(moveLabel(pending)) });
             }
             return;
           }
           if (result.kind === 'match') applyRef.current(result.transition);
-          else if (result.kind === 'unsure') setUnsure(result.ranked.slice(0, 3));
+          else if (result.kind === 'unsure') {
+            setUnsure(result.ranked.slice(0, 3));
+            speechTokenRef.current++;
+            speak(t.gameTutor.unsureSpoken, 'game-tutor');
+          }
         },
       },
     );
@@ -679,18 +733,18 @@ export function GameTutorPage() {
   const fen = boardFen(session);
   const lastMove = session.ply > 0 ? parsed.moves[session.ply - 1]! : null;
   // Freccia: sempre per le mosse da eseguire su indicazione; per quelle da indovinare solo come suggerimento.
-  const hintMove = expected && (!guess || showHint) ? expected : null;
+  // Durante la spiegazione della mossa appena fatta la successiva non si mostra ancora.
+  const hintMove = expected && !teaching && (!guess || showHint) ? expected : null;
   const overlayArrows: OverlayArrow[] = hintMove && !session.deviation ? [{ from: hintMove.from, to: hintMove.to, tone: 'hint' }] : [];
   const boardArrows: BoardArrow[] = hintMove && !session.deviation ? [{ from: hintMove.from, to: hintMove.to, tone: 'teach' }] : [];
   if (session.deviation) boardArrows.push({ from: session.deviation.uci.slice(0, 2), to: session.deviation.uci.slice(2, 4), tone: 'bad' });
   const orientation = side === 'b' ? 'black' : 'white';
-  // Prossima mossa: pezzo da muovere, case e perché (per le mosse da eseguire, o col suggerimento).
+  // Prossima mossa: pezzo da muovere e case (il perché arriva dopo che è stata fatta).
   const next =
-    expected && !finished && !session.deviation
+    expected && !finished && !session.deviation && !teaching
       ? {
           heading: t.gameTutor.moveNumber(expected.moveNumber, t.sides[expected.color], playerOf(expected.color)),
           what: moveInstruction(session.fen, expected),
-          why: explanationFor(session.ply + 1),
         }
       : null;
 
@@ -786,13 +840,22 @@ export function GameTutorPage() {
           </p>
         )}
         {explanation && !session.deviation && (
-          <p className="text-base" data-testid="tutor-explanation">
+          <p className="text-lg" data-testid="tutor-explanation">
+            <span className="font-semibold">{t.gameTutor.why}: </span>
             {explanation.text}
           </p>
         )}
+        {teaching && (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted">{t.gameTutor.nextSoon}</p>
+            <Button variant="secondary" size="sm" icon={<Icon name="arrowRight" size={16} />} onClick={revealNext} data-testid="tutor-reveal">
+              {t.gameTutor.nextNow}
+            </Button>
+          </div>
+        )}
         {judgement.status === 'busy' && <p className="text-sm text-muted">{t.gameTutor.evaluating}</p>}
 
-        {finished && (
+        {finished && !teaching && (
           <p className="text-lg font-semibold" data-testid="tutor-next">
             {t.gameTutor.finished(t.games.result[game.result] ?? game.result)}
           </p>
@@ -811,17 +874,11 @@ export function GameTutorPage() {
               </p>
             )}
             {guess && <p className="text-lg font-semibold">{next.what}</p>}
-            {!guess && next.why && (
-              <p className="text-base" data-testid="tutor-why-move">
-                <span className="font-semibold">{t.gameTutor.why}: </span>
-                {next.why}
-              </p>
-            )}
           </div>
         )}
 
         <div className="flex flex-wrap gap-2">
-          {!finished && !session.deviation && (
+          {!finished && !session.deviation && !teaching && (
             <Button variant="secondary" size="sm" icon={<Icon name="speaker" size={16} />} onClick={() => announce(session)} data-testid="tutor-repeat">
               {t.gameTutor.repeat}
             </Button>
@@ -841,13 +898,13 @@ export function GameTutorPage() {
               {t.gameTutor.restored}
             </Button>
           )}
-          {!finished && !session.deviation && (
+          {!finished && !session.deviation && !teaching && (
             <Button variant="secondary" size="sm" icon={<Icon name="arrowRight" size={16} />} onClick={advance} data-testid="tutor-skip">
               {t.gameTutor.skip}
             </Button>
           )}
         </div>
-        {running && autoSeconds > 0 && !finished && !session.deviation && (
+        {running && autoSeconds > 0 && !finished && !session.deviation && !teaching && (
           <div className="flex items-center gap-3">
             <p className="text-sm font-semibold tabular-nums" data-testid="tutor-countdown" data-remaining={remaining}>
               {t.gameTutor.countdown(remaining)}
@@ -896,6 +953,19 @@ export function GameTutorPage() {
               onChange={(e) => setAutoSeconds(Number(e.target.value))}
               className="min-h-10 w-20 rounded-xl border border-line bg-surface px-2 text-center"
               data-testid="tutor-auto-seconds"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            {t.gameTutor.nextDelayLabel}
+            <input
+              type="number"
+              min={0}
+              max={60}
+              step={1}
+              value={nextDelay}
+              onChange={(e) => setNextDelay(Number(e.target.value))}
+              className="min-h-10 w-20 rounded-xl border border-line bg-surface px-2 text-center"
+              data-testid="tutor-next-delay"
             />
           </label>
         </div>
