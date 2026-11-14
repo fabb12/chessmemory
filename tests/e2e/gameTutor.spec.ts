@@ -87,7 +87,11 @@ const FAKE_VOICE = `
   });
   window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   window.SpeechRecognition = class {
-    start() { this.onstart && this.onstart(); window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
+    start() {
+      this.onstart && this.onstart();
+      // Trascrizione provvisoria (frase non ancora conclusa).
+      window.__interim = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: false })] });
+      window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
     stop() {}
     abort() {}
   };
@@ -420,13 +424,48 @@ test('tutor grandi partite: con la fotocamera, dopo un salto si sistemano i pezz
   await say(page, 'vai alla seconda mossa');
   await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 2 di 33');
   await expect(page.getByTestId('tutor-arrange')).toBeVisible();
-  // L'utente sistema i pezzi come sullo schermo (1.e4 e5) e dice «pronto».
+  // L'utente sistema i pezzi come sullo schermo (1.e4 e5) e toglie la mano: si riparte da soli.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
-  await page.waitForTimeout(800);
-  await say(page, 'pronto');
-  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0, { timeout: 10_000 });
+  await expect.poll(async () => (await said(page)).some((t) => t.includes('Perfetto, riprendo da qui.'))).toBe(true);
   await page.waitForTimeout(1500);
   // Da qui la fotocamera segue di nuovo le mosse: 2.Cf3.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 2.Cf3.', { timeout: 10_000 });
+});
+
+test('tutor grandi partite: si interrompe a metà frase, senza ascoltare la propria eco', async ({ page }) => {
+  await openTutor(page, false, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-name-input').fill('Anna');
+  await page.getByTestId('tutor-name-save').click();
+  await page.getByTestId('tutor-mic').click();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  const cancels = () => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  const interim = (text: string) => page.evaluate((t) => (window as unknown as { __interim: (t: string) => void }).__interim(t), text);
+
+  // «vai alla quinta mossa» detto sopra la voce del tutor, a frase non ancora finita.
+  await page.getByTestId('tutor-repeat').click();
+  await page.waitForTimeout(100);
+  await interim('il bianco muove il pedone vai alla quinta mossa');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 8 di 33');
+  // La frase finale con lo stesso comando non lo ripete.
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('il bianco muove il pedone vai alla quinta mossa'));
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 8 di 33');
+
+  // Ora il tutor sta dicendo «Siamo alla mossa 5 del Bianco…»: la sua eco non è un comando.
+  expect((await said(page)).at(-1)).toContain('Siamo alla mossa 5 del Bianco.');
+  const before = await cancels();
+  await interim('siamo alla mossa 5 del bianco');
+  await page.waitForTimeout(300);
+  expect(await cancels()).toBe(before);
+  // «zitta» a metà frase la ferma subito; «vai alla prossima» va avanti.
+  await interim('siamo alla mossa 5 del bianco zitta');
+  await expect.poll(cancels).toBeGreaterThan(before);
+  await page.getByTestId('tutor-repeat').click();
+  await page.waitForTimeout(100);
+  await interim('il bianco cattura vai alla prossima');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 9 di 33');
 });

@@ -36,7 +36,7 @@ import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
 import { BoardTracker, type TrackerStatus } from '../features/vision/tracker';
-import { isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener } from '../features/voice/listen';
+import { commandAtEnd, isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener, type VoiceCommand } from '../features/voice/listen';
 import { currentSpeakingId, currentSpeechText, speak, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Uci } from '../types';
@@ -56,6 +56,8 @@ const NEXT_DELAY_KEY = 'cm.tutor.nextDelay';
 const DEFAULT_NEXT_DELAY = 4;
 /** Dopo che la voce del tutor tace, per un attimo il microfono ignora ciò che sente (la coda della sua frase). */
 const ECHO_GRACE_MS = 900;
+/** Dopo un salto: la scacchiera ferma per questo tempo dopo che la mano l'ha toccata = pezzi sistemati. */
+const ARRANGE_SETTLE_MS = 4000;
 
 function loadSeconds(key: string, fallback: number): number {
   try {
@@ -473,13 +475,42 @@ export function GameTutorPage() {
     if (speaking) recentSpokenRef.current = currentSpeechText();
   }, [speaking]);
 
+  /** Comando già eseguito durante la frase (dalla trascrizione provvisoria): la versione finale non lo ripete. */
+  const bargeRef = useRef<{ kind: string; at: number } | null>(null);
+  const isTalking = () => currentSpeakingId() !== null || Date.now() - lastSpokeRef.current < ECHO_GRACE_MS;
+  /** Un comando detto mentre il tutor parla, se non è l'eco della sua voce. */
+  const bargeIn = (text: string) => {
+    const found = commandAtEnd(text);
+    if (!found || isEcho(found.phrase, currentSpeechText() || recentSpokenRef.current)) return null;
+    return found;
+  };
+
+  /** Trascrizione provvisoria: mentre il tutor parla basta dire «zitta» o «prossima» per interromperlo subito. */
+  const onInterim = (text: string) => {
+    if (!isTalking()) return;
+    const found = bargeIn(text);
+    if (!found) return;
+    bargeRef.current = { kind: found.command.kind, at: Date.now() };
+    speechTokenRef.current++;
+    stopSpeaking();
+    setHeard(found.phrase);
+    runCommand(found.command);
+  };
+  const onInterimRef = useRef(onInterim);
+  onInterimRef.current = onInterim;
+
   const onHeard = (text: string) => {
-    const command = parseCommand(text);
-    const talking = currentSpeakingId() !== null || Date.now() - lastSpokeRef.current < ECHO_GRACE_MS;
-    if (talking) {
+    const barge = bargeRef.current;
+    bargeRef.current = null;
+    // Già eseguito mentre si parlava: la frase finale non lo ripete.
+    if (barge && Date.now() - barge.at < 6000 && commandAtEnd(text)?.command.kind === barge.kind) return;
+    let command = parseCommand(text);
+    if (isTalking()) {
       // Mentre il tutor parla si può interromperlo, ma solo con un comando breve
-      // («basta», «prossima mossa», «perché»…) che non sia l'eco della sua stessa voce.
-      if (!command || command.kind === 'question' || isEcho(text, currentSpeechText() || recentSpokenRef.current)) return;
+      // («zitta», «prossima», «vai alla quinta mossa»…) che non sia l'eco della sua stessa voce.
+      const found = bargeIn(text);
+      if (!found) return;
+      command = found.command;
       speechTokenRef.current++;
       stopSpeaking();
     }
@@ -496,7 +527,10 @@ export function GameTutorPage() {
       // Un comando o una domanda: il nome si potrà dire (o scrivere) più tardi.
       if (command) awaitingNameRef.current = false;
     }
-    if (!command) return;
+    if (command) runCommand(command);
+  };
+
+  const runCommand = (command: VoiceCommand) => {
     setRunning(true);
     if (command.kind === 'stop') return;
     if (command.kind === 'next') {
@@ -536,6 +570,7 @@ export function GameTutorPage() {
     setMicError(null);
     const listener = new VoiceListener({
       onHeard: (text) => onHeardRef.current(text),
+      onInterim: (text) => onInterimRef.current(text),
       onError: () => {
         saveText(MIC_KEY, '');
         setListening(false);
@@ -578,6 +613,19 @@ export function GameTutorPage() {
     void awake.acquire();
     return () => awake.release();
   }, [listening, stream]);
+
+  // Pezzi da sistemare dopo un salto: appena la mano ha toccato la scacchiera e poi
+  // tutto resta fermo per qualche secondo, si riparte da soli (o con «pronto»).
+  const touchedRef = useRef(false);
+  useEffect(() => {
+    if (!arranging) touchedRef.current = false;
+    else if (status === 'moving' || status === 'settling') touchedRef.current = true;
+  }, [arranging, status]);
+  useEffect(() => {
+    if (!arranging || status !== 'stable' || !touchedRef.current) return;
+    const timer = setTimeout(() => arrangedRef.current(), ARRANGE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [arranging, status]);
 
   // Il conto alla rovescia scorre solo quando nessuno sta facendo niente:
   // non mentre il tutor parla, la mano è sulla scacchiera o si aspetta una risposta.
@@ -748,7 +796,8 @@ export function GameTutorPage() {
       {
         video: () => videoRef.current,
         corners: () => cornersRef.current,
-        fen: () => (arrangingRef.current ? null : behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
+        paused: () => arrangingRef.current,
+        fen: () => (behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
         extraTransitions: () => (sessionRef.current && !behind() ? extraTransitions(sessionRef.current) : []),
         preferred: () => (behind() ? pendingUci() : sessionRef.current ? preferredTransition(parsed, sessionRef.current) : null),
         // La mossa indicata (non da indovinare) si riconosce con soglie più tolleranti.
@@ -930,8 +979,10 @@ export function GameTutorPage() {
 
   /** La scacchiera vera è stata sistemata: la fotocamera riparte da questa posizione. */
   const boardArranged = () => {
+    if (!arrangingRef.current) return;
     setArranging(false);
     trackerRef.current?.resync();
+    announce(session, t.gameTutor.resumed);
   };
   arrangedRef.current = boardArranged;
 
