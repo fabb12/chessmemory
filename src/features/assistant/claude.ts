@@ -715,6 +715,8 @@ export interface GameQuestionInput {
   /** Mossa che il tutor ha appena indicato, con la sua spiegazione. */
   current: string;
   question: string;
+  /** Nome dell'allievo, se lo ha detto: la risposta lo chiama per nome. */
+  student?: string;
   /** Domande e risposte precedenti, per le domande di seguito («e se invece…?»). */
   history: { question: string; answer: string }[];
 }
@@ -733,7 +735,7 @@ export async function askAboutGame(input: GameQuestionInput): Promise<string> {
 Introduzione: ${input.intro}
 Mosse giocate finora: ${input.played || '(nessuna, posizione iniziale)'}
 Posizione attuale (FEN): ${input.fen}
-Mossa indicata adesso: ${input.current}`;
+Mossa indicata adesso: ${input.current}${input.student ? `\nL'allievo si chiama ${input.student}: chiamalo per nome.` : ''}`;
     const messages: { role: 'user' | 'assistant'; content: string }[] = [];
     input.history.slice(-3).forEach((h, i) => {
       messages.push({ role: 'user', content: i === 0 ? `${context}\n\nDomanda: ${h.question}` : h.question });

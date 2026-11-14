@@ -56,8 +56,6 @@ const NEXT_DELAY_KEY = 'cm.tutor.nextDelay';
 const DEFAULT_NEXT_DELAY = 4;
 /** Dopo che la voce del tutor tace, per un attimo il microfono ignora ciò che sente (la coda della sua frase). */
 const ECHO_GRACE_MS = 900;
-/** Dopo un salto: la scacchiera ferma per questo tempo dopo che la mano l'ha toccata = pezzi sistemati. */
-const ARRANGE_SETTLE_MS = 4000;
 
 function loadSeconds(key: string, fallback: number): number {
   try {
@@ -188,6 +186,9 @@ export function GameTutorPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(name);
   const greetedRef = useRef(false);
+  /** Il tutor chiama spesso l'allievo per nome, alternando le frasi per non suonare ripetitivo. */
+  const nameTurnRef = useRef(0);
+  const nextOf = <T,>(list: readonly T[]): T => list[nameTurnRef.current++ % list.length]!;
   const setName = useCallback((value: string) => {
     const clean = value.trim().slice(0, 40);
     nameRef.current = clean;
@@ -216,21 +217,12 @@ export function GameTutorPage() {
   const [detecting, setDetecting] = useState(false);
   const trackerRef = useRef<BoardTracker | null>(null);
   /**
-   * Semimosse già eseguite davvero sulla scacchiera inquadrata. Può restare indietro
-   * rispetto alla partita quando il tutor avanza da solo (tempo scaduto, «prossima mossa»):
-   * la fotocamera allora aspetta, in ordine, le mosse ancora da eseguire.
+   * Semimossa che c'è davvero sulla scacchiera inquadrata. Dopo un salto («salta»,
+   * «vai alla quinta mossa», frecce, tempo scaduto) è diversa da quella della partita:
+   * la fotocamera allora riconosce sia la posizione di arrivo (pezzi sistemati a mano
+   * o più mosse insieme), sia le mosse mancanti una alla volta.
    */
   const physicalRef = useRef(0);
-  /**
-   * Dopo un salto (vai alla mossa 5, inizio, fine…) la scacchiera vera va sistemata
-   * come quella dello schermo: finché l'utente non dice «pronto» la fotocamera non legge.
-   */
-  const [arranging, setArrangingState] = useState(false);
-  const arrangingRef = useRef(false);
-  const setArranging = useCallback((on: boolean) => {
-    arrangingRef.current = on;
-    setArrangingState(on);
-  }, []);
   const [physicalPly, setPhysicalPlyState] = useState(0);
   const setPhysicalPly = useCallback((ply: number) => {
     physicalRef.current = ply;
@@ -367,7 +359,11 @@ export function GameTutorPage() {
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
       if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, who));
-      say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${moveInstruction(state.fen, move)}`);
+      const what = moveInstruction(state.fen, move);
+      // Quasi sempre il nome, con frasi che si alternano.
+      const call = who ? nextOf(t.gameTutor.callName)(who) : '';
+      const instruction = call.endsWith(', ') ? what.charAt(0).toLowerCase() + what.slice(1) : what;
+      say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${call}${instruction}`);
     },
     [parsed, game],
   );
@@ -480,7 +476,7 @@ export function GameTutorPage() {
     const text = ply > 0 ? explanationFor(ply) : t.gameTutor.whyNothing;
     speechTokenRef.current++;
     setAnswer({ question: t.gameTutor.whyQuestion, phase: { status: 'done', value: text } });
-    speak(text, 'game-tutor');
+    speak(nameRef.current ? `${t.gameTutor.whyTo(nameRef.current)} ${text}` : text, 'game-tutor');
   }, [parsed, explanationFor]);
 
   /** Domanda libera sulla partita: risponde Claude, con il contesto della posizione. */
@@ -511,6 +507,7 @@ export function GameTutorPage() {
           fen: s.fen,
           current,
           question: text,
+          student: nameRef.current,
           history: historyRef.current,
         });
         historyRef.current = [...historyRef.current, { question: text, answer: reply }].slice(-3);
@@ -632,6 +629,7 @@ export function GameTutorPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const arrangedRef = useRef<() => void>(() => undefined);
+  const alignedRef = useRef<() => void>(() => undefined);
 
   const startListening = () => {
     setMicError(null);
@@ -681,25 +679,13 @@ export function GameTutorPage() {
     return () => awake.release();
   }, [listening, stream]);
 
-  // Pezzi da sistemare dopo un salto: appena la mano ha toccato la scacchiera e poi
-  // tutto resta fermo per qualche secondo, si riparte da soli (o con «pronto»).
-  const touchedRef = useRef(false);
-  useEffect(() => {
-    if (!arranging) touchedRef.current = false;
-    else if (status === 'moving' || status === 'settling') touchedRef.current = true;
-  }, [arranging, status]);
-  useEffect(() => {
-    if (!arranging || status !== 'stable' || !touchedRef.current) return;
-    const timer = setTimeout(() => arrangedRef.current(), ARRANGE_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [arranging, status]);
-
   // Il conto alla rovescia scorre solo quando nessuno sta facendo niente:
   // non mentre il tutor parla, la mano è sulla scacchiera o si aspetta una risposta.
   const finishedNow = parsed && session ? isFinished(parsed, session) : true;
   const handBusy = status === 'moving' || status === 'settling';
   const answering = answer?.phase.status === 'busy';
-  const ticking = running && !paused && !teaching && !arranging && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && !answering;
+  const outOfSyncNow = Boolean(stream) && !!session && !session.deviation && physicalPly !== session.ply;
+  const ticking = running && !paused && !teaching && !outOfSyncNow && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && !answering;
   /**
    * Tempo scaduto senza che la mossa sia stata fatta. Con la fotocamera il tutor segue
    * la scacchiera vera: non va avanti da solo, ripete l'indicazione. Senza fotocamera
@@ -764,7 +750,10 @@ export function GameTutorPage() {
         setShowHint(false);
         // Mossa vista: subito il perché, poi (dopo la pausa) la mossa successiva.
         const who = nameRef.current;
-        teach(state, !guess ? t.gameTutor.wellDone(label, who) : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label));
+        teach(
+          state,
+          !guess ? t.gameTutor.wellDone(label, who, who ? nextOf(t.gameTutor.praise)(who) : '') : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label),
+        );
         return;
       }
       if (outcome.kind === 'deviation') {
@@ -850,38 +839,45 @@ export function GameTutorPage() {
     if (!stream || !parsed) return;
     // Alla (ri)accensione della fotocamera la scacchiera vera si considera allineata alla partita.
     if (sessionRef.current) setPhysicalPly(sessionRef.current.ply);
-    setArranging(false);
-    const behind = () => {
+    /** La scacchiera vera è in un'altra posizione della partita. */
+    const outOfSync = () => {
       const s = sessionRef.current;
-      return Boolean(s && !s.deviation && physicalRef.current < s.ply);
+      return Boolean(s && !s.deviation && physicalRef.current !== s.ply);
     };
-    const pendingUci = () => {
-      const uci = parsed.moves[physicalRef.current]?.uci;
-      return uci ? (uci.length > 4 ? `${uci.slice(0, 4)}q` : uci) : null;
-    };
+    /** «La scacchiera vera ora è nella posizione dello schermo», da qualunque posizione si parta. */
+    const alignTransition = (): Transition[] => (sessionRef.current ? [{ id: 'align', fen: sessionRef.current.fen, kind: 'takeback' }] : []);
     const tracker = new BoardTracker(
       {
         video: () => videoRef.current,
         corners: () => cornersRef.current,
-        paused: () => arrangingRef.current,
-        fen: () => (behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
-        extraTransitions: () => (sessionRef.current && !behind() ? extraTransitions(sessionRef.current) : []),
-        preferred: () => (behind() ? pendingUci() : sessionRef.current ? preferredTransition(parsed, sessionRef.current) : null),
-        // La mossa indicata (non da indovinare) si riconosce con soglie più tolleranti.
-        lenient: () => behind() || (sessionRef.current !== null && !isGuessTurn(parsed, sessionRef.current, sideRef.current)),
+        fen: () => (outOfSync() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
+        extraTransitions: () => (outOfSync() ? alignTransition() : sessionRef.current ? extraTransitions(sessionRef.current) : []),
+        preferred: () => (outOfSync() ? 'align' : sessionRef.current ? preferredTransition(parsed, sessionRef.current) : null),
+        // La mossa indicata (non da indovinare) e l'allineamento si riconoscono con soglie più tolleranti.
+        lenient: () => outOfSync() || (sessionRef.current !== null && !isGuessTurn(parsed, sessionRef.current, sideRef.current)),
       },
       {
         onStatus: setStatus,
         onView: (v) => setViewState(v),
         onPreview: setPreview,
         onResult: (result) => {
-          if (behind()) {
-            // Recupero: si aspettano le mosse già annunciate, nell'ordine della partita.
-            const pending = parsed.moves[physicalRef.current];
-            if (result.kind === 'match' && pending && result.transition.uci && sameMove(result.transition.uci, pending.uci)) {
+          if (outOfSync()) {
+            if (result.kind !== 'match') return; // pezzi ancora da sistemare: si aspetta
+            const s = sessionRef.current!;
+            if (result.transition.id === 'align') {
+              // La scacchiera vera è arrivata alla posizione dello schermo, comunque ci sia arrivata.
+              setPhysicalPly(s.ply);
+              trackerRef.current?.commit(s.fen);
+              alignedRef.current();
+              return;
+            }
+            // Una delle mosse mancanti, eseguita in ordine.
+            const pending = physicalRef.current < s.ply ? parsed.moves[physicalRef.current] : undefined;
+            if (pending && result.transition.uci && sameMove(result.transition.uci, pending.uci)) {
               setPhysicalPly(physicalRef.current + 1);
               trackerRef.current?.commit(fenAt(parsed, physicalRef.current));
-              setFeedback({ tone: 'good', text: t.gameTutor.caughtUp(moveLabel(pending)) });
+              if (physicalRef.current === s.ply) alignedRef.current();
+              else setFeedback({ tone: 'good', text: t.gameTutor.caughtUp(moveLabel(pending)) });
             }
             return;
           }
@@ -901,10 +897,9 @@ export function GameTutorPage() {
       trackerRef.current = null;
       // Fotocamera spenta: niente più pezzi da sistemare né mosse arretrate da recuperare,
       // tutto continua sulla scacchiera dello schermo.
-      setArranging(false);
       if (sessionRef.current) setPhysicalPly(sessionRef.current.ply);
     };
-  }, [stream, parsed, setPhysicalPly, setArranging]);
+  }, [stream, parsed, setPhysicalPly]);
 
   const onVideoReady = (video: HTMLVideoElement) => {
     if (!video.videoWidth || !video.videoHeight) return;
@@ -1030,10 +1025,9 @@ export function GameTutorPage() {
     setJudgement({ status: 'idle' });
     setWhy({ status: 'idle' });
     setShowHint(false);
+    // Con la fotocamera la scacchiera vera resta dov'è finché non la si sistema (o si fanno le mosse).
     if (trackerRef.current) {
-      setPhysicalPly(target.ply);
-      setArranging(true);
-      prefix = `${prefix} ${t.gameTutor.arrange}`.trim();
+      if (physicalRef.current !== target.ply) prefix = `${prefix} ${t.gameTutor.arrange(nameRef.current)}`.trim();
     } else commitBoard(target);
     announce(target, prefix);
   };
@@ -1048,14 +1042,21 @@ export function GameTutorPage() {
   };
   goToRef.current = goTo;
 
-  /** La scacchiera vera è stata sistemata: la fotocamera riparte da questa posizione. */
+  /** «Pronto»: la scacchiera vera è come quella dello schermo, la fotocamera riparte da qui. */
   const boardArranged = () => {
-    if (!arrangingRef.current) return;
-    setArranging(false);
-    trackerRef.current?.resync();
-    announce(session, t.gameTutor.resumed);
+    if (!trackerRef.current || physicalRef.current === session.ply) return;
+    setPhysicalPly(session.ply);
+    trackerRef.current.resync();
+    onAligned();
   };
   arrangedRef.current = boardArranged;
+
+  /** Scacchiera vera di nuovo allineata alla partita (vista dalla fotocamera o con «pronto»). */
+  const onAligned = () => {
+    setFeedback({ tone: 'good', text: t.gameTutor.aligned(nameRef.current) });
+    if (!teaching) announce(sessionRef.current ?? session, t.gameTutor.aligned(nameRef.current));
+  };
+  alignedRef.current = onAligned;
 
   const forward = () => {
     if (teaching) revealNext();
@@ -1116,9 +1117,11 @@ export function GameTutorPage() {
             {explanation.text}
           </p>
         )}
-        {arranging && stream && (
+        {stream && physicalPly !== session.ply && !session.deviation && (
           <div className="flex flex-wrap items-center gap-3" data-testid="tutor-arrange">
-            <p className="font-semibold">{t.gameTutor.arrange}</p>
+            <p className="font-semibold">
+              {physicalPly < session.ply ? t.gameTutor.behind(session.ply - physicalPly, moveLabel(parsed.moves[physicalPly]!)) : t.gameTutor.arrange(name)}
+            </p>
             <Button size="sm" onClick={boardArranged} data-testid="tutor-arranged">
               {t.gameTutor.arranged}
             </Button>
@@ -1196,11 +1199,6 @@ export function GameTutorPage() {
         {why.status === 'done' && (
           <p className="text-base" data-testid="tutor-why-text">
             {why.value}
-          </p>
-        )}
-        {stream && physicalPly < session.ply && !session.deviation && (
-          <p className="text-sm font-semibold" data-testid="tutor-behind">
-            {t.gameTutor.behind(session.ply - physicalPly, moveLabel(parsed.moves[physicalPly]!))}
           </p>
         )}
         {side !== 'none' && (

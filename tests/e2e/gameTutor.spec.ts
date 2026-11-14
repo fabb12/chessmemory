@@ -331,12 +331,12 @@ test('tutor grandi partite: con la fotocamera il tempo scaduto ripete l’indica
   await page.getByTestId('tutor-skip').click();
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
   await page.getByTestId('tutor-skip').click();
-  await expect(page.getByTestId('tutor-behind')).toContainText('mancano 2 mosse');
+  await expect(page.getByTestId('tutor-arrange')).toContainText('mancano 2 mosse');
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
   await play(page, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
-  await expect(page.getByTestId('tutor-behind')).toContainText('manca 1 mossa', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-arrange')).toContainText('manca 1 mossa', { timeout: 10_000 });
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
-  await expect(page.getByTestId('tutor-behind')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0, { timeout: 10_000 });
   // Allineati: la mossa indicata viene riconosciuta e spiegata subito.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 2.Cf3.', { timeout: 10_000 });
@@ -428,7 +428,7 @@ test('tutor grandi partite: con la fotocamera, dopo un salto si sistemano i pezz
   // L'utente sistema i pezzi come sullo schermo (1.e4 e5) e toglie la mano: si riparte da soli.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('tutor-arrange')).toHaveCount(0, { timeout: 10_000 });
-  await expect.poll(async () => (await said(page)).some((t) => t.includes('Perfetto, riprendo da qui.'))).toBe(true);
+  await expect.poll(async () => (await said(page)).some((t) => t.includes('Perfetto, la scacchiera è allineata.'))).toBe(true);
   await page.waitForTimeout(1500);
   // Da qui la fotocamera segue di nuovo le mosse: 2.Cf3.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
@@ -543,10 +543,15 @@ test('tutor grandi partite: spegnendo la fotocamera a metà si continua sulla sc
   await page.getByTestId('tutor-camera-start').click();
   await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
   await page.getByTestId('tutor-last').click();
+  await expect(page.getByTestId('tutor-arrange')).toBeVisible();
+  // Tornando alla posizione che c'è davvero sulla scacchiera non serve sistemare nulla.
   await page.getByTestId('tutor-first').click();
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  await page.getByTestId('tutor-last').click();
   await expect(page.getByTestId('tutor-arrange')).toBeVisible();
   await page.getByRole('button', { name: 'Ferma la fotocamera' }).click();
   await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  await page.getByTestId('tutor-first').click();
   // Si gioca sulla scacchiera 2D e il tempo scaduto fa avanzare.
   await page.locator('[data-square="e2"]').first().click();
   await page.locator('[data-square="e4"]').first().click();
@@ -600,4 +605,28 @@ test('tutor grandi partite: storico della lezione, volume e niente interruzioni 
   await expect(entries.filter({ hasText: 'prossima mossa' }).first()).toBeVisible();
   await page.getByTestId('tutor-log-clear').click();
   await expect(entries).toHaveCount(0);
+});
+
+test('tutor grandi partite: «salta» con la fotocamera non obbliga a rifare le mosse una per una', async ({ page }) => {
+  await openTutor(page, false, '0');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-name-input').fill('Marco');
+  await page.getByTestId('tutor-name-save').click();
+  await page.getByTestId('tutor-camera-start').click();
+  await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
+  await page.getByTestId('tutor-mic').click();
+  // Si saltano tre mosse a voce.
+  for (let i = 0; i < 3; i++) await say(page, 'salta');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 3 di 33');
+  await expect(page.getByTestId('tutor-arrange')).toContainText('mancano 3 mosse');
+  // I pezzi vengono sistemati tutti insieme (1.e4 e5 2.Cf3): la fotocamera riconosce la posizione di arrivo.
+  await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Perfetto Marco, la scacchiera è allineata.');
+  // E si continua normalmente: 2…d6.
+  await play(page, 'rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
+  await expect(page.getByTestId('tutor-feedback')).toContainText('2…d6', { timeout: 10_000 });
+  // Il nome compare spesso in quello che dice il tutor.
+  const lines = await said(page);
+  expect(lines.filter((l) => l.includes('Marco')).length).toBeGreaterThanOrEqual(4);
 });

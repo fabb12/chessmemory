@@ -81,6 +81,7 @@ export function parseCommand(heard: string): VoiceCommand | null {
   const words = text.split(' ').length;
   const goto = parseGoto(text);
   if (goto) return goto;
+  if (/^(salta|saltala|salta la mossa|salta questa mossa|salta questa|passa|passa oltre)$/.test(text)) return { kind: 'next' };
   if ((/\b(prossima|successiva|seguente)\b/.test(text) && !/^perche\b/.test(text) && words <= 5) || /^(vai )?avanti\b/.test(text)) return { kind: 'next' };
   if (/^(e )?(perche|come mai)( (questa|questa mossa|la mossa))?$/.test(text)) return { kind: 'why' };
   if (/^(ripeti|ripetere|puoi ripetere|cosa hai detto)\b/.test(text) && words <= 4) return { kind: 'repeat' };

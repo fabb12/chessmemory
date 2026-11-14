@@ -104,3 +104,10 @@ describe('eco con l’audio alto', () => {
     expect(commandAtEnd('pronto')).toBeNull();
   });
 });
+
+describe('salta', () => {
+  it('«salta», «salta la mossa», «passa» vanno alla mossa successiva', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    for (const text of ['salta', 'Salta la mossa', 'salta questa mossa', 'passa']) expect(parseCommand(text), text).toEqual({ kind: 'next' });
+  });
+});
