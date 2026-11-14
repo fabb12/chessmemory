@@ -57,8 +57,11 @@ test('analizza: foto → lettura con Claude (simulato) → Stockfish → spiegaz
   await expect(page.getByTestId('candidate-moves')).toHaveCount(0);
   expect(bodies).toHaveLength(1);
 
-  // Lettura veloce: sforzo basso, modalità rapida, nessuna seconda lettura perché la posizione è valida.
-  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', speed: 'fast', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+  // Modello predefinito Haiku: sforzo basso, nessuna seconda lettura perché la posizione è valida.
+  // Haiku non ha modalità rapida né ripiego lato server: quei parametri non si inviano.
+  expect(bodies[0]).toMatchObject({ model: 'claude-haiku-5-5', output_config: { effort: 'low', format: { type: 'json_schema' } } });
+  expect(bodies[0]).not.toHaveProperty('speed');
+  expect(bodies[0]).not.toHaveProperty('fallbacks');
 
   // «Io sono: Nero» → ora tocca a te: mosse consigliate, linea vincente e spiegazione.
   await page.getByTestId('my-color').getByRole('button', { name: 'Nero' }).click();
@@ -206,7 +209,7 @@ test('analizza: se c\'è un matto forzato mostra la sequenza fino al matto', asy
   await expect(page.getByTestId('analyze-line')).toBeVisible();
 });
 
-test('analizza: la lettura rapida si può spegnere', async ({ page }) => {
+test('analizza: con Opus la lettura rapida (che si può spegnere) e il ripiego lato server', async ({ page }) => {
   const bodies: Record<string, unknown>[] = [];
   await page.route('https://api.anthropic.com/**', async (route) => {
     bodies.push(route.request().postDataJSON() as Record<string, unknown>);
@@ -227,10 +230,18 @@ test('analizza: la lettura rapida si può spegnere', async ({ page }) => {
     });
   });
   await openAnalyze(page);
-  await page.getByTestId('fast-toggle').uncheck();
+  // Con Haiku (predefinito) la lettura rapida non c'è.
+  await expect(page.getByTestId('claude-model')).toHaveValue('claude-haiku-5-5');
+  await expect(page.getByTestId('fast-toggle')).toHaveCount(0);
+  await page.getByTestId('claude-model').selectOption('claude-opus-5-5');
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByTestId('analyze-turn')).toBeVisible({ timeout: 30_000 });
-  expect(bodies[0]).not.toHaveProperty('speed');
+  expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', speed: 'fast', fallbacks: 'default' });
+  await page.getByTestId('fast-toggle').uncheck();
+  await page.locator('input[type=file]').setInputFiles({ name: 'board2.png', mimeType: 'image/png', buffer: PNG });
+  await expect.poll(() => bodies.length).toBeGreaterThanOrEqual(2);
+  expect(bodies[bodies.length - 1]).toMatchObject({ model: 'claude-opus-5-5' });
+  expect(bodies[bodies.length - 1]).not.toHaveProperty('speed');
 });
 
 /**

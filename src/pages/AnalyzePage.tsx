@@ -3,7 +3,7 @@ import { CANDIDATE_TONES, CandidateMoves, type Candidate } from '../components/a
 import { BoardOverlay } from '../components/vision/BoardOverlay';
 import { MoveFeedbackCard } from '../components/analyze/MoveFeedbackCard';
 import { WinningLineCard } from '../components/analyze/WinningLineCard';
-import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
+import { ApiKeyForm, ModelPicker } from '../components/assistant/ApiKeyForm';
 import { BoardEditor } from '../components/chess/BoardEditor';
 import { ChessBoard, type BoardArrow } from '../components/chess/ChessBoard';
 import { LineViewer, playLine } from '../components/mistakes/LineViewer';
@@ -27,6 +27,7 @@ import {
   useApiKey,
   useAssistantUsage,
   useFastMode,
+  useModel,
   type BoardReading,
 } from '../features/assistant/claude';
 import { ANALYSIS_DEPTH, getEngine, terminalAnalysis, type Analysis } from '../features/engine/engine';
@@ -94,6 +95,7 @@ function errorText(error: unknown): string {
 export function AnalyzePage({ profile }: { profile: Profile }) {
   const apiKey = useApiKey();
   const fast = useFastMode();
+  const model = useModel();
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -983,6 +985,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 ))}
               </select>
             </div>
+            {apiKey && (
+              <div className="sm:col-span-2">
+                <ModelPicker />
+              </div>
+            )}
+            {model.fast && (
             <label className="flex cursor-pointer items-start gap-3 pt-1">
               <input
                 type="checkbox"
@@ -996,6 +1004,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 <span className="block text-xs text-muted">{t.analyze.fast.help}</span>
               </span>
             </label>
+            )}
             <label className="flex cursor-pointer items-start gap-3 pt-1 sm:col-span-2">
               <input
                 type="checkbox"
