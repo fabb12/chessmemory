@@ -325,6 +325,10 @@ export const it = {
     changeTurn: 'Cambia chi muove',
     turnIs: (side: string) => `Tocca a ${side}`,
     flipBoard: 'Gira la scacchiera',
+    flipSquares: {
+      label: 'Numerazione invertita: il Nero sta sulle righe 1-2',
+      help: 'Per le scacchiere girate rispetto alle coordinate stampate. Case, mosse e coordinate vengono mostrate e pronunciate come sulla tua scacchiera (a1 diventa h8, e4 diventa d5).',
+    },
     orientation: {
       label: 'Dove stanno i pezzi bianchi nella foto?',
       help: 'Di solito si capisce da solo. Se la posizione risulta ruotata o speculare scegli il lato giusto: resta valido per le prossime letture.',

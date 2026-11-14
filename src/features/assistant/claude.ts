@@ -241,6 +241,8 @@ export interface ReadOptions {
   lastRawPlacement?: string | null;
   /** Visione locale già fatta su questa foto (angoli noti): l'evidenza YOLO entra nel prompt e nella fusione. */
   vision?: VisionResult | null;
+  /** Coordinate stampate rovesciate: il Nero sta sulle righe 1-2 (non vanno usate per capire dove sta il Bianco). */
+  flippedCoordinates?: boolean;
   /** Visione locale da fare dopo, con gli angoli trovati da Claude (prima lettura o foto dalla galleria). */
   analyze?: (corners: Corners) => Promise<VisionResult>;
 }
@@ -397,6 +399,10 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
     const detectorHint = local
       ? `\n\nA local piece detector read the board like this (same orientation as the photo, rows top to bottom; '?' = unsure):\n${hintGrid(local).join('\n')}\nIt is often right on clear squares but can confuse bishops/pawns and kings/queens and miss pieces. Check every square, especially the '?' ones; the photo is what counts.`
       : '';
+    // Fuori dal prompt di sistema (che resta uguale e in cache): vale solo per chi lo sceglie.
+    const flippedHint = options.flippedCoordinates
+      ? '\n\nThe coordinates printed on this board are REVERSED: the Black army was set up next to the printed ranks 1-2 and White next to 7-8. Do NOT use the printed numbers or letters to decide white_side: decide only by where the White pieces actually stand.'
+      : '';
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
@@ -410,7 +416,7 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
         // (entro 5 minuti) costano circa un ventesimo. Dopo, solo la foto e il poco che cambia.
         system: [{ type: 'text', text: READING_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: [
-          { role: 'user', content: hint + detectorHint + extra ? [image, { type: 'text', text: (hint + detectorHint + extra).trim() }] : [image] },
+          { role: 'user', content: hint + flippedHint + detectorHint + extra ? [image, { type: 'text', text: (hint + flippedHint + detectorHint + extra).trim() }] : [image] },
         ],
       }).then((message) => {
         recordUsage('reading', message);

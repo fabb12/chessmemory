@@ -388,3 +388,25 @@ test('modalità tutor con foto: legge solo quando scatti, una foto per mossa', a
   await expect(page.getByTestId('live-banner')).toContainText('Nessuna mossa nuova');
   expect(counter.readings).toBe(1);
 });
+
+test('numerazione invertita: case e coordinate come sulla scacchiera girata, e Claude lo sa', async ({ page }) => {
+  const counter = await mockClaude(page, RANKS);
+  await openAnalyze(page);
+  await page.getByTestId('flip-squares').check();
+  await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
+  await page.getByTestId('my-color').getByRole('button', { name: 'Nero' }).click();
+  await expect(page.getByTestId('analyze-explanation')).toBeVisible({ timeout: 30_000 });
+
+  // Claude non deve usare le coordinate stampate per capire dov'è il Bianco.
+  expect(JSON.stringify(counter.bodies[0]!.messages)).toContain('REVERSED');
+  // Alla spiegazione le mosse arrivano con i nomi veri delle case; la risposta si mostra rinominata.
+  await expect(page.getByTestId('analyze-explanation')).toContainText('Il Bianco minaccia matto in c2: il Nero deve sviluppare il cavallo in c3.');
+  // Il Nero in basso, sulle righe 1-2; colonne da A (a destra del Bianco) ad H.
+  await expect(page.getByTestId('board-ranks').first()).toHaveText('87654321');
+  await expect(page.getByTestId('board-files').first()).toHaveText('abcdefgh', { ignoreCase: true });
+
+  // Tolta l'opzione, tutto torna normale.
+  await page.getByTestId('flip-squares').uncheck();
+  await expect(page.getByTestId('analyze-explanation')).toContainText('matto in f7');
+  await expect(page.getByTestId('board-ranks').first()).toHaveText('12345678');
+});

@@ -40,7 +40,7 @@ import { loadDetector, useDetectorStatus } from '../features/vision/pieceDetecto
 import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
 import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
-import { formatLine, sanToLocal } from '../utils/notation';
+import { formatLine, localSquares, sanToLocal, setFlippedSquares } from '../utils/notation';
 import { setVoiceEnabled, speak, speechSupported, stopSpeaking } from '../features/voice/speech';
 
 /** Analisi continua: ogni quanto si controlla se la scacchiera si muove (nessun costo, è locale). */
@@ -51,7 +51,8 @@ const STILL_SAMPLES = 2;
 const MIN_READ_GAP_MS = 1500;
 
 interface HistoryEntry {
-  san: string;
+  /** Mosse in SAN inglese (si traducono quando si mostrano, con la numerazione scelta). */
+  sans: string[];
   /** local = riconosciuta sul dispositivo (case cambiate o YOLO), claude = letta da Claude. */
   source: 'local' | 'claude';
   /** Posizione prima della mossa: serve a rileggere se la mossa era sbagliata. */
@@ -63,6 +64,7 @@ type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; valu
 const VIEW_KEY = 'cm.analyze.view';
 const PRACTICE_KEY = 'cm.analyze.practice';
 const TUTOR_MODE_KEY = 'cm.analyze.tutorMode';
+const FLIP_SQUARES_KEY = 'cm.analyze.flipSquares';
 
 /** video = osserva di continuo la scacchiera; photo = legge solo quando scatti una foto dopo ogni mossa. */
 type TutorMode = 'video' | 'photo';
@@ -106,6 +108,16 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   // Modalità tutor: osserva di continuo la scacchiera e dice (a voce) la mossa migliore.
   const [live, setLive] = useState(false);
   const [tutorText, setTutorText] = useState('');
+  // Numerazione invertita: il Nero sta sulle righe 1-2 della scacchiera fisica.
+  const [flipSquares, setFlipSquares] = useState(() => loadPref(FLIP_SQUARES_KEY) === '1');
+  // Vale già per questo render (anche per le scacchiere e le liste dei figli); si spegne lasciando la pagina.
+  setFlippedSquares(flipSquares);
+  useEffect(() => {
+    setFlippedSquares(flipSquares);
+    return () => setFlippedSquares(false);
+  }, [flipSquares]);
+  const flipSquaresRef = useRef(flipSquares);
+  flipSquaresRef.current = flipSquares;
   const [tutorMode, setTutorModeState] = useState<TutorMode>(() => (loadPref(TUTOR_MODE_KEY) === 'photo' ? 'photo' : 'video'));
   /** Modalità foto: l'ultima foto non mostrava mosse nuove. */
   const [noChange, setNoChange] = useState(false);
@@ -216,13 +228,14 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const text = await explainPosition({
           fen,
           evaluation: formatScore(result.score, pos.turn === 'w'),
-          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, brief ? 6 : 8)))),
+          // A Claude le mosse con i nomi veri delle case (come nella FEN); la risposta si rinomina dopo.
+          lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, brief ? 6 : 8)), false)),
           playerSide: myColorRef.current,
           brief,
         });
         if (id !== evalId.current) return;
         setExplanation({ status: 'done', value: text });
-        if (liveRef.current) speak(text, 'tutor');
+        if (liveRef.current) speak(localSquares(text), 'tutor');
       } catch (error) {
         if (id === evalId.current) setExplanation({ status: 'error', error: errorText(error) });
       }
@@ -324,6 +337,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             lastView: lastView.current,
             lastRawPlacement: lastRaw.current,
             vision,
+            flippedCoordinates: flipSquaresRef.current,
             analyze: vision ? undefined : (found) => analyzeImage(image, found),
           });
         }
@@ -377,7 +391,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         const next = (result.turnKnown && result.fen ? fenToPosition(result.fen) : null) ?? fenToPosition(`${result.placement} ${turn} KQkq`) ?? startPosition();
         if (fromCamera && previous && result.moves.length > 0) {
           const source = result.source === 'local' ? 'local' : 'claude';
-          setHistory((h) => [...h, { san: result.moves.map(sanToLocal).join(' '), source, before: previous }]);
+          setHistory((h) => [...h, { sans: result.moves, source, before: previous }]);
           const lastSan = result.moves[result.moves.length - 1]!;
           pendingMove.current = {
             move: { san: lastSan, color: next.turn === 'w' ? 'b' : 'w' },
@@ -443,7 +457,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
       if (result.kind === 'none') return 'none';
       const next = fenToPosition(result.fen);
       if (!next) return false;
-      setHistory((h) => [...h, { san: sanToLocal(result.san), source: 'local', before: pos }]);
+      setHistory((h) => [...h, { sans: [result.san], source: 'local', before: pos }]);
       pendingMove.current = {
         move: { san: result.san, color: pos.turn },
         previous: doneRef.current?.fen === positionToFen(pos) ? doneRef.current : null,
@@ -779,7 +793,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           )}
           {explanation.status === 'done' && banner.tone === 'mine' && (
             <p className="w-full text-base" data-testid="tutor-explanation">
-              {explanation.value}
+              {localSquares(explanation.value)}
             </p>
           )}
         </div>
@@ -979,6 +993,22 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 <span className="block text-xs text-muted">{t.analyze.fast.help}</span>
               </span>
             </label>
+            <label className="flex cursor-pointer items-start gap-3 pt-1 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={flipSquares}
+                onChange={(e) => {
+                  setFlipSquares(e.target.checked);
+                  savePref(FLIP_SQUARES_KEY, e.target.checked ? '1' : '0');
+                }}
+                className="mt-1 size-5 accent-[var(--accent)]"
+                data-testid="flip-squares"
+              />
+              <span>
+                <span className="block text-sm font-semibold">{t.analyze.flipSquares.label}</span>
+                <span className="block text-xs text-muted">{t.analyze.flipSquares.help}</span>
+              </span>
+            </label>
           </div>
           <div aria-live="polite" className="space-y-1 text-sm">
             {reading.status === 'busy' && !live && <p className="font-semibold">{t.analyze.reading}</p>}
@@ -995,7 +1025,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 </p>
                 {reading.value.moves.length > 0 && !live && (
                   <p className="text-muted" data-testid="read-moves">
-                    {t.analyze.moveFound(reading.value.moves.map(sanToLocal).join(' '))}
+                    {t.analyze.moveFound(reading.value.moves.map((san) => sanToLocal(san)).join(' '))}
                   </p>
                 )}
                 {reading.value.corrected.length > 0 && (
@@ -1026,7 +1056,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               <ol className="flex flex-wrap gap-1 text-sm">
                 {history.slice(-12).map((entry, index) => (
                   <li key={`${history.length}-${index}`} className="rounded-lg bg-surface px-2 py-0.5 tabular-nums" title={t.analyze.live.sources[entry.source]}>
-                    {entry.san}
+                    {entry.sans.map((san) => sanToLocal(san)).join(' ')}
                     {entry.source === 'local' && <span aria-hidden className="ml-1 text-ok">⚡</span>}
                   </li>
                 ))}
@@ -1242,9 +1272,9 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             <div className="rounded-xl border border-l-4 border-line border-l-accent bg-surface p-3.5" data-testid="analyze-explanation">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-accent-strong">{t.analyze.explanation}</p>
-                {!live && <SpeakButton text={`${verdict} ${explanation.value}`} auto />}
+                {!live && <SpeakButton text={`${verdict} ${localSquares(explanation.value)}`} auto />}
               </div>
-              <p className="mt-1 whitespace-pre-line">{explanation.value}</p>
+              <p className="mt-1 whitespace-pre-line">{localSquares(explanation.value)}</p>
             </div>
           )}
         </Card>
