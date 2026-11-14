@@ -102,7 +102,7 @@ export function commandAtEnd(heard: string): { command: VoiceCommand; phrase: st
   for (let n = Math.min(7, words.length); n >= 1; n--) {
     const phrase = words.slice(-n).join(' ');
     const command = parseCommand(phrase);
-    if (command && command.kind !== 'question' && command.kind !== 'repeat') return { command, phrase };
+    if (command && BARGE_IN_KINDS.has(command.kind)) return { command, phrase };
   }
   return null;
 }
@@ -284,8 +284,20 @@ export class ScreenAwake {
 export function isEcho(heard: string, speaking: string): boolean {
   const h = normalize(heard);
   const s = normalize(speaking);
-  return h.length > 0 && s.length > 0 && s.includes(h);
+  if (!h || !s) return false;
+  if (s.includes(h)) return true;
+  // Con l'audio alto il microfono trascrive l'eco in modo impreciso: conta se le parole
+  // che distinguono il comando («zitta», «prossima», «quinta», «5»…) le sta dicendo il tutor.
+  const spoken = new Set(s.split(' '));
+  const distinctive = h.split(' ').filter((w) => !COMMON_WORDS.has(w));
+  return distinctive.length > 0 && distinctive.every((w) => spoken.has(w));
 }
+
+/** Parole che compaiono in tanti comandi e frasi: non bastano a distinguere un comando dall'eco. */
+const COMMON_WORDS = new Set(['vai', 'alla', 'al', 'a', 'la', 'il', 'lo', 'le', 'mossa', 'del', 'di', 'e', 'torna', 'ok', 'dai']);
+
+/** Mentre il tutor parla, solo questi comandi lo interrompono: gli altri aspettano che finisca. */
+export const BARGE_IN_KINDS: ReadonlySet<VoiceCommand['kind']> = new Set(['stop', 'next', 'goto']);
 
 /** Il nome detto a voce: «mi chiamo Marco», «sono Anna Maria», «Luca». null se non sembra un nome. */
 export function parseName(heard: string): string | null {

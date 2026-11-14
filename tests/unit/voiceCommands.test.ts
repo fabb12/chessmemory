@@ -90,3 +90,17 @@ describe('dialogo dinamico', () => {
     expect(isEcho(echo.phrase, spoken)).toBe(true);
   });
 });
+
+describe('eco con l’audio alto', () => {
+  it('riconosce l’eco anche trascritta male, ma non i comandi veri', async () => {
+    const { isEcho, commandAtEnd } = await import('../../src/features/voice/listen');
+    const spoken = 'Bene, 1.e4. Perché: occupa il centro. Tra poco la mossa successiva.';
+    expect(isEcho('la mossa successiva', spoken)).toBe(true);
+    expect(isEcho('mossa successiva', spoken)).toBe(true);
+    expect(isEcho('zitta', spoken)).toBe(false);
+    expect(isEcho('vai alla quinta mossa', spoken)).toBe(false);
+    // «perché» detto dal tutor non è mai un'interruzione.
+    expect(commandAtEnd('occupa il centro perché')).toBeNull();
+    expect(commandAtEnd('pronto')).toBeNull();
+  });
+});

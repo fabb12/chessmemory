@@ -37,7 +37,7 @@ import { loadCalibration, saveCalibration } from '../features/vision/calibration
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
 import { BoardTracker, type TrackerStatus } from '../features/vision/tracker';
 import { commandAtEnd, isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener, type VoiceCommand } from '../features/voice/listen';
-import { currentSpeakingId, currentSpeechText, speak, stopSpeaking, useSpeakingId } from '../features/voice/speech';
+import { currentSpeakingId, currentSpeechText, onSpoken, setVoiceVolume, speak, stopSpeaking, useSpeakingId, useVoiceVolume } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Uci } from '../types';
 import { applyUci } from '../utils/chess';
@@ -98,6 +98,35 @@ function saveText(key: string, value: string): void {
   }
 }
 
+/** Una riga dello storico della lezione: chi ha parlato, che cosa, a che punto della partita. */
+interface LogEntry {
+  who: 'tutor' | 'user';
+  text: string;
+  ply: number;
+  at: number;
+}
+const LOG_LIMIT = 300;
+const logKey = (gameId: string) => `cm.tutor.log.${gameId}`;
+
+function loadLog(gameId: string): LogEntry[] {
+  try {
+    const raw = localStorage.getItem(logKey(gameId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as LogEntry[]).filter((e) => e && typeof e.text === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLog(gameId: string, log: LogEntry[]): void {
+  try {
+    if (log.length) localStorage.setItem(logKey(gameId), JSON.stringify(log.slice(-LOG_LIMIT)));
+    else localStorage.removeItem(logKey(gameId));
+  } catch {
+    // archivio pieno o non disponibile: lo storico resta solo in questa pagina
+  }
+}
+
 const clampSeconds = (n: number) => Math.max(0, Math.min(600, Math.round(Number.isFinite(n) ? n : 0)));
 
 type Feedback = { tone: 'good' | 'bad' | 'info'; text: string } | null;
@@ -126,6 +155,33 @@ export function GameTutorPage() {
   const apiKey = useApiKey();
 
   const [side, setSideState] = useState<UserSide>('none');
+  // ───── Storico della lezione: tutto quello che il tutor e l'allievo si sono detti ─────
+  const [log, setLog] = useState<LogEntry[]>(() => (game ? loadLog(game.id) : []));
+  const addLog = useCallback(
+    (who: LogEntry['who'], text: string) => {
+      const clean = text.trim();
+      if (!clean || !game) return;
+      const entry = { who, text: clean, ply: sessionRef.current?.ply ?? 0, at: Date.now() };
+      setLog((current) => {
+        const next = [...current, entry].slice(-LOG_LIMIT);
+        saveLog(game.id, next);
+        return next;
+      });
+    },
+    [game],
+  );
+  useEffect(() => onSpoken((text, id) => id === 'game-tutor' && addLog('tutor', text)), [addLog]);
+  const clearLog = () => {
+    setLog([]);
+    if (game) saveLog(game.id, []);
+  };
+  // Lo storico scorre da solo fino all'ultima frase (solo dentro il suo riquadro, la pagina resta ferma).
+  const logListRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const list = logListRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [log.length]);
+  const volume = useVoiceVolume();
   // Nome dell'allievo: il tutor lo chiede all'inizio e lo usa quando parla.
   const [name, setNameState] = useState(() => loadText(NAME_KEY));
   const nameRef = useRef(name);
@@ -486,14 +542,24 @@ export function GameTutorPage() {
   };
 
   /** Trascrizione provvisoria: mentre il tutor parla basta dire «zitta» o «prossima» per interromperlo subito. */
+  /** Ultimo comando visto nelle trascrizioni provvisorie: deve ripresentarsi per contare. */
+  const interimSeenRef = useRef<{ key: string; at: number } | null>(null);
   const onInterim = (text: string) => {
     if (!isTalking()) return;
     const found = bargeIn(text);
     if (!found) return;
+    // Con l'audio alto l'eco produce parole a caso che cambiano da un istante all'altro:
+    // un comando vero resta uguale in due trascrizioni provvisorie di fila.
+    const key = JSON.stringify(found.command);
+    const seen = interimSeenRef.current;
+    interimSeenRef.current = { key, at: Date.now() };
+    if (!seen || seen.key !== key || Date.now() - seen.at > 2000) return;
+    interimSeenRef.current = null;
     bargeRef.current = { kind: found.command.kind, at: Date.now() };
     speechTokenRef.current++;
     stopSpeaking();
     setHeard(found.phrase);
+    addLog('user', found.phrase);
     runCommand(found.command);
   };
   const onInterimRef = useRef(onInterim);
@@ -515,6 +581,7 @@ export function GameTutorPage() {
       stopSpeaking();
     }
     setHeard(text);
+    addLog('user', text);
     if (awaitingNameRef.current) {
       const heardName = !command || command.kind === 'question' ? parseName(text) : null;
       if (heardName) {
@@ -1222,7 +1289,22 @@ export function GameTutorPage() {
             />
           </label>
         </div>
+        <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+          {t.gameTutor.volume}
+          <input
+            type="range"
+            min={0.2}
+            max={1}
+            step={0.1}
+            value={volume}
+            onChange={(e) => setVoiceVolume(Number(e.target.value))}
+            className="w-40 accent-[var(--accent)]"
+            data-testid="tutor-volume"
+          />
+          <span className="tabular-nums text-muted">{Math.round(volume * 100)}%</span>
+        </label>
         {listening && <p className="text-sm text-muted">{t.gameTutor.micOn}</p>}
+        {listening && volume > 0.8 && <p className="text-xs text-muted">{t.gameTutor.echoTip}</p>}
         {(listening || stream) && ScreenAwake.supported() && <p className="text-xs text-muted">{t.gameTutor.awake}</p>}
         {!listeningSupported() && <p className="text-sm text-muted">{t.gameTutor.micUnsupported}</p>}
         {micError && (
@@ -1271,6 +1353,32 @@ export function GameTutorPage() {
                     : ''}
             </p>
           </div>
+        )}
+      </Card>
+
+      <Card className="space-y-2" data-testid="tutor-log">
+        <div className="flex items-center justify-between gap-2">
+          <SectionTitle>{t.gameTutor.logTitle(log.length)}</SectionTitle>
+          {log.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearLog} data-testid="tutor-log-clear">
+              {t.gameTutor.logClear}
+            </Button>
+          )}
+        </div>
+        {log.length === 0 ? (
+          <p className="text-sm text-muted">{t.gameTutor.logEmpty}</p>
+        ) : (
+          <ol ref={logListRef} className="max-h-80 space-y-2 overflow-y-auto pr-1" aria-live="off">
+            {log.map((entry, i) => (
+              <li key={`${entry.at}-${i}`} className={`flex flex-col ${entry.who === 'user' ? 'items-end' : 'items-start'}`} data-testid="tutor-log-entry" data-who={entry.who}>
+                <span className="text-xs text-muted">
+                  {entry.who === 'user' ? name || t.gameTutor.logYou : t.gameTutor.logTutor} · {t.gameTutor.logAt(entry.ply)} ·{' '}
+                  {new Date(entry.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <p className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${entry.who === 'user' ? 'bg-accent-soft' : 'bg-surface-2'}`}>{entry.text}</p>
+              </li>
+            ))}
+          </ol>
         )}
       </Card>
 

@@ -72,6 +72,7 @@ const FAKE_VOICE = `
       // window.__longSpeech = true: la frase non finisce finché non viene interrotta.
       speak: (u) => {
         window.__said.push(u.text);
+        window.__volume = u.volume;
         window.__current = u;
         if (!window.__longSpeech) setTimeout(() => u.onend && u.onend(), 30);
       },
@@ -443,7 +444,10 @@ test('tutor grandi partite: si interrompe a metà frase, senza ascoltare la prop
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
   await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
   const cancels = () => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
-  const interim = (text: string) => page.evaluate((t) => (window as unknown as { __interim: (t: string) => void }).__interim(t), text);
+  // Il microfono manda più trascrizioni provvisorie di fila mentre si parla: un comando vero vi resta.
+  const interim = async (text: string) => {
+    for (let i = 0; i < 2; i++) await page.evaluate((t) => (window as unknown as { __interim: (t: string) => void }).__interim(t), text);
+  };
 
   // «vai alla quinta mossa» detto sopra la voce del tutor, a frase non ancora finita.
   await page.getByTestId('tutor-repeat').click();
@@ -522,7 +526,7 @@ test('tutor grandi partite: senza fotocamera tutte le richieste a voce funzionan
   await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
   await page.getByTestId('tutor-repeat').click();
   await page.waitForTimeout(100);
-  await page.evaluate(() => (window as unknown as { __interim: (t: string) => void }).__interim('il bianco muove vai alla prossima'));
+  for (let i = 0; i < 2; i++) await page.evaluate(() => (window as unknown as { __interim: (t: string) => void }).__interim('il bianco muove vai alla prossima'));
   await expect(pos).toHaveText('Semimossa 1 di 33');
   await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = false));
 
@@ -550,4 +554,50 @@ test('tutor grandi partite: spegnendo la fotocamera a metà si continua sulla sc
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
   await page.getByTestId('tutor-auto-seconds').fill('2');
   await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 2 di 33', { timeout: 8_000 });
+});
+
+test('tutor grandi partite: storico della lezione, volume e niente interruzioni false con l’audio alto', async ({ page }) => {
+  await openTutor(page, false, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-name-input').fill('Sara');
+  await page.getByTestId('tutor-name-save').click();
+  await page.getByTestId('tutor-mic').click();
+  await say(page, 'prossima mossa');
+  await expect(page.getByTestId('tutor-explanation')).toBeVisible();
+  // Storico: frasi del tutor e dell'allieva, con il punto della partita.
+  const entries = page.getByTestId('tutor-log-entry');
+  await expect(entries.filter({ hasText: 'prossima mossa' })).toHaveAttribute('data-who', 'user');
+  await expect(entries.filter({ hasText: 'Il Bianco muove il pedone da e2 a e4.' }).first()).toHaveAttribute('data-who', 'tutor');
+  await expect(page.getByTestId('tutor-log')).toContainText('Sara');
+
+  // L'eco imprecisa della voce del tutor («…la mossa successiva…») non lo interrompe,
+  // e un comando visto in una sola trascrizione provvisoria nemmeno.
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  await page.getByTestId('tutor-reveal').click();
+  await page.waitForTimeout(100);
+  const cancels = () => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  const interim = (t: string) => page.evaluate((x) => (window as unknown as { __interim: (t: string) => void }).__interim(x), t);
+  const before = await cancels();
+  await interim('nero muove pedone e7 e5'); // eco
+  await interim('il nero muove il pedone da e7');
+  await interim('basta'); // una sola volta: forse è rumore
+  await interim('nero muove il pedone');
+  await page.waitForTimeout(300);
+  expect(await cancels()).toBe(before);
+  await interim('basta');
+  await interim('basta');
+  await expect.poll(cancels).toBeGreaterThan(before);
+
+  // Volume della voce.
+  await page.getByTestId('tutor-volume').fill('0.5');
+  await page.getByTestId('tutor-repeat').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __volume: number }).__volume)).toBe(0.5);
+
+  // Lo storico resta dopo aver riaperto la pagina e si può cancellare.
+  const count = await entries.count();
+  await page.reload();
+  await expect.poll(() => entries.count()).toBeGreaterThanOrEqual(count);
+  await expect(entries.filter({ hasText: 'prossima mossa' }).first()).toBeVisible();
+  await page.getByTestId('tutor-log-clear').click();
+  await expect(entries).toHaveCount(0);
 });
