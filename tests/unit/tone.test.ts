@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phrases, TONE_PROMPTS, TONES } from '../../src/features/tutor/tone';
+import { NamePacer, phrases, TONE_PROMPTS, TONES } from '../../src/features/tutor/tone';
 import { explanationKey } from '../../src/features/tutor/explanationCache';
 
 describe('tono di parlata', () => {
@@ -32,5 +32,33 @@ describe('tono di parlata', () => {
     expect(TONE_PROMPTS.offensive).toContain('mai insulti su aspetto');
     expect(explanationKey('opera', 3)).toBe(explanationKey('opera', 3, 'normal'));
     expect(explanationKey('opera', 3, 'arrogant')).not.toBe(explanationKey('opera', 3));
+  });
+
+  it('il nome si dice al momento giusto, non in ogni frase', () => {
+    const pacer = new NamePacer();
+    expect(pacer.use('', 'greet')).toBe('');
+    // Saluto: sempre. Subito dopo, le frasi di routine non ripetono il nome.
+    expect(pacer.use('Marco', 'greet')).toBe('Marco');
+    const routine = Array.from({ length: 6 }, () => pacer.use('Marco', 'routine'));
+    expect(routine.every((n) => n === '')).toBe(true);
+    // Dopo un po' di frasi senza nome, torna.
+    expect(pacer.use('Marco', 'routine')).toBe('Marco');
+    // Un errore richiama per nome, ma non se il nome è appena stato detto.
+    expect(pacer.use('Marco', 'attention')).toBe('');
+    expect(pacer.use('Marco', 'routine')).toBe('');
+    expect(pacer.use('Marco', 'attention')).toBe('Marco');
+    // Su venti mosse (indicazione + lode) il nome compare poche volte.
+    const fresh = new NamePacer();
+    const said = Array.from({ length: 40 }, () => fresh.use('Marco', 'routine')).filter(Boolean).length;
+    expect(said).toBeGreaterThanOrEqual(4);
+    expect(said).toBeLessThanOrEqual(7);
+    fresh.reset();
+    expect(fresh.use('Marco', 'routine')).toBe('Marco');
+  });
+
+  it('senza nome i toni non normali mantengono il loro richiamo', () => {
+    expect(phrases('normal').call('', 0)).toBe('');
+    expect(phrases('offensive').call('', 0)).toContain('schiappa');
+    expect(phrases('rude').call('', 0)).toBe('Muoviti: ');
   });
 });
