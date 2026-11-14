@@ -37,8 +37,8 @@ import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
 import { BoardTracker, type TrackerStatus } from '../features/vision/tracker';
-import { listeningSupported, parseCommand, VoiceListener } from '../features/voice/listen';
-import { currentSpeakingId, speak, stopSpeaking, useSpeakingId } from '../features/voice/speech';
+import { isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener } from '../features/voice/listen';
+import { currentSpeakingId, currentSpeechText, speak, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Uci } from '../types';
 import { applyUci } from '../utils/chess';
@@ -76,6 +76,27 @@ function saveSeconds(key: string, n: number): void {
   }
 }
 
+const NAME_KEY = 'cm.user.name';
+/** Il microfono era acceso: alla prossima apertura si riaccende da solo. */
+const MIC_KEY = 'cm.tutor.mic';
+
+function loadText(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveText(key: string, value: string): void {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // archivio non disponibile: vale solo per questa visita
+  }
+}
+
 const clampSeconds = (n: number) => Math.max(0, Math.min(600, Math.round(Number.isFinite(n) ? n : 0)));
 
 type Feedback = { tone: 'good' | 'bad' | 'info'; text: string } | null;
@@ -104,6 +125,18 @@ export function GameTutorPage() {
   const apiKey = useApiKey();
 
   const [side, setSideState] = useState<UserSide>('none');
+  // Nome dell'allievo: il tutor lo chiede all'inizio e lo usa quando parla.
+  const [name, setNameState] = useState(() => loadText(NAME_KEY));
+  const nameRef = useRef(name);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(name);
+  const greetedRef = useRef(false);
+  const setName = useCallback((value: string) => {
+    const clean = value.trim().slice(0, 40);
+    nameRef.current = clean;
+    setNameState(clean);
+    saveText(NAME_KEY, clean);
+  }, []);
   const sideRef = useRef<UserSide>('none');
   const [session, setSessionState] = useState<SessionState | null>(() => (parsed ? startSession(parsed) : null));
   const sessionRef = useRef(session);
@@ -258,11 +291,15 @@ export function GameTutorPage() {
       setRunning(true);
       setTeaching(null);
       speechTokenRef.current++;
-      const say = (text: string) => speak(`${prefix} ${text}`.trim(), 'game-tutor');
-      if (isFinished(parsed, state)) return say(t.gameTutor.finished(t.games.result[game.result] ?? game.result));
+      const who = nameRef.current;
+      // La prima volta si saluta per nome.
+      const hello = who && !greetedRef.current ? `${t.gameTutor.hello(who)} ` : '';
+      if (who) greetedRef.current = true;
+      const say = (text: string) => speak(`${hello}${prefix} ${text}`.trim(), 'game-tutor');
+      if (isFinished(parsed, state)) return say(t.gameTutor.finished(t.games.result[game.result] ?? game.result, who));
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
-      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black));
+      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, who));
       say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${moveInstruction(state.fen, move)}`);
     },
     [parsed, game],
@@ -419,11 +456,40 @@ export function GameTutorPage() {
     [parsed, game, apiKey, explanationFor],
   );
 
+  /** In attesa del nome detto a voce (dopo «Come ti chiami?»). */
+  const awaitingNameRef = useRef(false);
+  /** Ultima frase detta dal tutor: serve a riconoscerne l'eco anche subito dopo la fine. */
+  const recentSpokenRef = useRef('');
+  useEffect(() => {
+    if (speaking) recentSpokenRef.current = currentSpeechText();
+  }, [speaking]);
+
   const onHeard = (text: string) => {
-    setHeard(text);
     const command = parseCommand(text);
+    const talking = currentSpeakingId() !== null || Date.now() - lastSpokeRef.current < ECHO_GRACE_MS;
+    if (talking) {
+      // Mentre il tutor parla si può interromperlo, ma solo con un comando breve
+      // («basta», «prossima mossa», «perché»…) che non sia l'eco della sua stessa voce.
+      if (!command || command.kind === 'question' || isEcho(text, currentSpeechText() || recentSpokenRef.current)) return;
+      speechTokenRef.current++;
+      stopSpeaking();
+    }
+    setHeard(text);
+    if (awaitingNameRef.current) {
+      const heardName = !command || command.kind === 'question' ? parseName(text) : null;
+      if (heardName) {
+        awaitingNameRef.current = false;
+        setName(heardName);
+        greetedRef.current = true;
+        if (sessionRef.current) announce(sessionRef.current, t.gameTutor.nice(heardName));
+        return;
+      }
+      // Un comando o una domanda: il nome si potrà dire (o scrivere) più tardi.
+      if (command) awaitingNameRef.current = false;
+    }
     if (!command) return;
     setRunning(true);
+    if (command.kind === 'stop') return;
     if (command.kind === 'next') {
       if (teaching) revealNext();
       else advance();
@@ -441,9 +507,8 @@ export function GameTutorPage() {
     setMicError(null);
     const listener = new VoiceListener({
       onHeard: (text) => onHeardRef.current(text),
-      // Il tutor non deve ascoltare sé stesso.
-      muted: () => currentSpeakingId() !== null || Date.now() - lastSpokeRef.current < ECHO_GRACE_MS,
       onError: () => {
+        saveText(MIC_KEY, '');
         setListening(false);
         setMicError(t.gameTutor.micDenied);
       },
@@ -453,16 +518,37 @@ export function GameTutorPage() {
       return;
     }
     listenerRef.current = listener;
+    saveText(MIC_KEY, 'on');
     setListening(true);
     setRunning(true);
-    if (sessionRef.current) announce(sessionRef.current);
+    if (!nameRef.current) {
+      // All'inizio il tutor chiede il nome, per usarlo quando parla.
+      awaitingNameRef.current = true;
+      speechTokenRef.current++;
+      speak(t.gameTutor.askName, 'game-tutor');
+    } else if (sessionRef.current) announce(sessionRef.current);
   };
   const stopListening = () => {
     listenerRef.current?.stop();
     listenerRef.current = null;
+    saveText(MIC_KEY, '');
     setListening(false);
   };
-  useEffect(() => () => listenerRef.current?.stop(), []);
+  const startListeningRef = useRef(startListening);
+  startListeningRef.current = startListening;
+  useEffect(() => {
+    // Il microfono era acceso l'ultima volta: si riaccende da solo.
+    if (loadText(MIC_KEY) === 'on' && listeningSupported()) startListeningRef.current();
+    return () => listenerRef.current?.stop();
+  }, []);
+
+  // Schermo sempre acceso finché microfono o fotocamera sono attivi: il salvaschermo li fermerebbe.
+  useEffect(() => {
+    if (!listening && !stream) return;
+    const awake = new ScreenAwake();
+    void awake.acquire();
+    return () => awake.release();
+  }, [listening, stream]);
 
   // Il conto alla rovescia scorre solo quando nessuno sta facendo niente:
   // non mentre il tutor parla, la mano è sulla scacchiera o si aspetta una risposta.
@@ -480,7 +566,7 @@ export function GameTutorPage() {
     if (!s) return;
     if (trackerRef.current) {
       setRemaining(autoSeconds);
-      announce(s, t.gameTutor.reminder);
+      announce(s, t.gameTutor.reminder(nameRef.current));
     } else advance();
   };
   const advanceRef = useRef(onTimeout);
@@ -533,7 +619,8 @@ export function GameTutorPage() {
         setJudgement({ status: 'idle' });
         setShowHint(false);
         // Mossa vista: subito il perché, poi (dopo la pausa) la mossa successiva.
-        teach(state, !guess ? t.gameTutor.wellDone(label) : outcome.firstTry ? t.gameTutor.correct(label) : t.gameTutor.correctLater(label));
+        const who = nameRef.current;
+        teach(state, !guess ? t.gameTutor.wellDone(label, who) : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label));
         return;
       }
       if (outcome.kind === 'deviation') {
@@ -541,7 +628,7 @@ export function GameTutorPage() {
         setShowHint(true);
         if (!guess) {
           const expected = expectedMove(parsed, current)!;
-          const text = t.gameTutor.deviationWrongOrder(moveInstruction(current.fen, expected));
+          const text = t.gameTutor.deviationWrongOrder(moveInstruction(current.fen, expected), nameRef.current);
           setFeedback({ tone: 'bad', text });
           speechTokenRef.current++;
           speak(text, 'game-tutor');
@@ -857,12 +944,12 @@ export function GameTutorPage() {
 
         {finished && !teaching && (
           <p className="text-lg font-semibold" data-testid="tutor-next">
-            {t.gameTutor.finished(t.games.result[game.result] ?? game.result)}
+            {t.gameTutor.finished(t.games.result[game.result] ?? game.result, name)}
           </p>
         )}
         {next && guess && (
           <p className="text-lg font-semibold" data-testid="tutor-next">
-            {t.gameTutor.yourTurn(playerOf(expected!.color))}
+            {t.gameTutor.yourTurn(playerOf(expected!.color), name)}
           </p>
         )}
         {next && (!guess || showHint) && (
@@ -932,6 +1019,47 @@ export function GameTutorPage() {
       </div>
 
       <Card className="space-y-3" data-testid="tutor-voice">
+        {name && !editingName ? (
+          <p className="flex flex-wrap items-center gap-2 text-sm" data-testid="tutor-name">
+            <span className="font-semibold">{t.gameTutor.nameIs(name)}</span>
+            <Button variant="ghost" size="sm" onClick={() => setEditingName(true)}>
+              {t.gameTutor.nameChange}
+            </Button>
+          </p>
+        ) : (
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const value = nameDraft.trim();
+              if (!value) return;
+              setName(value);
+              setEditingName(false);
+              const wasWaiting = awaitingNameRef.current;
+              awaitingNameRef.current = false;
+              greetedRef.current = false;
+              if (wasWaiting && sessionRef.current) {
+                greetedRef.current = true;
+                announce(sessionRef.current, t.gameTutor.nice(value));
+              }
+            }}
+          >
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold">
+              {t.gameTutor.nameLabel}
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                autoComplete="given-name"
+                className="min-h-11 rounded-xl border border-line bg-surface px-3 font-normal"
+                data-testid="tutor-name-input"
+              />
+            </label>
+            <Button type="submit" variant="secondary" disabled={!nameDraft.trim()} data-testid="tutor-name-save">
+              {t.gameTutor.nameSave}
+            </Button>
+          </form>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           {listening ? (
             <Button variant="secondary" icon={<Icon name="stop" size={18} />} onClick={stopListening} data-testid="tutor-mic">
@@ -970,6 +1098,7 @@ export function GameTutorPage() {
           </label>
         </div>
         {listening && <p className="text-sm text-muted">{t.gameTutor.micOn}</p>}
+        {(listening || stream) && ScreenAwake.supported() && <p className="text-xs text-muted">{t.gameTutor.awake}</p>}
         {!listeningSupported() && <p className="text-sm text-muted">{t.gameTutor.micUnsupported}</p>}
         {micError && (
           <p role="alert" className="text-sm font-semibold text-bad">

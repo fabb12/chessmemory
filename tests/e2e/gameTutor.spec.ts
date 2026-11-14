@@ -69,15 +69,25 @@ const FAKE_VOICE = `
   Object.defineProperty(window, 'speechSynthesis', {
     configurable: true,
     value: {
-      speak: (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); },
-      cancel: () => {},
+      // window.__longSpeech = true: la frase non finisce finché non viene interrotta.
+      speak: (u) => {
+        window.__said.push(u.text);
+        window.__current = u;
+        if (!window.__longSpeech) setTimeout(() => u.onend && u.onend(), 30);
+      },
+      cancel: () => {
+        window.__cancels = (window.__cancels || 0) + 1;
+        const u = window.__current;
+        window.__current = null;
+        if (u) setTimeout(() => u.onerror && u.onerror(), 0);
+      },
       getVoices: () => [],
       addEventListener: () => {},
     },
   });
   window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   window.SpeechRecognition = class {
-    start() { window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
+    start() { this.onstart && this.onstart(); window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
     stop() {}
     abort() {}
   };
@@ -326,4 +336,41 @@ test('tutor grandi partite: con la fotocamera il tempo scaduto ripete l’indica
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 2.Cf3.', { timeout: 10_000 });
   await expect(page.getByTestId('tutor-explanation')).toContainText('La lezione:');
+});
+
+test('tutor grandi partite: chiede il nome, si interrompe a voce e il microfono resta acceso', async ({ page }) => {
+  await openTutor(page, false, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-mic').click();
+  // All'inizio chiede il nome e poi lo usa quando parla.
+  await expect.poll(async () => (await said(page)).some((t) => t.includes('Come ti chiami?'))).toBe(true);
+  await say(page, 'mi chiamo marco');
+  await expect(page.getByTestId('tutor-name')).toContainText('Ti chiami Marco');
+  await expect.poll(async () => (await said(page)).some((t) => t.includes('Piacere, Marco! Iniziamo.'))).toBe(true);
+
+  // Mentre il tutor parla, un comando vocale lo interrompe subito.
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  await page.getByTestId('tutor-repeat').click();
+  await page.waitForTimeout(100);
+  const cancels = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('prossima mossa'));
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.');
+  // «Basta» ferma la spiegazione in corso.
+  await page.waitForTimeout(100);
+  const before = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  expect(before).toBeGreaterThan(cancels);
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('basta'));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0)).toBeGreaterThan(before);
+  // Una frase qualsiasi mentre parla (non un comando) non lo interrompe.
+  await page.getByTestId('tutor-reveal').click();
+  await page.waitForTimeout(100);
+  const now = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('chi ha vinto la partita'));
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0)).toBe(now);
+
+  // Alla prossima apertura microfono e nome ci sono ancora.
+  await page.reload();
+  await expect(page.getByTestId('tutor-mic')).toHaveText('Spegni il microfono');
+  await expect(page.getByTestId('tutor-name')).toContainText('Marco');
 });
