@@ -552,3 +552,103 @@ ${(input.brief ? input.lines.slice(0, 2) : input.lines).map((l, i) => `${i + 1}.
     throw mapError(error, sdk);
   }
 }
+
+// ───────────── Tutor delle Grandi Partite ─────────────
+
+export interface MasterMoveInput {
+  /** Posizione PRIMA della mossa. */
+  fen: string;
+  /** Mossa del Maestro in notazione italiana, con il numero (es. «10.Cxb5!»). */
+  move: string;
+  /** Chi la gioca, es. «Paul Morphy (Bianco)». */
+  player: string;
+  game: string;
+  /** Commento del PGN su questa mossa, se c'è. */
+  comment?: string;
+  /** Le mosse successive della partita (notazione italiana), per capire il piano. */
+  continuation: string;
+}
+
+const MASTER_SYSTEM = `Sei un istruttore di scacchi che accompagna un allievo (principiante o intermedio) mentre rigioca sulla scacchiera una partita storica di un grande maestro.
+Spiega in italiano semplice, in 2–3 frasi brevi, senza elenchi né titoli, PERCHÉ il maestro ha giocato la mossa indicata: l'idea, la minaccia o il piano, e che cosa ottiene.
+Le mosse della partita sono storiche e corrette: non contraddirle e non inventare varianti diverse. Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
+
+/** Spiegazione breve di una mossa di una partita famosa (generata in anticipo e messa in cache). */
+export async function explainMasterMove(input: MasterMoveInput): Promise<string> {
+  let sdk: typeof Anthropic | null = null;
+  try {
+    const created = await createClient();
+    sdk = created.sdk;
+    const message = await createMessage(created.client, created.sdk, {
+      model: ASSISTANT_MODEL,
+      max_tokens: 4000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: [{ type: 'text', text: MASTER_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: `Partita: ${input.game}
+Posizione prima della mossa (FEN): ${input.fen}
+Mossa: ${input.move}, giocata da ${input.player}.${input.comment ? `\nCommento dell'annotatore: ${input.comment}` : ''}
+Seguito della partita: ${input.continuation || '(fine della partita)'}`,
+        },
+      ],
+    });
+    recordUsage('explanation', message);
+    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+    const text = textOf(message);
+    if (!text) throw new AssistantError('unreadable');
+    return text;
+  } catch (error) {
+    throw mapError(error, sdk);
+  }
+}
+
+export interface DeviationInput {
+  fen: string;
+  /** Mossa giocata dall'utente e mossa del maestro, in notazione italiana. */
+  played: string;
+  master: string;
+  player: string;
+  /** Valutazioni di Stockfish (dal punto di vista di chi muove) dopo le due mosse. */
+  playedEval: string;
+  masterEval: string;
+  /** Migliore variante di Stockfish dopo la mossa dell'utente, in notazione italiana. */
+  refutation: string;
+}
+
+/** «Perché la mia mossa non va bene?»: chiamata live, solo su richiesta dell'utente. */
+export async function explainDeviation(input: DeviationInput): Promise<string> {
+  let sdk: typeof Anthropic | null = null;
+  try {
+    const created = await createClient();
+    sdk = created.sdk;
+    const message = await createMessage(created.client, created.sdk, {
+      model: ASSISTANT_MODEL,
+      max_tokens: 4000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: EXPLAIN_SYSTEM,
+      messages: [
+        {
+          role: 'user',
+          content: `Posizione (FEN): ${input.fen}
+L'allievo, al posto di ${input.player}, ha giocato ${input.played} invece della mossa del maestro ${input.master}.
+Stockfish: dopo ${input.played} la valutazione è ${input.playedEval}, dopo ${input.master} è ${input.masterEval} (dal punto di vista di chi muove).
+Migliore risposta dopo ${input.played}: ${input.refutation || 'nessuna variante'}.
+Rispondi in 2–3 frasi brevi: che cosa non va nella mossa dell'allievo (o, se è buona anche lei, dillo) e perché ${input.master} è migliore.`,
+        },
+      ],
+    });
+    recordUsage('explanation', message);
+    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+    const text = textOf(message);
+    if (!text) throw new AssistantError('unreadable');
+    return text;
+  } catch (error) {
+    throw mapError(error, sdk);
+  }
+}

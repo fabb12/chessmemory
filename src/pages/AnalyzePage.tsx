@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CANDIDATE_TONES, CandidateMoves, type Candidate } from '../components/analyze/CandidateMoves';
-import { BoardOverlay } from '../components/analyze/BoardOverlay';
+import { BoardOverlay } from '../components/vision/BoardOverlay';
 import { MoveFeedbackCard } from '../components/analyze/MoveFeedbackCard';
 import { WinningLineCard } from '../components/analyze/WinningLineCard';
 import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
@@ -37,6 +37,7 @@ import type { Side, Uci } from '../types';
 import { fromCrop, toCrop, type Corners, type Rect } from '../features/vision/geometry';
 import { analyzeImage, localBoardReading, resolveLocal, trustLocal, type VisionResult } from '../features/vision/hybrid';
 import { loadDetector, useDetectorStatus } from '../features/vision/pieceDetector';
+import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
 import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
@@ -810,7 +811,15 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   muted
                   onLoadedMetadata={(e) => {
                     const v = e.currentTarget;
-                    if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
+                    if (!v.videoWidth || !v.videoHeight) return;
+                    const ratio = v.videoWidth / v.videoHeight;
+                    setVideoAspect(ratio);
+                    // Calibrazione salvata (stessa fotocamera, non spostata): la griglia è già al suo posto.
+                    const saved = cornersRef.current ? null : loadCalibration(ratio);
+                    if (saved) {
+                      cornersByUser.current = true;
+                      setCorners(saved);
+                    }
                   }}
                   className="absolute inset-0 size-full object-contain"
                   data-testid="camera-video"
@@ -819,6 +828,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   <BoardOverlay
                     corners={corners}
                     view={viewPref === 'auto' ? (reading.status === 'done' ? reading.value.view : null) : viewPref}
+                    onChangeEnd={(next) => saveCalibration(next, videoAspect)}
                     onChange={(next) => {
                       cornersByUser.current = true;
                       setCorners(next);

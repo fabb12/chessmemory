@@ -176,6 +176,14 @@ export function GamePage({ profile }: { profile: Profile }) {
             </ol>
           </section>
 
+          <Card className="space-y-2">
+            <Link to={`/partite/${game.id}/tutor`} className={buttonClass('primary')} data-testid="game-tutor-link">
+              <Icon name="camera" size={18} />
+              {t.gameTutor.open}
+            </Link>
+            <p className="text-sm text-muted">{t.gameTutor.openHelp}</p>
+          </Card>
+
           <Card>
             <h2 className="font-display text-lg font-semibold">{t.games.lessonsTitle}</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
