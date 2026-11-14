@@ -16,7 +16,7 @@ describe('istruzione e perché di ogni mossa (senza Claude)', () => {
 
   it('spiega le catture, il centro e lo sviluppo; usa il commento del PGN quando c’è', () => {
     expect(reasonOf(at(1).fen, at(1).move)).toContain('centro');
-    expect(reasonOf(at(3).fen, at(3).move, at(3).prev)).toMatch(/attacca il pedone in e5|Sviluppa il cavallo/);
+    expect(reasonOf(at(3).fen, at(3).move, at(3).prev)).toMatch(/attacca il pedone in e5|sviluppa il cavallo/i);
     expect(reasonOf(at(4).fen, at(4).move, at(4).prev)).toContain('Philidor');
     const capture = opera.moves.findIndex((m) => m.san.includes('x') && !m.comment) + 1;
     expect(reasonOf(at(capture).fen, at(capture).move, at(capture).prev)).toMatch(/Cattura|Riprende/);
@@ -31,5 +31,20 @@ describe('istruzione e perché di ogni mossa (senza Claude)', () => {
 
   it('in modalità guidata nessuna mossa va indovinata', () => {
     expect(isGuessTurn(opera, startSession(opera), 'none')).toBe(false);
+  });
+});
+
+describe('spiegazioni sintetiche', () => {
+  it('le spiegazioni ricavate dalla posizione restano brevi', async () => {
+    const { parseGame } = await import('../../src/features/games/pgn');
+    const { findGame } = await import('../../src/data/games');
+    const { reasonOf } = await import('../../src/features/tutor/moveReason');
+    const game = parseGame(findGame('opera-game')!.pgn)!;
+    game.moves.forEach((move, i) => {
+      if (move.comment) return;
+      const fen = i === 0 ? game.startFen : game.moves[i - 1]!.fen;
+      const text = reasonOf(fen, move, game.moves[i - 1], game);
+      expect(text.split(/\s+/).length, text).toBeLessThanOrEqual(22);
+    });
   });
 });

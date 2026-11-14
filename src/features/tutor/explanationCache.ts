@@ -22,7 +22,7 @@ class TutorCacheDb extends Dexie {
 }
 
 /** Versione del prompt: cambiandola le vecchie spiegazioni vengono ignorate. */
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 
 /** Chiave della spiegazione: il tono «normale» tiene le chiavi di prima (le spiegazioni già pronte restano valide). */
 export function explanationKey(gameId: string, ply: number, tone = 'normal'): string {
