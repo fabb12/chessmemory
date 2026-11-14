@@ -261,4 +261,26 @@ test.describe('flusso completo di allenamento', () => {
     await page.locator('[data-testid^="game-link-carlsen-"]').first().click();
     await expect(page.locator('h1')).toBeVisible();
   });
+
+  test('partite famose: categorie e classifiche', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/partite');
+    await page.getByTestId('games-filter-short').click();
+    await expect(page.locator('[data-testid^="game-link-"]').first()).toHaveAttribute('data-testid', 'game-link-legal-mate-game');
+    await expect(page.getByTestId('game-rank').first()).toHaveText('1');
+    await page.getByTestId('games-filter-long').click();
+    await expect(page.locator('[data-testid^="game-link-"]').first()).toHaveAttribute('data-testid', 'game-link-carlsen-nepomniachtchi-2021-6');
+    await page.getByTestId('games-filter-elegant').click();
+    await expect(page.getByTestId('games-filter-help')).toContainText('Sacrifici');
+    await expect(page.locator('[data-testid^="game-link-"]').first()).toHaveAttribute('data-testid', 'game-link-immortal-game');
+    // La categoria resta scelta tornando indietro da una partita.
+    await page.locator('[data-testid^="game-link-"]').first().click();
+    await expect(page.locator('h1')).toBeVisible();
+    await page.goBack();
+    await expect(page.getByTestId('games-filter-elegant')).toHaveAttribute('aria-pressed', 'true');
+    for (const f of ['strategic', 'shocking', 'instructive', 'important']) {
+      await page.getByTestId(`games-filter-${f}`).click();
+      expect(await page.locator('[data-testid^="game-link-"]').count()).toBeGreaterThanOrEqual(5);
+    }
+  });
 });

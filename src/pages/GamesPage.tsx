@@ -1,23 +1,22 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, PageTitle } from '../components/ui/Card';
-import { FAMOUS_GAMES } from '../data/games';
-import { parseGame } from '../features/games/pgn';
+import { GAME_CATEGORIES, gamesIn, isGameCategory, PLY_COUNTS, type GameCategory } from '../data/gameCategories';
 import { t } from '../i18n';
 
-const plyCounts = new Map(FAMOUS_GAMES.map((g) => [g.id, parseGame(g.pgn).moves.length]));
-
 export function GamesPage() {
-  const [filter, setFilter] = useState<'all' | 'carlsen'>('all');
-  const games =
-    filter === 'carlsen' ? FAMOUS_GAMES.filter((g) => `${g.white} ${g.black}`.includes('Carlsen')) : FAMOUS_GAMES;
+  // La categoria sta nell'indirizzo: tornando indietro da una partita resta quella scelta.
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('categoria');
+  const filter: GameCategory = isGameCategory(raw) ? raw : 'all';
+  const setFilter = (f: GameCategory) => setParams(f === 'all' ? {} : { categoria: f }, { replace: true });
+  const { games, ranked } = gamesIn(filter);
   return (
     <div className="space-y-6">
       <header>
         <PageTitle>{t.games.title}</PageTitle>
       </header>
       <div className="flex flex-wrap gap-2" role="group" aria-label={t.games.filterLabel} data-testid="games-filter">
-        {(['all', 'carlsen'] as const).map((f) => (
+        {GAME_CATEGORIES.map((f) => (
           <button
             key={f}
             type="button"
@@ -32,20 +31,32 @@ export function GamesPage() {
           </button>
         ))}
       </div>
+      {filter !== 'all' && t.games.filterHelp[filter] && (
+        <p className="text-muted" data-testid="games-filter-help">
+          {t.games.filterHelp[filter]}
+        </p>
+      )}
       <ul className="grid gap-3 md:grid-cols-2">
-        {games.map((game) => (
+        {games.map((game, index) => (
           <li key={game.id}>
             <Link to={`/partite/${game.id}`} className="block h-full rounded-3xl" data-testid={`game-link-${game.id}`}>
               <Card className="cm-card-hover h-full hover:border-accent/50">
                 <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-semibold">{game.title}</h2>
+                  <h2 className="font-semibold">
+                    {ranked && (
+                      <span className="mr-2 inline-flex size-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white tabular-nums" data-testid="game-rank">
+                        {index + 1}
+                      </span>
+                    )}
+                    {game.title}
+                  </h2>
                   <span className="shrink-0 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-xs font-semibold tabular-nums">
                     {game.result.replace('1/2', '½')}
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm font-medium">{t.games.players(game.white, game.black)}</p>
                 <p className="text-xs text-muted">
-                  {t.games.meta(game.event, game.year)} · {game.opening} · {t.games.movesCount(plyCounts.get(game.id) ?? 0)}
+                  {t.games.meta(game.event, game.year)} · {game.opening} · {t.games.movesCount(PLY_COUNTS.get(game.id) ?? 0)}
                 </p>
                 <p className="mt-2 text-sm text-muted">{game.summary}</p>
                 <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Temi">
