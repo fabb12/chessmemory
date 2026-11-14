@@ -195,3 +195,113 @@ test('tutor grandi partite: modalità «Indovina tutto» sulla scacchiera 2D', a
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Esatto! 1.e4');
   await expect(page.getByTestId('tutor-explanation')).toContainText('centro');
 });
+
+/** Voce e microfono finti: la sintesi «parla» all'istante, il riconoscimento ascolta window.__say(testo). */
+const FAKE_VOICE = `
+(() => {
+  window.__said = [];
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    value: {
+      speak: (u) => { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 30); },
+      cancel: () => {},
+      getVoices: () => [],
+      addEventListener: () => {},
+    },
+  });
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  window.SpeechRecognition = class {
+    start() { window.__say = (text) => this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); }
+    stop() {}
+    abort() {}
+  };
+})();
+`;
+
+async function say(page: Page, text: string) {
+  // Si aspetta che il tutor abbia finito di parlare (e la breve pausa anti-eco).
+  await page.waitForTimeout(1100);
+  await page.evaluate((t) => (window as unknown as { __say: (t: string) => void }).__say(t), text);
+}
+
+test('tutor grandi partite: dopo N secondi passa da solo alla mossa successiva', async ({ page }) => {
+  await page.addInitScript(FAKE_VOICE);
+  await page.goto('./#/partite/opera-game/tutor');
+  await page.getByTestId('tutor-auto-seconds').fill('2');
+  await page.getByTestId('tutor-repeat').click();
+  await expect(page.getByTestId('tutor-countdown')).toBeVisible();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.', { timeout: 6_000 });
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.', { timeout: 6_000 });
+  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+  expect(said.some((s) => s.startsWith('Il Nero muove il pedone da e7 a e5.'))).toBe(true);
+  // 0 = mai: il conto alla rovescia sparisce.
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await expect(page.getByTestId('tutor-countdown')).toHaveCount(0);
+});
+
+test('tutor grandi partite: comandi a voce e domande sulla partita', async ({ page }) => {
+  const questions: string[] = [];
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const body = route.request().postDataJSON() as { messages: { content: string }[] };
+    const last = String(body.messages[body.messages.length - 1]?.content ?? '');
+    const isQuestion = last.includes('Domanda:');
+    if (isQuestion) questions.push(last);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: 'msg_q',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-opus-5-5',
+        content: [{ type: 'text', text: isQuestion ? 'Ha vinto Morphy con un matto spettacolare.' : 'Spiegazione di Claude.' }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+  await page.addInitScript(FAKE_VOICE);
+  await page.addInitScript(() => localStorage.setItem('cm.anthropic.apiKey', `sk-ant-api03-${'x'.repeat(40)}`));
+  await page.goto('./#/partite/opera-game/tutor');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-mic').click();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
+
+  await say(page, 'prossima mossa');
+  await expect(page.getByTestId('tutor-heard')).toContainText('prossima mossa');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+
+  await say(page, 'perché?');
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Spiegazione di Claude.');
+
+  await say(page, 'chi ha vinto questa partita?');
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Ha vinto Morphy con un matto spettacolare.');
+  expect(questions[0]).toContain('Mosse giocate finora: 1.e4');
+  expect(questions[0]).toContain('chi ha vinto');
+
+  // La domanda si può anche scrivere.
+  await page.getByTestId('tutor-question').fill('avanti');
+  await page.getByTestId('tutor-ask').click();
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
+});
+
+test('tutor grandi partite: se il tutor avanza da solo, la fotocamera aspetta le mosse in ordine', async ({ page }) => {
+  await openTutor(page, false);
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-camera-start').click();
+  await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
+  // «Avanti» due volte: sulla scacchiera vera mancano 1.e4 e 1…e5.
+  await page.getByTestId('tutor-skip').click();
+  await page.getByTestId('tutor-skip').click();
+  await expect(page.getByTestId('tutor-behind')).toContainText('mancano 2 mosse');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
+  await play(page, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR');
+  await expect(page.getByTestId('tutor-behind')).toContainText('manca 1 mossa', { timeout: 10_000 });
+  await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
+  await expect(page.getByTestId('tutor-behind')).toHaveCount(0, { timeout: 10_000 });
+  // Allineati: la mossa indicata viene riconosciuta come sempre.
+  await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('2.Cf3.', { timeout: 10_000 });
+});

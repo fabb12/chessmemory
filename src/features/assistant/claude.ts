@@ -652,3 +652,59 @@ Rispondi in 2–3 frasi brevi: che cosa non va nella mossa dell'allievo (o, se �
     throw mapError(error, sdk);
   }
 }
+
+export interface GameQuestionInput {
+  /** «Morphy – Duca di Brunswick e Conte Isouard, Parigi 1858». */
+  game: string;
+  /** Introduzione storica della partita. */
+  intro: string;
+  /** Mosse già giocate (notazione italiana). */
+  played: string;
+  /** Posizione attuale (FEN). */
+  fen: string;
+  /** Mossa che il tutor ha appena indicato, con la sua spiegazione. */
+  current: string;
+  question: string;
+  /** Domande e risposte precedenti, per le domande di seguito («e se invece…?»). */
+  history: { question: string; answer: string }[];
+}
+
+const QUESTION_SYSTEM = `Sei un istruttore di scacchi che accompagna un allievo (principiante o intermedio) mentre rigioca sulla sua scacchiera una partita storica di un grande maestro. L'allievo ti fa una domanda a voce.
+Rispondi in italiano semplice, in 2–4 frasi brevi, senza elenchi né titoli, restando sul contesto della partita e della posizione attuale. Le mosse della partita sono storiche: non contraddirle. Se la domanda non riguarda gli scacchi o la partita, riportala gentilmente alla partita.
+Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
+
+/** Risposta a una domanda libera dell'allievo sulla partita che sta rigiocando. */
+export async function askAboutGame(input: GameQuestionInput): Promise<string> {
+  let sdk: typeof Anthropic | null = null;
+  try {
+    const created = await createClient();
+    sdk = created.sdk;
+    const context = `Partita: ${input.game}
+Introduzione: ${input.intro}
+Mosse giocate finora: ${input.played || '(nessuna, posizione iniziale)'}
+Posizione attuale (FEN): ${input.fen}
+Mossa indicata adesso: ${input.current}`;
+    const messages: { role: 'user' | 'assistant'; content: string }[] = [];
+    input.history.slice(-3).forEach((h, i) => {
+      messages.push({ role: 'user', content: i === 0 ? `${context}\n\nDomanda: ${h.question}` : h.question });
+      messages.push({ role: 'assistant', content: h.answer });
+    });
+    messages.push({ role: 'user', content: messages.length === 0 ? `${context}\n\nDomanda: ${input.question}` : `(Posizione ora: ${input.fen}; mossa indicata: ${input.current})\n${input.question}` });
+    const message = await createMessage(created.client, created.sdk, {
+      model: ASSISTANT_MODEL,
+      max_tokens: 4000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: [{ type: 'text', text: QUESTION_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      messages,
+    });
+    recordUsage('explanation', message);
+    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+    const text = textOf(message);
+    if (!text) throw new AssistantError('unreadable');
+    return text;
+  } catch (error) {
+    throw mapError(error, sdk);
+  }
+}
