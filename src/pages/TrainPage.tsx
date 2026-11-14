@@ -321,7 +321,6 @@ export function TrainPage({ profile }: { profile: Profile }) {
     <div className="mx-auto max-w-2xl space-y-4">
       <header>
         <PageTitle>{t.train.introTitle}</PageTitle>
-        <p className="mt-1.5 text-lg text-muted">{t.train.introText}</p>
       </header>
       <Card>
         <fieldset data-testid="level-picker">
@@ -359,10 +358,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
         ) : (
           <>
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-semibold">{t.train.pickTitle}</p>
-                <p className="mt-0.5 text-sm text-muted">{t.train.pickHelp}</p>
-              </div>
+              <p className="font-semibold">{t.train.pickTitle}</p>
               <Button
                 variant="secondary"
                 icon={<Icon name="undo" size={18} />}

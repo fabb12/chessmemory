@@ -90,7 +90,7 @@ export function ObservePhase({ exercise, concept, orientation, onNext }: Observe
 
       <div className="animate-rise">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm text-muted">{t.observe.intro}</p>
+          <span />
           <SpeakButton
             text={facts.map((f) => `${f.label}. ${f.text}`).join(' ') + (moves.length > 1 ? ` ${t.observe.line}. ${formatLine(moves)}` : '')}
             auto={Boolean(onNext)}

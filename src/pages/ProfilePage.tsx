@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AccountCard } from '../components/account/AccountCard';
 import { isSupabaseConfigured } from '../services/supabase';
@@ -77,12 +77,6 @@ export function ProfilePage({ profile }: { profile: Profile }) {
   const [pendingImport, setPendingImport] = useState<BackupData | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetChecked, setResetChecked] = useState(false);
-  const [persisted, setPersisted] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    void navigator.storage?.persisted?.().then(setPersisted).catch(() => setPersisted(null));
-  }, []);
-
   const handleExport = async () => {
     try {
       const backup = await exportBackup();
@@ -148,7 +142,6 @@ export function ProfilePage({ profile }: { profile: Profile }) {
             </dd>
           </div>
         </dl>
-        <p className="mt-2 text-sm text-muted">{t.level.notElo}</p>
       </Card>
 
       <Card>
@@ -221,11 +214,6 @@ export function ProfilePage({ profile }: { profile: Profile }) {
       <Card>
         <SectionTitle>{t.profile.dataSection}</SectionTitle>
         <p className="mt-1 text-sm text-muted">{t.profile.dataNote}</p>
-        {persisted !== null && (
-          <p className="mt-1 text-sm text-muted">
-            {persisted ? t.profile.storagePersisted : t.profile.storageBestEffort}
-          </p>
-        )}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Button variant="secondary" block icon={<Icon name="download" size={18} />} onClick={() => void handleExport()} data-testid="export-data">
             {t.profile.export}

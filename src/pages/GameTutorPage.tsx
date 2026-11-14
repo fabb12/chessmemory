@@ -31,6 +31,7 @@ import {
   type SessionState,
   type UserSide,
 } from '../features/tutor/gameSession';
+import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
@@ -44,6 +45,8 @@ import { playLine } from '../components/mistakes/LineViewer';
 
 /** Profondità di Stockfish per giudicare le deviazioni: veloce, l'analisi parte prima che l'utente muova. */
 const JUDGE_DEPTH = 12;
+/** Quanto si aspetta la spiegazione di Claude prima di leggere quella locale. */
+const SPEECH_WAIT_MS = 3500;
 
 type Feedback = { tone: 'good' | 'bad' | 'info'; text: string } | null;
 type Phase<T> = { status: 'idle' } | { status: 'busy' } | { status: 'done'; value: T } | { status: 'error' };
@@ -70,7 +73,8 @@ export function GameTutorPage() {
   const parsed = useMemo(() => (game ? parseGame(game.pgn) : null), [game]);
   const apiKey = useApiKey();
 
-  const [side, setSide] = useState<UserSide>(() => (game?.result === '1-0' ? 'w' : game?.result === '0-1' ? 'b' : 'both'));
+  const [side, setSideState] = useState<UserSide>('none');
+  const sideRef = useRef<UserSide>('none');
   const [session, setSessionState] = useState<SessionState | null>(() => (parsed ? startSession(parsed) : null));
   const sessionRef = useRef(session);
   const setSession = useCallback((next: SessionState) => {
@@ -99,7 +103,8 @@ export function GameTutorPage() {
   const [why, setWhy] = useState<Phase<string>>({ status: 'idle' });
   const [unsure, setUnsure] = useState<RankedTransition[] | null>(null);
   const [showHint, setShowHint] = useState(false);
-  const [readyAhead, setReadyAhead] = useState(0);
+  const [, setTextsVersion] = useState(0);
+  const speechTokenRef = useRef(0);
   const analysisRef = useRef<Map<string, Promise<Analysis>>>(new Map());
   const queueRef = useRef<PrefetchQueue | null>(null);
 
@@ -132,7 +137,7 @@ export function GameTutorPage() {
     if (!parsed || !game) return;
     const cache = getExplanationCache();
     const key = (ply: number) => explanationKey(game.id, ply);
-    void cache.warm(parsed.moves.map((_, k) => key(k + 1))).then(() => setReadyAhead(queueRef.current?.readyAhead((sessionRef.current?.ply ?? 0) + 1) ?? 0));
+    void cache.warm(parsed.moves.map((_, k) => key(k + 1))).then(() => setTextsVersion((v) => v + 1));
     if (!apiKey) {
       queueRef.current = null;
       return;
@@ -155,8 +160,7 @@ export function GameTutorPage() {
         });
       },
       onReady: (ply, text) => {
-        const s = sessionRef.current;
-        if (s) setReadyAhead(queue.readyAhead(s.ply + 1));
+        setTextsVersion((v) => v + 1);
         // La spiegazione della mossa appena giocata è arrivata dopo: si mostra adesso.
         setExplanation((current) => (current && current.ply === ply ? { ply, text } : current));
       },
@@ -169,7 +173,12 @@ export function GameTutorPage() {
   const explanationFor = useCallback(
     (ply: number): string => {
       const move = parsed?.moves[ply - 1];
-      return queueRef.current?.peek(ply) ?? (game ? getExplanationCache().peek(explanationKey(game.id, ply)) : undefined) ?? move?.comment ?? t.gameTutor.noComment;
+      if (!parsed || !move) return '';
+      return (
+        queueRef.current?.peek(ply) ??
+        (game ? getExplanationCache().peek(explanationKey(game.id, ply)) : undefined) ??
+        reasonOf(fenAt(parsed, ply - 1), move, parsed.moves[ply - 2])
+      );
     },
     [parsed, game],
   );
@@ -179,8 +188,40 @@ export function GameTutorPage() {
     if (!parsed || !session || session.deviation || isFinished(parsed, session)) return;
     if (isGuessTurn(parsed, session, side)) void analysisOf(session.fen).catch(() => undefined);
     queueRef.current?.advance(session.ply + 1);
-    if (queueRef.current) setReadyAhead(queueRef.current.readyAhead(session.ply + 1));
   }, [parsed, session, side, analysisOf]);
+
+  /**
+   * Dice a voce che cosa fare adesso: la mossa da eseguire (pezzo, casa di partenza
+   * e di arrivo) con il perché, oppure «tocca a te» se la mossa va indovinata.
+   * `prefix` è il riscontro sulla mossa appena fatta. Se la spiegazione di Claude
+   * è in arrivo la si aspetta un poco, poi si legge quella locale.
+   */
+  const announce = useCallback(
+    (state: SessionState, prefix = '') => {
+      if (!parsed || !game) return;
+      const token = ++speechTokenRef.current;
+      const say = (text: string) => {
+        if (token === speechTokenRef.current) speak(`${prefix} ${text}`.trim(), 'game-tutor');
+      };
+      if (isFinished(parsed, state)) return say(t.gameTutor.finished(t.games.result[game.result] ?? game.result));
+      if (state.deviation) return say('');
+      const move = expectedMove(parsed, state)!;
+      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black));
+      const ply = state.ply + 1;
+      const what = moveInstruction(state.fen, move);
+      const queue = queueRef.current;
+      if (!queue || queue.peek(ply) !== undefined) return say(`${what} ${t.gameTutor.why}: ${explanationFor(ply)}`);
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SPEECH_WAIT_MS));
+      void Promise.race([queue.get(ply), timeout]).then(() => say(`${what} ${t.gameTutor.why}: ${explanationFor(ply)}`));
+    },
+    [parsed, game, explanationFor],
+  );
+
+  const setSide = (next: UserSide) => {
+    sideRef.current = next;
+    setSideState(next);
+    if (sessionRef.current) announce(sessionRef.current);
+  };
 
   // ───── Applicazione di una mossa riconosciuta (fotocamera, correzione o scacchiera 2D) ─────
   const applyTransition = useCallback(
@@ -196,7 +237,7 @@ export function GameTutorPage() {
         setJudgement({ status: 'idle' });
         setShowHint(false);
         setFeedback({ tone: 'info', text: t.gameTutor.takenBack });
-        speak(t.gameTutor.takenBack, 'game-tutor');
+        announce(next, t.gameTutor.takenBack);
         return;
       }
       if (!transition.uci || !transition.san) return;
@@ -208,21 +249,31 @@ export function GameTutorPage() {
       if (outcome.kind === 'match') {
         const ply = state.ply;
         const label = moveLabel(outcome.move);
-        const head = !guess ? t.gameTutor.played(label) : outcome.firstTry ? t.gameTutor.correct(label) : t.gameTutor.correctLater(label);
-        const text = explanationFor(ply);
-        setFeedback({ tone: guess ? 'good' : 'info', text: head });
-        setExplanation({ ply, text });
         setJudgement({ status: 'idle' });
         setShowHint(false);
-        speak(`${head} ${text}`, 'game-tutor');
+        if (!guess) {
+          // Mossa eseguita su indicazione: il perché è già stato detto, si passa alla prossima.
+          setFeedback({ tone: 'good', text: t.gameTutor.played(label) });
+          setExplanation(null);
+          announce(state, t.gameTutor.done);
+          return;
+        }
+        const head = outcome.firstTry ? t.gameTutor.correct(label) : t.gameTutor.correctLater(label);
+        const text = explanationFor(ply);
+        setFeedback({ tone: 'good', text: head });
+        setExplanation({ ply, text });
+        announce(state, `${head} ${text}`);
         return;
       }
       if (outcome.kind === 'deviation') {
         const played = sanToLocal(outcome.deviation.san);
         setShowHint(true);
         if (!guess) {
-          setFeedback({ tone: 'bad', text: t.gameTutor.deviationWrongOrder });
-          speak(t.gameTutor.deviationWrongOrder, 'game-tutor');
+          const expected = expectedMove(parsed, current)!;
+          const text = t.gameTutor.deviationWrongOrder(moveInstruction(current.fen, expected));
+          setFeedback({ tone: 'bad', text });
+          speechTokenRef.current++;
+          speak(text, 'game-tutor');
           return;
         }
         setFeedback({ tone: 'bad', text: t.gameTutor.deviation(played) });
@@ -249,7 +300,7 @@ export function GameTutorPage() {
           .catch(() => setJudgement({ status: 'error' }));
       }
     },
-    [parsed, game, side, setSession, explanationFor, analysisOf],
+    [parsed, game, side, setSession, explanationFor, analysisOf, announce],
   );
   const applyRef = useRef(applyTransition);
   applyRef.current = applyTransition;
@@ -265,6 +316,7 @@ export function GameTutorPage() {
   // ───── Fotocamera ─────
   const startCamera = async () => {
     setCameraError(false);
+    if (sessionRef.current) announce(sessionRef.current);
     try {
       const media = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -328,7 +380,6 @@ export function GameTutorPage() {
     const saved = loadCalibration(ratio);
     if (saved) {
       setCorners(saved);
-      setCalibrationNote(t.gameTutor.calibration.loaded);
     } else {
       setCorners(defaultCorners(ratio));
       void autoDetect();
@@ -347,7 +398,7 @@ export function GameTutorPage() {
         setCorners(found.corners);
         saveCalibration(found.corners, aspect);
         tracker.resync();
-        setCalibrationNote(t.gameTutor.calibration.autoFound(found.matched));
+        setCalibrationNote(t.gameTutor.calibration.autoFound);
       } else {
         setCalibrationNote(t.gameTutor.calibration.autoFailed);
       }
@@ -384,19 +435,21 @@ export function GameTutorPage() {
   const playerOf = (color: 'w' | 'b') => (color === 'w' ? game.white : game.black);
   const fen = boardFen(session);
   const lastMove = session.ply > 0 ? parsed.moves[session.ply - 1]! : null;
-  // Freccia: sempre per le mosse da eseguire per l'avversario; per le proprie solo come suggerimento.
+  // Freccia: sempre per le mosse da eseguire su indicazione; per quelle da indovinare solo come suggerimento.
   const hintMove = expected && (!guess || showHint) ? expected : null;
   const overlayArrows: OverlayArrow[] = hintMove && !session.deviation ? [{ from: hintMove.from, to: hintMove.to, tone: 'hint' }] : [];
   const boardArrows: BoardArrow[] = hintMove && !session.deviation ? [{ from: hintMove.from, to: hintMove.to, tone: 'teach' }] : [];
   if (session.deviation) boardArrows.push({ from: session.deviation.uci.slice(0, 2), to: session.deviation.uci.slice(2, 4), tone: 'bad' });
   const orientation = side === 'b' ? 'black' : 'white';
-  const instruction = finished
-    ? t.gameTutor.finished(t.games.result[game.result] ?? game.result)
-    : session.deviation
-      ? null
-      : guess
-        ? t.gameTutor.yourTurn(playerOf(expected!.color))
-        : t.gameTutor.playFor(playerOf(expected!.color), moveLabel(expected!));
+  // Prossima mossa: pezzo da muovere, case e perché (per le mosse da eseguire, o col suggerimento).
+  const next =
+    expected && !finished && !session.deviation
+      ? {
+          heading: t.gameTutor.moveNumber(expected.moveNumber, t.sides[expected.color], playerOf(expected.color)),
+          what: moveInstruction(session.fen, expected),
+          why: explanationFor(session.ply + 1),
+        }
+      : null;
 
   const askWhy = async () => {
     const deviation = session.deviation;
@@ -431,6 +484,16 @@ export function GameTutorPage() {
     }
   };
 
+  const jump = (target: SessionState) => {
+    setSession(target);
+    trackerRef.current?.commit(boardFen(target));
+    setFeedback(null);
+    setExplanation(null);
+    setJudgement({ status: 'idle' });
+    setShowHint(false);
+    announce(target);
+  };
+
   const viewSide = t.analyze.orientation.sides[view] ?? view;
 
   return (
@@ -445,6 +508,23 @@ export function GameTutorPage() {
           {t.games.players(game.white, game.black)} · {t.games.meta(game.event, game.year)}
         </p>
       </header>
+
+      <fieldset>
+        <legend className="mb-1 text-sm font-semibold">{t.gameTutor.sideLabel}</legend>
+        <div className="flex flex-wrap gap-2" data-testid="tutor-side">
+          {(['none', 'w', 'b', 'both'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={side === s}
+              onClick={() => setSide(s)}
+              className={`min-h-10 rounded-xl border-2 px-4 text-sm font-semibold ${side === s ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
+            >
+              {t.gameTutor.sides[s]}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       {/* Istruzione e riscontro: in alto, grandi, leggibili da lontano. */}
       <div
@@ -467,13 +547,41 @@ export function GameTutorPage() {
           </p>
         )}
         {judgement.status === 'busy' && <p className="text-sm text-muted">{t.gameTutor.evaluating}</p>}
-        {instruction && (
+
+        {finished && (
           <p className="text-lg font-semibold" data-testid="tutor-next">
-            {instruction}
+            {t.gameTutor.finished(t.games.result[game.result] ?? game.result)}
           </p>
         )}
-        {!guess && !finished && !session.deviation && <p className="text-sm text-muted">{t.gameTutor.playForHelp}</p>}
+        {next && guess && (
+          <p className="text-lg font-semibold" data-testid="tutor-next">
+            {t.gameTutor.yourTurn(playerOf(expected!.color))}
+          </p>
+        )}
+        {next && (!guess || showHint) && (
+          <div className="space-y-1" data-testid="tutor-move">
+            <p className="text-sm font-semibold text-muted">{next.heading}</p>
+            {!guess && (
+              <p className="font-display text-2xl font-semibold" data-testid="tutor-next">
+                {next.what}
+              </p>
+            )}
+            {guess && <p className="text-lg font-semibold">{next.what}</p>}
+            {!guess && next.why && (
+              <p className="text-base" data-testid="tutor-why-move">
+                <span className="font-semibold">{t.gameTutor.why}: </span>
+                {next.why}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
+          {!finished && !session.deviation && (
+            <Button variant="secondary" size="sm" icon={<Icon name="speaker" size={16} />} onClick={() => announce(session)} data-testid="tutor-repeat">
+              {t.gameTutor.repeat}
+            </Button>
+          )}
           {guess && !finished && !session.deviation && !showHint && (
             <Button variant="secondary" size="sm" icon={<Icon name="bulb" size={16} />} onClick={() => setShowHint(true)} data-testid="tutor-hint">
               {t.gameTutor.hint}
@@ -481,7 +589,7 @@ export function GameTutorPage() {
           )}
           {session.deviation && apiKey && judgement.status === 'done' && (
             <Button variant="secondary" size="sm" icon={<Icon name="chat" size={16} />} onClick={() => void askWhy()} disabled={why.status === 'busy'} data-testid="tutor-why">
-              {why.status === 'busy' ? t.gameTutor.whyBusy : t.gameTutor.why}
+              {why.status === 'busy' ? t.gameTutor.whyBusy : t.gameTutor.whyDeviation}
             </Button>
           )}
           {session.deviation && (
@@ -495,10 +603,11 @@ export function GameTutorPage() {
             {why.value}
           </p>
         )}
-        <p className="text-xs text-muted" data-testid="tutor-score">
-          {t.gameTutor.score(session.found, parsed.moves.filter((m) => side === 'both' || m.color === side).length)}
-          {apiKey ? ` · ${t.gameTutor.prefetch(readyAhead)}` : ''}
-        </p>
+        {side !== 'none' && (
+          <p className="text-xs text-muted" data-testid="tutor-score">
+            {t.gameTutor.score(session.found, parsed.moves.filter((m) => side === 'both' || m.color === side).length)}
+          </p>
+        )}
       </div>
 
       {unsure && (
@@ -519,24 +628,6 @@ export function GameTutorPage() {
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <Card className="space-y-3">
-          <fieldset>
-            <legend className="mb-1 text-sm font-semibold">{t.gameTutor.sideLabel}</legend>
-            <div className="flex flex-wrap gap-2" data-testid="tutor-side">
-              {(['w', 'b', 'both'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={side === s}
-                  onClick={() => setSide(s)}
-                  className={`min-h-10 rounded-xl border-2 px-4 text-sm font-semibold ${side === s ? 'border-accent bg-accent-soft' : 'border-line bg-surface'}`}
-                >
-                  {t.gameTutor.sides[s]}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-muted">{t.gameTutor.sideHelp}</p>
-          </fieldset>
-
           <div className="overflow-hidden rounded-2xl border border-line bg-surface-2">
             {stream ? (
               <div className="relative w-full bg-black" style={{ aspectRatio: aspect }}>
@@ -557,7 +648,7 @@ export function GameTutorPage() {
                     onChange={setCorners}
                     onChangeEnd={(next) => {
                       saveCalibration(next, aspect);
-                      setCalibrationNote(t.gameTutor.calibration.saved);
+                      setCalibrationNote(null);
                       trackerRef.current?.resync();
                     }}
                   />
@@ -566,11 +657,7 @@ export function GameTutorPage() {
             ) : (
               <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 p-4 text-center text-muted">
                 <Icon name="camera" size={40} />
-                <ol className="list-decimal space-y-1 pl-5 text-left text-sm">
-                  {t.gameTutor.calibration.steps.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
+                <p className="text-sm">{t.gameTutor.framing}</p>
               </div>
             )}
           </div>
@@ -608,7 +695,7 @@ export function GameTutorPage() {
             </p>
           )}
           {calibrationNote && stream && (
-            <p className="text-xs text-muted" data-testid="tutor-calibration-note">
+            <p className="text-sm" data-testid="tutor-calibration-note">
               {calibrationNote}
             </p>
           )}
@@ -631,46 +718,15 @@ export function GameTutorPage() {
             lastMove={lastMove && !session.deviation ? { from: lastMove.from, to: lastMove.to } : null}
             lastMoveTone="neutral"
           />
-          <p className="text-xs text-muted">{t.gameTutor.boardHelp}</p>
-          <div className="space-y-2 rounded-xl border border-line p-3">
-            <p className="text-sm font-semibold">{t.gameTutor.manualTitle}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  const next = skipMove(parsed, session);
-                  setSession(next);
-                  trackerRef.current?.commit(boardFen(next));
-                  if (next.ply > session.ply) {
-                    const text = explanationFor(next.ply);
-                    setExplanation({ ply: next.ply, text });
-                    setFeedback({ tone: 'info', text: t.gameTutor.played(moveLabel(parsed.moves[next.ply - 1]!)) });
-                  }
-                }}
-                disabled={finished}
-                data-testid="tutor-skip"
-              >
-                {t.gameTutor.skip}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const next = undoMove(parsed, session);
-                  setSession(next);
-                  trackerRef.current?.commit(boardFen(next));
-                  setFeedback(null);
-                  setExplanation(null);
-                }}
-                disabled={session.ply === 0 && !session.deviation}
-                data-testid="tutor-undo"
-              >
-                {t.gameTutor.undo}
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => jump(undoMove(parsed, session))} disabled={session.ply === 0 && !session.deviation} data-testid="tutor-undo">
+              {t.gameTutor.undo}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => jump(skipMove(parsed, session))} disabled={finished} data-testid="tutor-skip">
+              {t.gameTutor.skip}
+            </Button>
+            <span className="ml-auto text-xs text-muted tabular-nums">{t.games.position(session.ply, parsed.moves.length)}</span>
           </div>
-          <p className="text-xs text-muted tabular-nums">{t.games.position(session.ply, parsed.moves.length)}</p>
         </Card>
       </div>
     </div>

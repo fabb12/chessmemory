@@ -12,8 +12,11 @@ import type { Side, Uci } from '../../types';
  * indietro il pezzo (la fotocamera riconosce anche il ritorno alla posizione).
  */
 
-/** Con quale colore l'utente «indovina» le mosse del Maestro; l'altro colore lo muove su indicazione. */
-export type UserSide = Side | 'both';
+/**
+ * Con quale colore l'utente «indovina» le mosse del Maestro; le altre le esegue su indicazione.
+ * 'none' = modalità guidata: il tutor indica e spiega ogni mossa di entrambi i colori.
+ */
+export type UserSide = Side | 'both' | 'none';
 
 export interface Deviation {
   uci: Uci;

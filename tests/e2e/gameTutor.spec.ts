@@ -117,10 +117,13 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
 
   // Prima ancora di accendere la fotocamera la coda ha preparato le prime mosse.
   await expect.poll(() => asked.slice(0, 3)).toEqual(['1.e4', '1…e5', '2.Cf3']);
+  // Modalità guidata (predefinita): indica pezzo, case e perché anche per il Bianco.
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
+  await expect(page.getByTestId('tutor-why-move')).toContainText('Spiegazione preparata per 1.e4.');
+  await page.getByTestId('tutor-side').getByRole('button', { name: 'Indovina il Bianco' }).click();
   await expect(page.getByTestId('tutor-next')).toContainText('qual è la mossa di Paul Morphy');
 
   await page.getByTestId('tutor-camera-start').click();
-  await expect(page.getByTestId('tutor-calibration-note')).toContainText('Calibrazione precedente ripristinata');
   await expect(page.getByTestId('board-overlay')).toBeVisible();
   // Griglia AR con i pezzi attesi dalla FEN e anteprima raddrizzata dal worker.
   await expect(page.getByTestId('overlay-piece')).toHaveCount(32);
@@ -135,8 +138,9 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
   await expect(page.getByTestId('tutor-explanation')).toHaveText('Spiegazione preparata per 1.e4.');
   await expect(page.getByTestId('tutor-score')).toContainText('al primo colpo: 1 su');
 
-  // 1…e5 tocca al Nero: il tutor la indica (freccia sulla griglia AR) e l'utente la esegue.
-  await expect(page.getByTestId('tutor-next')).toContainText('1…e5');
+  // 1…e5 tocca al Nero: il tutor la indica, con il perché, (freccia sulla griglia AR) e l'utente la esegue.
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+  await expect(page.getByTestId('tutor-why-move')).toContainText('Spiegazione preparata per 1…e5.');
   await expect(page.getByTestId('overlay-arrow')).toHaveAttribute('data-move', 'e7e5');
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('1…e5.', { timeout: 10_000 });
@@ -144,12 +148,12 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
   // 2.d4 invece di 2.Cf3: deviazione, giudizio di Stockfish, richiesta di riprovare.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR');
   await expect(page.getByTestId('tutor-feedback')).toContainText('d4', { timeout: 10_000 });
-  await expect(page.getByTestId('tutor-feedback')).toContainText('Riporta indietro il pezzo', { timeout: 30_000 });
+  await expect(page.getByTestId('tutor-feedback')).toContainText('Rimetti il pezzo', { timeout: 30_000 });
   await expect(page.getByTestId('tutor-why')).toBeVisible();
 
   // Il pedone torna in d2: la fotocamera riconosce il ritorno alla posizione della partita.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
-  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, posizione ripristinata. Riprova!', { timeout: 10_000 });
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Posizione ripristinata.', { timeout: 10_000 });
 
   // 2.Cf3: giusta, ma non al primo colpo.
   await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
@@ -158,18 +162,36 @@ test('tutor grandi partite: segue le mosse sulla scacchiera, spiega subito e ges
   await expect(page.getByTestId('tutor-score')).toContainText('al primo colpo: 1 su');
 });
 
-test('tutor grandi partite: senza fotocamera si gioca sulla scacchiera 2D, con i commenti del PGN', async ({ page }) => {
+test('tutor grandi partite: modalità guidata sulla scacchiera 2D, con le spiegazioni locali', async ({ page }) => {
   await openTutor(page, false);
-  await page.getByTestId('tutor-side').getByRole('button', { name: 'Di entrambi' }).click();
-  // Muove con un clic sulla casa di partenza e uno su quella d'arrivo.
+  const click = async (square: string) => page.locator(`[data-square="${square}"]`).first().click();
+  // Senza chiave: istruzione e perché ricavati dalla posizione.
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
+  await expect(page.getByTestId('tutor-why-move')).toContainText('centro');
+  await click('e2');
+  await click('e4');
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.');
+  // Subito la mossa successiva, per l'altro colore.
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+  // Mossa sbagliata: si chiede di rimettere il pezzo e si ripete la mossa giusta.
+  await click('d7');
+  await click('d5');
+  await expect(page.getByTestId('tutor-feedback')).toContainText('Il Nero muove il pedone da e7 a e5.');
+  await page.getByTestId('tutor-takeback').click();
+  await click('e7');
+  await click('e5');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il cavallo da g1 a f3.');
+  await page.getByTestId('tutor-skip').click();
+  // 2…d6 ha un commento nel PGN: è il perché della mossa.
+  await expect(page.getByTestId('tutor-why-move')).toContainText('Philidor');
+});
+
+test('tutor grandi partite: modalità «Indovina tutto» sulla scacchiera 2D', async ({ page }) => {
+  await openTutor(page, false);
+  await page.getByTestId('tutor-side').getByRole('button', { name: 'Indovina tutto' }).click();
   const click = async (square: string) => page.locator(`[data-square="${square}"]`).first().click();
   await click('e2');
   await click('e4');
   await expect(page.getByTestId('tutor-feedback')).toHaveText('Esatto! 1.e4');
-  await expect(page.getByTestId('tutor-explanation')).toContainText('osserva che cosa cambia');
-  await page.getByTestId('tutor-skip').click();
-  await page.getByTestId('tutor-skip').click();
-  // 2…d6 ha un commento nel PGN: si mostra subito.
-  await page.getByTestId('tutor-skip').click();
-  await expect(page.getByTestId('tutor-explanation')).toContainText('Philidor');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('centro');
 });

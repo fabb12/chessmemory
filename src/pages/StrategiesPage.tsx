@@ -41,7 +41,6 @@ export function StrategiesPage() {
     <div className="space-y-8">
       <header>
         <PageTitle>{t.strategies.title}</PageTitle>
-        <p className="mt-1.5 text-lg text-muted">{t.strategies.intro}</p>
       </header>
       <Link to="/partite" className="block rounded-3xl" data-testid="games-link">
         <Card className="cm-card-hover flex items-center gap-3 hover:border-accent/50">
