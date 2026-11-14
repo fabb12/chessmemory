@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_CATEGORIES, gamesIn, PLY_COUNTS, RANKINGS } from '../../src/data/gameCategories';
+import { FAMOUS_PLAYERS, GAME_CATEGORIES, gamesIn, gamesOfPlayer, PLY_COUNTS, RANKINGS } from '../../src/data/gameCategories';
 import { FAMOUS_GAMES } from '../../src/data/games';
 
 describe('categorie delle partite famose', () => {
@@ -24,5 +24,15 @@ describe('categorie delle partite famose', () => {
   it('ogni categoria ha delle partite', () => {
     for (const c of GAME_CATEGORIES) expect(gamesIn(c).games.length, c).toBeGreaterThan(0);
     expect(gamesIn('all').games.length).toBe(FAMOUS_GAMES.length);
+  });
+
+  it('ogni giocatore famoso ha almeno una partita, in ordine di anno', () => {
+    for (const p of FAMOUS_PLAYERS) {
+      const games = gamesOfPlayer(p.id);
+      expect(games.length, p.id).toBeGreaterThan(0);
+      expect(games.map((g) => g.year)).toEqual([...games.map((g) => g.year)].sort((a, b) => a - b));
+    }
+    expect(gamesOfPlayer('carlsen').length).toBeGreaterThanOrEqual(5);
+    expect(gamesOfPlayer('kasparov').map((g) => g.id)).toEqual(['karpov-kasparov-1985-24', 'deep-blue-kasparov-6', 'kasparov-topalov']);
   });
 });
