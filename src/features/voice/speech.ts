@@ -65,6 +65,7 @@ export function speak(text: string, id = 'default'): void {
   const voice = italianVoice();
   if (voice) utterance.voice = voice;
   utterance.rate = getVoiceRate();
+  utterance.volume = getVoiceVolume();
   // Solo la frase in corso chiude il «sta parlando»: quella interrotta da cancel()
   // segnala la sua fine più tardi e non deve far credere che la nuova sia finita.
   const done = () => {
@@ -83,6 +84,15 @@ export function speak(text: string, id = 'default'): void {
   speakingId = id;
   notify();
   synth.speak(utterance);
+  spokenListeners.forEach((l) => l(text, id));
+}
+
+const spokenListeners = new Set<(text: string, id: string) => void>();
+
+/** Avvisa ogni volta che l'app pronuncia una frase (per lo storico della lezione). */
+export function onSpoken(listener: (text: string, id: string) => void): () => void {
+  spokenListeners.add(listener);
+  return () => spokenListeners.delete(listener);
 }
 
 /** Il testo che l'app sta pronunciando adesso ('' se tace). */
@@ -120,6 +130,7 @@ export function useSpeakingId(): string | null {
 const ENABLED_KEY = 'cm.voice.enabled';
 const AUTO_KEY = 'cm.voice.auto';
 const RATE_KEY = 'cm.voice.rate';
+const VOLUME_KEY = 'cm.voice.volume';
 const prefListeners = new Set<() => void>();
 
 function read(key: string): string | null {
@@ -157,6 +168,20 @@ export function getVoiceAuto(): boolean {
 export function setVoiceAuto(on: boolean): void {
   write(AUTO_KEY, on ? 'on' : 'off');
   if (!on) stopSpeaking();
+}
+
+/** Volume della voce (0,2–1). Più basso = il microfono sente meno l'eco dell'altoparlante. */
+export function getVoiceVolume(): number {
+  const n = Number(read(VOLUME_KEY));
+  return read(VOLUME_KEY) !== null && n >= 0.2 && n <= 1 ? n : 1;
+}
+
+export function setVoiceVolume(volume: number): void {
+  write(VOLUME_KEY, String(Math.max(0.2, Math.min(1, volume))));
+}
+
+export function useVoiceVolume(): number {
+  return useSyncExternalStore(subscribePrefs, getVoiceVolume, () => 1);
 }
 
 export function getVoiceRate(): number {

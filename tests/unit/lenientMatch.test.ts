@@ -28,3 +28,23 @@ describe('mossa indicata dal tutor: riconoscimento tollerante', () => {
     expect(other.kind === 'match' && other.transition.uci).not.toBe('e2e4');
   });
 });
+
+describe('allineamento dopo un salto', () => {
+  it('riconosce la posizione di arrivo anche dopo più mosse sistemate insieme', async () => {
+    const { touchedSquares } = await import('../../src/features/engine/moveMatcher');
+    // Dall'inizio a dopo 1.e4 e5 2.Cf3: cambiano e2, e4, e7, e5, g1, f3.
+    const after = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
+    const changed = Object.fromEntries(touchedSquares(START, after).map((sq) => [sq, 200]));
+    const align = { id: 'align', fen: after, kind: 'takeback' as const };
+    const result = matchTransition({ fen: START, candidates: [...legalTransitions(START), align], changes: changes(changed), preferred: 'align', lenient: true });
+    expect(result.kind).toBe('match');
+    expect(result.kind === 'match' && result.transition.id).toBe('align');
+  });
+
+  it('a pezzi sistemati solo in parte non si allinea', () => {
+    const after = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2';
+    const align = { id: 'align', fen: after, kind: 'takeback' as const };
+    const result = matchTransition({ fen: START, candidates: [...legalTransitions(START), align], changes: changes({ e2: 200, e4: 200 }), preferred: 'align', lenient: true });
+    expect(result.kind === 'match' && result.transition.id).not.toBe('align');
+  });
+});
