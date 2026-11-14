@@ -66,6 +66,12 @@ export const SEEN_MIN = 0.3;
 export const PREFERRED_SLACK = 0.03;
 /** Distacco minimo (in errore) tra la migliore e la seconda. */
 export const MIN_MARGIN = 0.1;
+/**
+ * Soglie per la mossa attesa quando l'utente sta solo ESEGUENDO una mossa indicata
+ * (tutor guidato): quasi certamente ha giocato proprio quella, quindi si accetta anche
+ * con un'immagine meno pulita (una casa poco contrastata, un po' di rumore).
+ */
+export const LENIENT = { maxMissing: 1, minScale: 0.25, maxError: 0.5, slack: 0.1 };
 /** Peso dell'accordo con il classificatore a 3 classi. */
 const OCCUPANCY_WEIGHT = 0.15;
 
@@ -128,6 +134,8 @@ export interface MatchInput {
   geometry?: BoardGeometry | null;
   /** Impronta già accertata (fotocamera ferma): si usa solo questa invece di provarle tutte. */
   footprint?: FootprintName | null;
+  /** La mossa attesa è stata indicata all'utente (non va indovinata): soglie più tolleranti. */
+  lenient?: boolean;
 }
 
 const ALL_SQUARES: string[] = [];
@@ -230,12 +238,16 @@ export function matchTransition(input: MatchInput): MatchResult {
   // peggiore errore possibile per il tutor: nel dubbio decide la regola generale o l'utente.
   if (input.preferred) {
     const preferred = ranked.find((r) => r.transition.id === input.preferred);
+    const limits = input.lenient
+      ? LENIENT
+      : { maxMissing: 0, minScale: MIN_SCALE, maxError: MAX_ERROR, slack: PREFERRED_SLACK };
     if (
       preferred &&
-      preferred.missing.length === 0 &&
-      preferred.scale >= MIN_SCALE &&
-      preferred.error <= MAX_ERROR &&
-      preferred.error <= best.error + PREFERRED_SLACK
+      preferred.missing.length <= limits.maxMissing &&
+      preferred.missing.length < preferred.touched.length &&
+      preferred.scale >= limits.minScale &&
+      preferred.error <= limits.maxError &&
+      preferred.error <= best.error + limits.slack
     ) {
       return { kind: 'match', transition: preferred.transition, ranked, viaPreferred: preferred !== best, footprint };
     }

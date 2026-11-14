@@ -31,6 +31,8 @@ export interface TrackerSource {
   extraTransitions?: () => Transition[];
   /** Transizione attesa (validazione istantanea della mossa del Maestro). */
   preferred?: () => string | null;
+  /** La transizione attesa è stata indicata all'utente: si riconosce con soglie più tolleranti. */
+  lenient?: () => boolean;
 }
 
 export interface TrackerEvents {
@@ -192,7 +194,7 @@ export class BoardTracker {
     for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) changes.set(cellToSquare(i, j, this.view), cells[i * 8 + j] ?? 0);
     const occupancy = this.model ? classifyOccupancy(this.model, frame.features, this.view) : null;
     const candidates = [...legalTransitions(fen), ...(this.source.extraTransitions?.() ?? [])];
-    return matchTransition({ fen, candidates, changes, occupancy, preferred: this.source.preferred?.() ?? null, geometry: geometryForView(this.view, this.footprint), footprint: this.footprintLock.locked });
+    return matchTransition({ fen, candidates, changes, occupancy, preferred: this.source.preferred?.() ?? null, lenient: this.source.lenient?.() ?? false, geometry: geometryForView(this.view, this.footprint), footprint: this.footprintLock.locked });
   }
 }
 
