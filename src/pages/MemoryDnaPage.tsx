@@ -46,7 +46,6 @@ export function MemoryDnaPage() {
     <div className="space-y-5 sm:space-y-6">
       <header className="animate-rise">
         <PageTitle>{t.dna.title}</PageTitle>
-        <p className="mt-1.5 text-lg text-muted">{t.dna.intro}</p>
       </header>
 
       <Card className="cm-hero animate-rise sm:p-8" data-testid="dna-insight">
@@ -66,10 +65,6 @@ export function MemoryDnaPage() {
           <CategoryCard key={s.category} stats={s} />
         ))}
       </div>
-
-      <p className="text-sm text-muted">
-        {t.dna.conceptsMastered} {t.dna.disclaimer}
-      </p>
     </div>
   );
 }

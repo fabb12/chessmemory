@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, PageTitle } from '../components/ui/Card';
-import { Icon } from '../components/ui/Icon';
 import { FAMOUS_GAMES } from '../data/games';
 import { parseGame } from '../features/games/pgn';
 import { t } from '../i18n';
@@ -16,7 +15,6 @@ export function GamesPage() {
     <div className="space-y-6">
       <header>
         <PageTitle>{t.games.title}</PageTitle>
-        <p className="mt-1.5 text-lg text-muted">{t.games.intro}</p>
       </header>
       <div className="flex flex-wrap gap-2" role="group" aria-label={t.games.filterLabel} data-testid="games-filter">
         {(['all', 'carlsen'] as const).map((f) => (
@@ -62,10 +60,6 @@ export function GamesPage() {
           </li>
         ))}
       </ul>
-      <p className="flex items-center gap-2 text-sm text-muted">
-        <Icon name="bulb" size={16} />
-        {t.games.keyboardHint}
-      </p>
     </div>
   );
 }

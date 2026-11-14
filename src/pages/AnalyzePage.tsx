@@ -750,7 +750,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     <div className="space-y-5">
       <header>
         <PageTitle>{t.analyze.title}</PageTitle>
-        <p className="mt-1.5 text-lg text-muted">{t.analyze.intro}</p>
       </header>
 
       {!apiKey && (
@@ -851,7 +850,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             ) : (
               <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 p-4 text-center text-muted">
                 <Icon name="camera" size={40} />
-                <p className="text-sm">{t.analyze.camera.tip}</p>
+                <p className="text-sm">{t.analyze.camera.tips[0]}</p>
               </div>
             )}
           </div>
@@ -863,8 +862,8 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </Button>
             </div>
           )}
-          {stream && detector !== 'idle' && (
-            <p className={`text-xs ${detector === 'ready' ? 'text-ok' : 'text-muted'}`} data-testid="detector-status">
+          {stream && (detector === 'missing' || detector === 'error') && (
+            <p className="text-xs text-muted" data-testid="detector-status">
               {t.analyze.live.detector[detector]}
             </p>
           )}
@@ -916,7 +915,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                           data-testid={`tutor-mode-${mode}`}
                         >
                           <span className="block font-semibold">{t.analyze.live.mode[mode]}</span>
-                          <span className="block text-xs text-muted">{t.analyze.live.mode.help[mode]}</span>
                         </button>
                       ))}
                     </div>
@@ -924,12 +922,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   <Button size="lg" block icon={<Icon name="play" size={18} />} onClick={startTutor} data-testid="live-toggle">
                     {t.analyze.live.start}
                   </Button>
-                  <p className="text-sm font-semibold">{t.analyze.live.stepsTitle}</p>
-                  <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
-                    {(tutorMode === 'photo' ? t.analyze.live.photoSteps : t.analyze.live.steps).map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
+                  <p className="text-sm text-muted">{tutorMode === 'photo' ? t.analyze.live.photoHow : t.analyze.live.videoHow}</p>
                 </>
               )}
               {(live || usage.readings > 0) && (
@@ -1016,7 +1009,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               />
               <span>
                 <span className="block text-sm font-semibold">{t.analyze.flipSquares.label}</span>
-                <span className="block text-xs text-muted">{t.analyze.flipSquares.help}</span>
               </span>
             </label>
           </div>
@@ -1100,7 +1092,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-muted">{t.analyze.side.help}</p>
             </fieldset>
             {showBoard && fen ? (
               <>
@@ -1182,7 +1173,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                   />
                   <span>
                     <span className="block font-semibold">{t.analyze.coach.toggle}</span>
-                    <span className="block text-sm text-muted">{t.analyze.coach.help}</span>
                   </span>
                 </label>
                 {practice && !showSuggestions && (
@@ -1256,7 +1246,6 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
               </div>
               <p className="text-xs text-muted">{t.analyze.evalHelp}</p>
               {win && <WinningLineCard line={win} open={variation === 'win'} onToggle={() => setVariation(variation === 'win' ? null : 'win')} />}
-              <p className="text-sm text-muted">{t.analyze.candidates.help}</p>
               <CandidateMoves
                 candidates={candidates}
                 whiteToMove={position?.turn === 'w'}

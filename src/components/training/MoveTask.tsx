@@ -205,7 +205,6 @@ export function MoveTask({
                   </span>
                 </p>
               )}
-              <p className="text-sm text-muted">{t.task.howTo}</p>
               {renderHints()}
               <Button
                 variant="secondary"

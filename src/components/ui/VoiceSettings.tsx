@@ -28,7 +28,6 @@ export function VoiceSettings() {
 
   return (
     <div className="space-y-4">
-      <p className="text-muted">{t.voice.settingsText}</p>
       <label className="flex min-h-11 cursor-pointer items-center gap-3">
         <input
           type="checkbox"
@@ -39,7 +38,6 @@ export function VoiceSettings() {
         />
         <span className="font-semibold">{t.voice.enabled}</span>
       </label>
-      <p className="text-sm text-muted">{enabled ? t.voice.enabledOn : t.voice.enabledOff}</p>
       <fieldset disabled={!enabled} className={`space-y-4 border-0 p-0 ${enabled ? '' : 'opacity-50'}`}>
       <label className="flex min-h-11 cursor-pointer items-center gap-3">
         <input

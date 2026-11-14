@@ -8,6 +8,7 @@ import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { findGame } from '../data/games';
 import { parseGame } from '../features/games/pgn';
+import { reasonOf } from '../features/tutor/moveReason';
 import { t } from '../i18n';
 import { sanToLocal } from '../utils/notation';
 
@@ -64,6 +65,7 @@ export function GamePage({ profile }: { profile: Profile }) {
 
   const current = index === 0 ? null : parsed.moves[index - 1]!;
   const fen = current?.fen ?? parsed.startFen;
+  const reason = current ? reasonOf(index === 1 ? parsed.startFen : parsed.moves[index - 2]!.fen, current, parsed.moves[index - 2]) : '';
 
   return (
     <div className="space-y-4" data-testid="game-viewer" data-index={index}>
@@ -131,7 +133,7 @@ export function GamePage({ profile }: { profile: Profile }) {
               <SpeakButton
                 text={
                   current
-                    ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}. ${current.comment ?? ''}`
+                    ? `${current.moveNumber}${current.color === 'w' ? '.' : '…'}${sanToLocal(current.san)}. ${reason}`
                     : `${game.title}. ${game.intro}`
                 }
                 auto={current ? Boolean(current.comment) : true}
@@ -139,9 +141,8 @@ export function GamePage({ profile }: { profile: Profile }) {
               />
             </div>
             <p className="mt-1.5" data-testid={current ? undefined : 'game-intro'}>
-              {current ? (current.comment ?? t.games.noComment) : game.intro}
+              {current ? reason : game.intro}
             </p>
-            {!current && <p className="mt-2 text-sm text-muted">{t.games.startPosition}</p>}
             {index === total && (
               <p className="mt-2 font-semibold" data-testid="game-result">
                 {game.result.replace('1/2', '½')} · {t.games.result[game.result]}
@@ -181,7 +182,6 @@ export function GamePage({ profile }: { profile: Profile }) {
               <Icon name="camera" size={18} />
               {t.gameTutor.open}
             </Link>
-            <p className="text-sm text-muted">{t.gameTutor.openHelp}</p>
           </Card>
 
           <Card>

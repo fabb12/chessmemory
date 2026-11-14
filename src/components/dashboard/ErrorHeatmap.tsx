@@ -64,7 +64,6 @@ export function ErrorHeatmap({ attempts }: { attempts: readonly AttemptRecord[] 
   return (
     <Card data-testid="error-heatmap" data-mode={mode} data-total={heat.total}>
       <h2 className="font-display text-xl font-semibold">{t.dna.heat.title}</h2>
-      <p className="mt-1 text-sm text-muted">{t.dna.heat.intro}</p>
 
       <div className="mt-3 space-y-2">
         <Segmented
