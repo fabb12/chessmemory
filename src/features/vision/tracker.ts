@@ -4,7 +4,7 @@ import { CvClient, type FrameResult } from './cvClient';
 import { cellToSquare, type Corners } from './geometry';
 import { StabilityTracker, thumbnailDifference, type MotionState } from './motion';
 import { classifyOccupancy, detectView, learnOccupancy, type OccupancyModel } from './occupancy';
-import { geometryForView, type FootprintName } from './perspective';
+import { FootprintLock, geometryForView, type FootprintName } from './perspective';
 import { featureChanges } from './squareFeatures';
 
 /**
@@ -65,6 +65,7 @@ export class BoardTracker {
   view: BoardView = 'bottom';
   /** Impronta dei pezzi che ha spiegato l'ultima mossa (dipende dall'inclinazione della fotocamera). */
   footprint: FootprintName = 'tilted';
+  private readonly footprintLock = new FootprintLock();
   /** Se true, alla sincronizzazione l'orientamento si deduce dalla posizione. */
   autoView = true;
   previewEnabled = true;
@@ -96,6 +97,8 @@ export class BoardTracker {
   /** Il prossimo fotogramma stabile diventa il riferimento della posizione attuale. */
   resync(): void {
     this.syncRequested = true;
+    // Nuova calibrazione o nuovo orientamento: l'inclinazione va riaccertata.
+    this.footprintLock.reset();
     this.baseline = null;
     this.setStatus('syncing');
   }
@@ -178,6 +181,7 @@ export class BoardTracker {
     this.lastChecked = frame.thumb;
     const result = this.evaluate(frame, fen);
     if (result.kind === 'match' && result.footprint) this.footprint = result.footprint;
+    if (result.kind !== 'none') this.footprintLock.record(result.kind === 'match' ? result.footprint : null);
     this.events.onResult?.(result);
   }
 
@@ -188,7 +192,7 @@ export class BoardTracker {
     for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) changes.set(cellToSquare(i, j, this.view), cells[i * 8 + j] ?? 0);
     const occupancy = this.model ? classifyOccupancy(this.model, frame.features, this.view) : null;
     const candidates = [...legalTransitions(fen), ...(this.source.extraTransitions?.() ?? [])];
-    return matchTransition({ fen, candidates, changes, occupancy, preferred: this.source.preferred?.() ?? null, geometry: geometryForView(this.view, this.footprint) });
+    return matchTransition({ fen, candidates, changes, occupancy, preferred: this.source.preferred?.() ?? null, geometry: geometryForView(this.view, this.footprint), footprint: this.footprintLock.locked });
   }
 }
 

@@ -38,6 +38,8 @@ export interface RankedTransition {
   error: number;
   /** Accordo con il classificatore vuota/bianco/nero (positivo = d'accordo). */
   occupancy: number;
+  /** Case che la transizione dovrebbe far cambiare ma che nell'immagine NON sono cambiate. */
+  missing: string[];
 }
 
 export type MatchResult =
@@ -56,8 +58,12 @@ export const CHANGE_MIN = 10;
 export const SATURATION = 30;
 /** La scala di cambiamento che spiega l'osservazione deve essere almeno questa (0–1). */
 export const MIN_SCALE = 0.35;
-/** Oltre questa parte di cambiamenti non spiegati la transizione non convince. */
-export const MAX_ERROR = 0.5;
+/** Oltre questa parte di cambiamenti non spiegati la transizione non convince (meglio chiedere all'utente). */
+export const MAX_ERROR = 0.35;
+/** Una casa che la transizione fa cambiare (previsto ≥ 0,5) deve risultare cambiata almeno così (0–1, saturato). */
+export const SEEN_MIN = 0.3;
+/** La mossa attesa vince solo se nessun'altra spiega l'immagine meglio di così. */
+export const PREFERRED_SLACK = 0.03;
 /** Distacco minimo (in errore) tra la migliore e la seconda. */
 export const MIN_MARGIN = 0.1;
 /** Peso dell'accordo con il classificatore a 3 classi. */
@@ -120,6 +126,8 @@ export interface MatchInput {
   preferred?: string | null;
   /** Prospettiva: senza, si assume la scacchiera vista dall'alto (ogni pezzo copre solo la sua casa). */
   geometry?: BoardGeometry | null;
+  /** Impronta già accertata (fotocamera ferma): si usa solo questa invece di provarle tutte. */
+  footprint?: FootprintName | null;
 }
 
 const ALL_SQUARES: string[] = [];
@@ -186,7 +194,8 @@ export function rankTransitions({ fen, candidates, changes, occupancy, geometry 
         agreement /= Math.max(1, watched.length);
         error -= OCCUPANCY_WEIGHT * agreement;
       }
-      return { transition, touched, scale, error, occupancy: agreement };
+      const missing = ALL_SQUARES.filter((sq) => (predicted.get(sq) ?? 0) >= 0.5 && (observed.get(sq) ?? 0) < SEEN_MIN);
+      return { transition, touched, scale, error, occupancy: agreement, missing };
     })
     .sort((a, b) => a.error - b.error);
 }
@@ -198,6 +207,9 @@ export function rankTransitions({ fen, candidates, changes, occupancy, geometry 
  */
 function rankWithBestFootprint(input: MatchInput): { ranked: RankedTransition[]; footprint: FootprintName | null } {
   if (!input.geometry) return { ranked: rankTransitions(input), footprint: null };
+  if (input.footprint) {
+    return { ranked: rankTransitions({ ...input, geometry: { ...input.geometry, footprint: FOOTPRINTS[input.footprint] } }), footprint: input.footprint };
+  }
   let best: { ranked: RankedTransition[]; footprint: FootprintName | null } | null = null;
   for (const name of Object.keys(FOOTPRINTS) as FootprintName[]) {
     const ranked = rankTransitions({ ...input, geometry: { ...input.geometry, footprint: FOOTPRINTS[name] } });
@@ -213,10 +225,18 @@ export function matchTransition(input: MatchInput): MatchResult {
   const { ranked, footprint } = rankWithBestFootprint(input);
   const best = ranked[0];
   if (!best) return { kind: 'unsure', reason: 'weak', ranked, footprint };
-  // Mossa attesa: basta che spieghi i cambiamenti quasi quanto la migliore (validazione istantanea).
+  // Mossa attesa (validazione istantanea): vince sui pareggi, ma solo se TUTTE le sue case sono
+  // cambiate davvero e nessun'altra mossa spiega l'immagine meglio. Un falso «Esatto!» è il
+  // peggiore errore possibile per il tutor: nel dubbio decide la regola generale o l'utente.
   if (input.preferred) {
     const preferred = ranked.find((r) => r.transition.id === input.preferred);
-    if (preferred && preferred.scale >= 0.8 * MIN_SCALE && preferred.error <= MAX_ERROR && preferred.error <= best.error + 0.08) {
+    if (
+      preferred &&
+      preferred.missing.length === 0 &&
+      preferred.scale >= MIN_SCALE &&
+      preferred.error <= MAX_ERROR &&
+      preferred.error <= best.error + PREFERRED_SLACK
+    ) {
       return { kind: 'match', transition: preferred.transition, ranked, viaPreferred: preferred !== best, footprint };
     }
   }
