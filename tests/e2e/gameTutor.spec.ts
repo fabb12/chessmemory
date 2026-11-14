@@ -680,3 +680,20 @@ test('tutor grandi partite: tono di parlata per frasi e Claude', async ({ page }
   await page.reload();
   await expect(page.getByTestId('tutor-tone')).toHaveValue('offensive');
 });
+
+test('tutor grandi partite: nome e tono si impostano nel Profilo', async ({ page }) => {
+  await page.addInitScript(FAKE_VOICE);
+  await page.goto('./');
+  await page.goto('./#/profilo');
+  await page.getByTestId('profile-name').fill('Giulia');
+  await page.getByTestId('profile-name-save').click();
+  await expect(page.getByText('Salvato: il tutor ti chiamerà Giulia.')).toBeVisible();
+  await page.getByTestId('profile-tone').selectOption('friendly');
+  await page.goto('./#/partite/opera-game/tutor');
+  await expect(page.getByTestId('tutor-name')).toContainText('Ti chiami Giulia');
+  await expect(page.getByTestId('tutor-tone')).toHaveValue('friendly');
+  // Il microfono non chiede il nome: lo conosce già, e saluta con il tono scelto.
+  await page.getByTestId('tutor-mic').click();
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toContain('Ciao Giulia! Che bello vederti.');
+  expect((await said(page)).some((s) => s.includes('Come ti chiami'))).toBe(false);
+});

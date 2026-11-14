@@ -32,6 +32,7 @@ import {
   type UserSide,
 } from '../features/tutor/gameSession';
 import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
+import { setUserName, useUserName } from '../features/user/userName';
 import { phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type Tone } from '../features/tutor/tone';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
@@ -76,7 +77,6 @@ function saveSeconds(key: string, n: number): void {
   }
 }
 
-const NAME_KEY = 'cm.user.name';
 /** Il microfono era acceso: alla prossima apertura si riaccende da solo. */
 const MIC_KEY = 'cm.tutor.mic';
 
@@ -182,8 +182,10 @@ export function GameTutorPage() {
   }, [log.length]);
   const volume = useVoiceVolume();
   // Nome dell'allievo: il tutor lo chiede all'inizio e lo usa quando parla.
-  const [name, setNameState] = useState(() => loadText(NAME_KEY));
+  // Nome dell'allievo (impostabile anche nel Profilo): il tutor lo usa quando parla.
+  const name = useUserName();
   const nameRef = useRef(name);
+  nameRef.current = name;
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(name);
   const greetedRef = useRef(false);
@@ -195,10 +197,8 @@ export function GameTutorPage() {
   toneRef.current = tone;
   const ph = () => phrases(toneRef.current);
   const setName = useCallback((value: string) => {
-    const clean = value.trim().slice(0, 40);
-    nameRef.current = clean;
-    setNameState(clean);
-    saveText(NAME_KEY, clean);
+    nameRef.current = value.trim();
+    setUserName(value);
   }, []);
   const sideRef = useRef<UserSide>('none');
   const [session, setSessionState] = useState<SessionState | null>(() => (parsed ? startSession(parsed) : null));

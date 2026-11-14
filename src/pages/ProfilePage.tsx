@@ -7,6 +7,7 @@ import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Icon } from '../components/ui/Icon';
 import { VoiceSettings } from '../components/ui/VoiceSettings';
+import { NameField } from '../components/ui/NameField';
 import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
 import type { Profile } from '../db/schema';
 import type { AnalysisDepth } from '../features/engine/engine';
@@ -147,6 +148,7 @@ export function ProfilePage({ profile }: { profile: Profile }) {
       <Card>
         <SectionTitle>{t.profile.prefsSection}</SectionTitle>
         <div className="mt-3 space-y-4">
+          <NameField />
           <Segmented
             legend={t.profile.theme}
             name="theme"
