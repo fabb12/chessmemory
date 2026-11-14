@@ -832,6 +832,10 @@ export function GameTutorPage() {
     return () => {
       tracker.dispose();
       trackerRef.current = null;
+      // Fotocamera spenta: niente più pezzi da sistemare né mosse arretrate da recuperare,
+      // tutto continua sulla scacchiera dello schermo.
+      setArranging(false);
+      if (sessionRef.current) setPhysicalPly(sessionRef.current.ply);
     };
   }, [stream, parsed, setPhysicalPly, setArranging]);
 

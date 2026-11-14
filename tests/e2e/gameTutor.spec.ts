@@ -469,3 +469,85 @@ test('tutor grandi partite: si interrompe a metà frase, senza ascoltare la prop
   await interim('il bianco cattura vai alla prossima');
   await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 9 di 33');
 });
+
+test('tutor grandi partite: senza fotocamera tutte le richieste a voce funzionano', async ({ page }) => {
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const body = route.request().postDataJSON() as { messages: { content: string }[] };
+    const last = String(body.messages[body.messages.length - 1]?.content ?? '');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: 'msg_q',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-haiku-5-5',
+        content: [{ type: 'text', text: last.includes('Domanda:') ? 'Risposta sulla partita.' : 'Spiegazione di Claude.' }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+  await openTutor(page, true, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await expect(page.getByTestId('tutor-camera-start')).toBeVisible(); // fotocamera spenta
+  await page.getByTestId('tutor-mic').click();
+  const pos = page.getByTestId('tutor-position');
+
+  await say(page, 'sono Luca');
+  await expect(page.getByTestId('tutor-name')).toContainText('Luca');
+  await say(page, 'prossima mossa');
+  await expect(page.getByTestId('tutor-explanation')).toContainText('Spiegazione di Claude.');
+  await say(page, 'vai alla prossima');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+  await say(page, 'perché');
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Spiegazione di Claude.');
+  await say(page, 'che apertura è questa?');
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Risposta sulla partita.');
+  await say(page, 'vai alla 5ª mossa');
+  await expect(pos).toHaveText('Semimossa 8 di 33');
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  await say(page, 'indietro');
+  await expect(pos).toHaveText('Semimossa 7 di 33');
+  await say(page, 'vai alla fine');
+  await expect(pos).toHaveText('Semimossa 33 di 33');
+  await say(page, 'ricomincia');
+  await expect(pos).toHaveText('Semimossa 0 di 33');
+  await say(page, 'pronto'); // nessun effetto senza fotocamera
+  await expect(pos).toHaveText('Semimossa 0 di 33');
+
+  // Interruzione a metà frase anche senza fotocamera.
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  await page.getByTestId('tutor-repeat').click();
+  await page.waitForTimeout(100);
+  await page.evaluate(() => (window as unknown as { __interim: (t: string) => void }).__interim('il bianco muove vai alla prossima'));
+  await expect(pos).toHaveText('Semimossa 1 di 33');
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = false));
+
+  // Tempo scaduto senza fotocamera: la mossa si considera fatta e si va avanti.
+  await page.getByTestId('tutor-reveal').click();
+  await page.getByTestId('tutor-next-delay').fill('0');
+  await page.getByTestId('tutor-auto-seconds').fill('2');
+  await expect(pos).toHaveText('Semimossa 2 di 33', { timeout: 8_000 });
+});
+
+test('tutor grandi partite: spegnendo la fotocamera a metà si continua sulla scacchiera dello schermo', async ({ page }) => {
+  await openTutor(page, false, '0');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-camera-start').click();
+  await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
+  await page.getByTestId('tutor-last').click();
+  await page.getByTestId('tutor-first').click();
+  await expect(page.getByTestId('tutor-arrange')).toBeVisible();
+  await page.getByRole('button', { name: 'Ferma la fotocamera' }).click();
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  // Si gioca sulla scacchiera 2D e il tempo scaduto fa avanzare.
+  await page.locator('[data-square="e2"]').first().click();
+  await page.locator('[data-square="e4"]').first().click();
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 1.e4.');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Nero muove il pedone da e7 a e5.');
+  await page.getByTestId('tutor-auto-seconds').fill('2');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 2 di 33', { timeout: 8_000 });
+});
