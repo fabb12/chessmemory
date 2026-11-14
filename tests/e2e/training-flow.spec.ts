@@ -249,12 +249,13 @@ test.describe('flusso completo di allenamento', () => {
     await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce attiva/);
   });
 
-  test('partite famose: elenco ampio con filtro Carlsen', async ({ page }) => {
+  test('partite famose: elenco ampio e partite di un giocatore (Carlsen)', async ({ page }) => {
     await completeOnboarding(page);
     await page.goto('./#/partite');
     const all = await page.locator('[data-testid^="game-link-"]').count();
     expect(all).toBeGreaterThanOrEqual(15);
-    await page.getByTestId('games-filter-carlsen').click();
+    await page.getByTestId('games-player-carlsen').click();
+    await expect(page.getByTestId('games-player-help')).toContainText('norvegese');
     const carlsen = await page.locator('[data-testid^="game-link-"]').count();
     expect(carlsen).toBeGreaterThanOrEqual(5);
     expect(carlsen).toBeLessThan(all);

@@ -7,9 +7,41 @@ import { FAMOUS_GAMES, type FamousGame } from './games';
  * la «più» della categoria).
  */
 
-export type GameCategory = 'all' | 'short' | 'long' | 'elegant' | 'strategic' | 'shocking' | 'instructive' | 'important' | 'carlsen';
+export type GameCategory = 'all' | 'short' | 'long' | 'elegant' | 'strategic' | 'shocking' | 'instructive' | 'important';
 
-export const GAME_CATEGORIES: readonly GameCategory[] = ['all', 'short', 'long', 'elegant', 'strategic', 'shocking', 'instructive', 'important', 'carlsen'];
+export const GAME_CATEGORIES: readonly GameCategory[] = ['all', 'short', 'long', 'elegant', 'strategic', 'shocking', 'instructive', 'important'];
+
+/** Giocatori famosi, in ordine cronologico; `name` è come compare nelle partite. */
+export interface FamousPlayer {
+  id: string;
+  name: string;
+}
+
+export const FAMOUS_PLAYERS: readonly FamousPlayer[] = [
+  { id: 'morphy', name: 'Paul Morphy' },
+  { id: 'anderssen', name: 'Adolf Anderssen' },
+  { id: 'steinitz', name: 'Wilhelm Steinitz' },
+  { id: 'reti', name: 'Richard Réti' },
+  { id: 'fischer', name: 'Bobby Fischer' },
+  { id: 'spassky', name: 'Boris Spassky' },
+  { id: 'karpov', name: 'Anatoly Karpov' },
+  { id: 'kasparov', name: 'Garry Kasparov' },
+  { id: 'deep-blue', name: 'Deep Blue' },
+  { id: 'anand', name: 'Viswanathan Anand' },
+  { id: 'topalov', name: 'Veselin Topalov' },
+  { id: 'carlsen', name: 'Magnus Carlsen' },
+];
+
+/** Le partite di un giocatore, dalla più antica. */
+export function gamesOfPlayer(id: string): FamousGame[] {
+  const player = FAMOUS_PLAYERS.find((p) => p.id === id);
+  if (!player) return [];
+  return FAMOUS_GAMES.filter((g) => g.white === player.name || g.black === player.name).sort((a, b) => a.year - b.year);
+}
+
+export function isPlayerId(value: string | null): value is string {
+  return value !== null && FAMOUS_PLAYERS.some((p) => p.id === value);
+}
 
 /** Quante partite mostrano le classifiche calcolate (più corte / più lunghe). */
 const LENGTH_TOP = 6;
@@ -53,8 +85,6 @@ export function gamesIn(category: GameCategory): { games: FamousGame[]; ranked: 
   switch (category) {
     case 'all':
       return { games: [...FAMOUS_GAMES], ranked: false };
-    case 'carlsen':
-      return { games: FAMOUS_GAMES.filter((g) => `${g.white} ${g.black}`.includes('Carlsen')), ranked: false };
     case 'short':
       return { games: [...FAMOUS_GAMES].sort((a, b) => plies(a) - plies(b)).slice(0, LENGTH_TOP), ranked: true };
     case 'long':

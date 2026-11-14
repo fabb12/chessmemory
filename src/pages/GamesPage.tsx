@@ -1,15 +1,18 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { Card, PageTitle } from '../components/ui/Card';
-import { GAME_CATEGORIES, gamesIn, isGameCategory, PLY_COUNTS, type GameCategory } from '../data/gameCategories';
+import { FAMOUS_PLAYERS, GAME_CATEGORIES, gamesIn, gamesOfPlayer, isGameCategory, isPlayerId, PLY_COUNTS, type GameCategory } from '../data/gameCategories';
 import { t } from '../i18n';
 
 export function GamesPage() {
   // La categoria sta nell'indirizzo: tornando indietro da una partita resta quella scelta.
   const [params, setParams] = useSearchParams();
   const raw = params.get('categoria');
-  const filter: GameCategory = isGameCategory(raw) ? raw : 'all';
+  const rawPlayer = params.get('giocatore');
+  const player = isPlayerId(rawPlayer) ? rawPlayer : null;
+  const filter: GameCategory | null = player ? null : isGameCategory(raw) ? raw : 'all';
   const setFilter = (f: GameCategory) => setParams(f === 'all' ? {} : { categoria: f }, { replace: true });
-  const { games, ranked } = gamesIn(filter);
+  const setPlayer = (id: string) => setParams({ giocatore: id }, { replace: true });
+  const { games, ranked } = player ? { games: gamesOfPlayer(player), ranked: false } : gamesIn(filter ?? 'all');
   return (
     <div className="space-y-6">
       <header>
@@ -31,9 +34,34 @@ export function GamesPage() {
           </button>
         ))}
       </div>
-      {filter !== 'all' && t.games.filterHelp[filter] && (
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">{t.games.playersLabel}</h2>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t.games.playersLabel} data-testid="games-players">
+          {FAMOUS_PLAYERS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={player === p.id}
+              data-testid={`games-player-${p.id}`}
+              onClick={() => setPlayer(p.id)}
+              className={`min-h-11 rounded-full border px-4 text-sm font-semibold ${
+                player === p.id ? 'border-accent bg-accent text-white' : 'border-line bg-surface-2 text-fg'
+              }`}
+            >
+              {p.name}
+              <span className="ml-1.5 tabular-nums opacity-70">{gamesOfPlayer(p.id).length}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {filter && filter !== 'all' && t.games.filterHelp[filter] && (
         <p className="text-muted" data-testid="games-filter-help">
           {t.games.filterHelp[filter]}
+        </p>
+      )}
+      {player && (
+        <p className="text-muted" data-testid="games-player-help">
+          {t.games.playerHelp[player]}
         </p>
       )}
       <ul className="grid gap-3 md:grid-cols-2">

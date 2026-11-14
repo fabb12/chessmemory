@@ -44,6 +44,9 @@ export function speechSupported(): boolean {
 }
 
 let speakingId: string | null = null;
+/** Frase in corso (per riconoscere, nel microfono, l'eco della voce dell'app). */
+let currentUtterance: SpeechSynthesisUtterance | null = null;
+let currentText = '';
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
@@ -62,7 +65,12 @@ export function speak(text: string, id = 'default'): void {
   const voice = italianVoice();
   if (voice) utterance.voice = voice;
   utterance.rate = getVoiceRate();
+  // Solo la frase in corso chiude il «sta parlando»: quella interrotta da cancel()
+  // segnala la sua fine più tardi e non deve far credere che la nuova sia finita.
   const done = () => {
+    if (currentUtterance !== utterance) return;
+    currentUtterance = null;
+    currentText = '';
     if (speakingId === id) {
       speakingId = null;
       notify();
@@ -70,13 +78,22 @@ export function speak(text: string, id = 'default'): void {
   };
   utterance.onend = done;
   utterance.onerror = done;
+  currentUtterance = utterance;
+  currentText = utterance.text;
   speakingId = id;
   notify();
   synth.speak(utterance);
 }
 
+/** Il testo che l'app sta pronunciando adesso ('' se tace). */
+export function currentSpeechText(): string {
+  return currentText;
+}
+
 export function stopSpeaking(): void {
   if (!speechSupported()) return;
+  currentUtterance = null;
+  currentText = '';
   window.speechSynthesis.cancel();
   speakingId = null;
   notify();
