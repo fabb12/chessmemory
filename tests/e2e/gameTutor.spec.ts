@@ -374,3 +374,59 @@ test('tutor grandi partite: chiede il nome, si interrompe a voce e il microfono 
   await expect(page.getByTestId('tutor-mic')).toHaveText('Spegni il microfono');
   await expect(page.getByTestId('tutor-name')).toContainText('Marco');
 });
+
+test('tutor grandi partite: «vai alla quinta mossa» e frecce sotto la scacchiera allineano la posizione', async ({ page }) => {
+  await openTutor(page, false, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-name-input').fill('Marco');
+  await page.getByTestId('tutor-name-save').click();
+  await page.getByTestId('tutor-mic').click();
+  const fen = () => page.locator('[data-fen]').first().getAttribute('data-fen');
+
+  // A voce: la scacchiera va subito alla posizione prima della 5ª mossa del Bianco (5.Dxf3).
+  await say(page, 'vai alla quinta mossa');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 8 di 33');
+  await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco cattura in f3 con la donna che parte da d1.');
+  await expect.poll(async () => (await said(page)).some((t) => t.includes('Siamo alla mossa 5 del Bianco.'))).toBe(true);
+  const at5 = await fen();
+
+  await say(page, 'torna alla mossa 2 del nero');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 3 di 33');
+  expect(await fen()).not.toBe(at5);
+
+  // Frecce: indietro, avanti (spiega la mossa), inizio, fine.
+  await page.getByTestId('tutor-undo').click();
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 2 di 33');
+  await page.getByTestId('tutor-forward').click();
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 3 di 33');
+  await expect(page.getByTestId('tutor-explanation')).toBeVisible();
+  await page.getByTestId('tutor-first').click();
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 0 di 33');
+  expect(await fen()).toContain('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
+  await page.getByTestId('tutor-last').click();
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 33 di 33');
+  await expect(page.getByTestId('tutor-next')).toContainText('Complimenti Marco');
+  // Tastiera: ← torna indietro di una mossa.
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 32 di 33');
+});
+
+test('tutor grandi partite: con la fotocamera, dopo un salto si sistemano i pezzi e si dice «pronto»', async ({ page }) => {
+  await openTutor(page, false, '0');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-camera-start').click();
+  await expect(page.getByTestId('tutor-status')).toHaveAttribute('data-status', 'stable', { timeout: 15_000 });
+  await page.getByTestId('tutor-mic').click();
+  await say(page, 'vai alla seconda mossa');
+  await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 2 di 33');
+  await expect(page.getByTestId('tutor-arrange')).toBeVisible();
+  // L'utente sistema i pezzi come sullo schermo (1.e4 e5) e dice «pronto».
+  await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
+  await page.waitForTimeout(800);
+  await say(page, 'pronto');
+  await expect(page.getByTestId('tutor-arrange')).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  // Da qui la fotocamera segue di nuovo le mosse: 2.Cf3.
+  await play(page, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R');
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Bene, 2.Cf3.', { timeout: 10_000 });
+});

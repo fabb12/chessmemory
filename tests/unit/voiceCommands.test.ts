@@ -47,3 +47,20 @@ describe('interruzione, eco e nome', () => {
     expect(parseName('perché il cavallo va in f3')).toBeNull();
   });
 });
+
+describe('vai a una mossa', () => {
+  it('capisce numeri, ordinali, colore, inizio e fine', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    expect(parseCommand('vai alla quinta mossa')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('Torna alla mossa 12 del Nero')).toEqual({ kind: 'goto', move: 12, color: 'b' });
+    expect(parseCommand('mossa dieci')).toEqual({ kind: 'goto', move: 10, color: 'w' });
+    expect(parseCommand('vai alla mossa numero 3')).toEqual({ kind: 'goto', move: 3, color: 'w' });
+    expect(parseCommand('prima mossa')).toEqual({ kind: 'goto', move: 1, color: 'w' });
+    expect(parseCommand("vai all'inizio")).toEqual({ kind: 'goto', where: 'start' });
+    expect(parseCommand('ricomincia')).toEqual({ kind: 'goto', where: 'start' });
+    expect(parseCommand('vai alla fine')).toEqual({ kind: 'goto', where: 'end' });
+    // Non sono «vai a»:
+    expect(parseCommand('prossima mossa')).toEqual({ kind: 'next' });
+    expect(parseCommand('perché la quinta mossa è forte')?.kind).toBe('question');
+  });
+});

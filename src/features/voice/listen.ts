@@ -7,7 +7,50 @@
  * altrimenti il tutor ascolterebbe sé stesso.
  */
 
-export type VoiceCommand = { kind: 'next' } | { kind: 'why' } | { kind: 'repeat' } | { kind: 'back' } | { kind: 'stop' } | { kind: 'question'; text: string };
+export type VoiceCommand =
+  | { kind: 'next' }
+  | { kind: 'why' }
+  | { kind: 'repeat' }
+  | { kind: 'back' }
+  | { kind: 'stop' }
+  /** «Pronto»: i pezzi sulla scacchiera vera sono stati sistemati. */
+  | { kind: 'ready' }
+  /** Vai a una mossa: numero della mossa (1 = prima) e colore, oppure inizio/fine della partita. */
+  | { kind: 'goto'; move: number; color: 'w' | 'b' }
+  | { kind: 'goto'; where: 'start' | 'end' }
+  | { kind: 'question'; text: string };
+
+const ORDINALS = [
+  'prima', 'seconda', 'terza', 'quarta', 'quinta', 'sesta', 'settima', 'ottava', 'nona', 'decima',
+  'undicesima', 'dodicesima', 'tredicesima', 'quattordicesima', 'quindicesima', 'sedicesima',
+  'diciassettesima', 'diciottesima', 'diciannovesima', 'ventesima',
+];
+const NUMBERS = [
+  'uno', 'due', 'tre', 'quattro', 'cinque', 'sei', 'sette', 'otto', 'nove', 'dieci',
+  'undici', 'dodici', 'tredici', 'quattordici', 'quindici', 'sedici', 'diciassette', 'diciotto', 'diciannove', 'venti',
+];
+
+/** «quinta», «5», «cinque», «trentesima» (oltre la ventesima solo in cifre) → 5. */
+function numberWord(word: string): number | null {
+  if (/^\d{1,3}$/.test(word)) return Number(word);
+  const ord = ORDINALS.indexOf(word);
+  if (ord >= 0) return ord + 1;
+  const num = NUMBERS.indexOf(word);
+  if (num >= 0) return num + 1;
+  if (word === 'un' || word === 'una') return 1;
+  return null;
+}
+
+/** «vai alla quinta mossa», «torna alla mossa 12 del nero», «mossa dieci», «vai all'inizio», «vai alla fine». */
+function parseGoto(text: string): VoiceCommand | null {
+  if (/^(vai |torna |ricomincia |riparti )?(all |dall )?(inizio|da capo|dall inizio)$|^ricomincia$|^riparti$/.test(text)) return { kind: 'goto', where: 'start' };
+  if (/^(vai |salta )?(alla |all )?(fine|ultima mossa)( della partita)?$/.test(text)) return { kind: 'goto', where: 'end' };
+  const m = /^(?:(?:vai|torna|andiamo|salta|portami|passa)\s+)?(?:a\s+|alla\s+|al\s+)?(?:(\S+)\s+mossa|mossa\s+(?:numero\s+)?(\S+))(?:\s+del\s+(bianco|nero))?$/.exec(text);
+  if (!m) return null;
+  const n = numberWord(m[1] ?? m[2] ?? '');
+  if (!n || n < 1) return null;
+  return { kind: 'goto', move: n, color: m[3] === 'nero' ? 'b' : 'w' };
+}
 
 const normalize = (text: string) =>
   text
@@ -23,10 +66,13 @@ export function parseCommand(heard: string): VoiceCommand | null {
   const text = normalize(heard);
   if (!text) return null;
   const words = text.split(' ').length;
+  const goto = parseGoto(text);
+  if (goto) return goto;
   if ((/\b(prossima|successiva|seguente)\b/.test(text) && !/^perche\b/.test(text) && words <= 5) || /^(vai )?avanti\b/.test(text)) return { kind: 'next' };
   if (/^(e )?(perche|come mai)( (questa|questa mossa|la mossa))?$/.test(text)) return { kind: 'why' };
   if (/^(ripeti|ripetere|puoi ripetere|cosa hai detto)\b/.test(text) && words <= 4) return { kind: 'repeat' };
   if (/^(indietro|torna indietro|mossa precedente)$/.test(text)) return { kind: 'back' };
+  if (/^(pronto|pronta|fatto|ho fatto|sistemato|sistemata|ho sistemato|pezzi sistemati)$/.test(text)) return { kind: 'ready' };
   if (/^(basta|stop|zitto|zitta|silenzio|fermati|ferma|aspetta|un attimo)\b/.test(text) && words <= 3) return { kind: 'stop' };
   // Una domanda vera: almeno due parole (una parola isolata è quasi sempre rumore).
   if (words >= 2) return { kind: 'question', text: heard.trim() };

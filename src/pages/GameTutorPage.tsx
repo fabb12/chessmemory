@@ -28,7 +28,6 @@ import {
   skipMove,
   startSession,
   takeBack,
-  undoMove,
   type SessionState,
   type UserSide,
 } from '../features/tutor/gameSession';
@@ -164,6 +163,16 @@ export function GameTutorPage() {
    * la fotocamera allora aspetta, in ordine, le mosse ancora da eseguire.
    */
   const physicalRef = useRef(0);
+  /**
+   * Dopo un salto (vai alla mossa 5, inizio, fine…) la scacchiera vera va sistemata
+   * come quella dello schermo: finché l'utente non dice «pronto» la fotocamera non legge.
+   */
+  const [arranging, setArrangingState] = useState(false);
+  const arrangingRef = useRef(false);
+  const setArranging = useCallback((on: boolean) => {
+    arrangingRef.current = on;
+    setArrangingState(on);
+  }, []);
   const [physicalPly, setPhysicalPlyState] = useState(0);
   const setPhysicalPly = useCallback((ply: number) => {
     physicalRef.current = ply;
@@ -496,12 +505,32 @@ export function GameTutorPage() {
     }
     else if (command.kind === 'why') answerWhy();
     else if (command.kind === 'repeat' && sessionRef.current) announce(sessionRef.current);
-    else if (command.kind === 'back' && parsed && sessionRef.current) jumpRef.current(undoMove(parsed, sessionRef.current));
+    else if (command.kind === 'back' && parsed && sessionRef.current) goToRef.current(sessionRef.current.deviation ? sessionRef.current.ply : sessionRef.current.ply - 1);
+    else if (command.kind === 'goto' && parsed) {
+      if ('where' in command) goToRef.current(command.where === 'start' ? 0 : parsed.moves.length);
+      else goToRef.current((command.move - 1) * 2 + (command.color === 'b' ? 1 : 0));
+    } else if (command.kind === 'ready') arrangedRef.current();
     else if (command.kind === 'question') void ask(command.text);
   };
   const onHeardRef = useRef(onHeard);
   onHeardRef.current = onHeard;
   const jumpRef = useRef<(target: SessionState) => void>(() => undefined);
+  const goToRef = useRef<(ply: number) => void>(() => undefined);
+  const navRef = useRef<{ prev: () => void; next: () => void } | null>(null);
+  // Frecce della tastiera: ← mossa precedente, → mossa successiva (non mentre si scrive).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.closest('[data-square]'))) return;
+      if (event.key === 'ArrowLeft') navRef.current?.prev();
+      else if (event.key === 'ArrowRight') navRef.current?.next();
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const arrangedRef = useRef<() => void>(() => undefined);
 
   const startListening = () => {
     setMicError(null);
@@ -555,7 +584,7 @@ export function GameTutorPage() {
   const finishedNow = parsed && session ? isFinished(parsed, session) : true;
   const handBusy = status === 'moving' || status === 'settling';
   const answering = answer?.phase.status === 'busy';
-  const ticking = running && !paused && !teaching && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && !answering;
+  const ticking = running && !paused && !teaching && !arranging && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !handBusy && !answering;
   /**
    * Tempo scaduto senza che la mossa sia stata fatta. Con la fotocamera il tutor segue
    * la scacchiera vera: non va avanti da solo, ripete l'indicazione. Senza fotocamera
@@ -706,6 +735,7 @@ export function GameTutorPage() {
     if (!stream || !parsed) return;
     // Alla (ri)accensione della fotocamera la scacchiera vera si considera allineata alla partita.
     if (sessionRef.current) setPhysicalPly(sessionRef.current.ply);
+    setArranging(false);
     const behind = () => {
       const s = sessionRef.current;
       return Boolean(s && !s.deviation && physicalRef.current < s.ply);
@@ -718,7 +748,7 @@ export function GameTutorPage() {
       {
         video: () => videoRef.current,
         corners: () => cornersRef.current,
-        fen: () => (behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
+        fen: () => (arrangingRef.current ? null : behind() ? fenAt(parsed, physicalRef.current) : sessionRef.current ? boardFen(sessionRef.current) : null),
         extraTransitions: () => (sessionRef.current && !behind() ? extraTransitions(sessionRef.current) : []),
         preferred: () => (behind() ? pendingUci() : sessionRef.current ? preferredTransition(parsed, sessionRef.current) : null),
         // La mossa indicata (non da indovinare) si riconosce con soglie più tolleranti.
@@ -754,7 +784,7 @@ export function GameTutorPage() {
       tracker.dispose();
       trackerRef.current = null;
     };
-  }, [stream, parsed, setPhysicalPly]);
+  }, [stream, parsed, setPhysicalPly, setArranging]);
 
   const onVideoReady = (video: HTMLVideoElement) => {
     if (!video.videoWidth || !video.videoHeight) return;
@@ -868,16 +898,48 @@ export function GameTutorPage() {
     }
   };
 
-  const jump = (target: SessionState) => {
+  /**
+   * Salto a un'altra posizione della partita (frecce, «vai alla quinta mossa»): la scacchiera
+   * dello schermo si allinea subito; con la fotocamera si chiede di sistemare i pezzi veri.
+   */
+  const jump = (target: SessionState, prefix = '') => {
     setSession(target);
-    commitBoard(target);
+    setUnsure(null);
     setFeedback(null);
     setExplanation(null);
     setJudgement({ status: 'idle' });
+    setWhy({ status: 'idle' });
     setShowHint(false);
-    announce(target);
+    if (trackerRef.current) {
+      setPhysicalPly(target.ply);
+      setArranging(true);
+      prefix = `${prefix} ${t.gameTutor.arrange}`.trim();
+    } else commitBoard(target);
+    announce(target, prefix);
   };
   jumpRef.current = jump;
+
+  /** Va alla semimossa `ply` (0 = posizione iniziale). */
+  const goTo = (ply: number) => {
+    const target = Math.max(0, Math.min(parsed.moves.length, ply));
+    const where =
+      target === 0 ? t.gameTutor.atStart : target >= parsed.moves.length ? '' : t.gameTutor.atMove(parsed.moves[target]!.moveNumber, t.sides[parsed.moves[target]!.color]);
+    jump({ ...session, ply: target, fen: fenAt(parsed, target), deviation: null, missedCurrent: false }, where);
+  };
+  goToRef.current = goTo;
+
+  /** La scacchiera vera è stata sistemata: la fotocamera riparte da questa posizione. */
+  const boardArranged = () => {
+    setArranging(false);
+    trackerRef.current?.resync();
+  };
+  arrangedRef.current = boardArranged;
+
+  const forward = () => {
+    if (teaching) revealNext();
+    else advance();
+  };
+  navRef.current = { prev: () => goTo(session.deviation ? session.ply : session.ply - 1), next: forward };
 
   const viewSide = t.analyze.orientation.sides[view] ?? view;
 
@@ -931,6 +993,14 @@ export function GameTutorPage() {
             <span className="font-semibold">{t.gameTutor.why}: </span>
             {explanation.text}
           </p>
+        )}
+        {arranging && stream && (
+          <div className="flex flex-wrap items-center gap-3" data-testid="tutor-arrange">
+            <p className="font-semibold">{t.gameTutor.arrange}</p>
+            <Button size="sm" onClick={boardArranged} data-testid="tutor-arranged">
+              {t.gameTutor.arranged}
+            </Button>
+          </div>
         )}
         {teaching && (
           <div className="flex flex-wrap items-center gap-3">
@@ -1257,12 +1327,24 @@ export function GameTutorPage() {
             lastMove={lastMove && !session.deviation ? { from: lastMove.from, to: lastMove.to } : null}
             lastMoveTone="neutral"
           />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => jump(undoMove(parsed, session))} disabled={session.ply === 0 && !session.deviation} data-testid="tutor-undo">
-              {t.gameTutor.undo}
+          {/* Frecce sempre sotto la scacchiera: inizio, indietro, avanti, fine (anche con ← → da tastiera). */}
+          <nav className="flex items-center justify-between gap-2" aria-label={t.gameTutor.navLabel} data-testid="tutor-nav">
+            <Button variant="secondary" onClick={() => goTo(0)} disabled={session.ply === 0 && !session.deviation} aria-label={t.games.first} data-testid="tutor-first">
+              ⏮
             </Button>
-            <span className="ml-auto text-xs text-muted tabular-nums">{t.games.position(session.ply, parsed.moves.length)}</span>
-          </div>
+            <Button variant="secondary" onClick={() => goTo(session.deviation ? session.ply : session.ply - 1)} disabled={session.ply === 0 && !session.deviation} aria-label={t.games.previous} data-testid="tutor-undo">
+              ◀
+            </Button>
+            <span className="text-center text-xs text-muted tabular-nums" data-testid="tutor-position">
+              {t.games.position(session.ply, parsed.moves.length)}
+            </span>
+            <Button variant="secondary" onClick={forward} disabled={finished || Boolean(session.deviation)} aria-label={t.games.next} data-testid="tutor-forward">
+              ▶
+            </Button>
+            <Button variant="secondary" onClick={() => goTo(parsed.moves.length)} disabled={finished} aria-label={t.games.last} data-testid="tutor-last">
+              ⏭
+            </Button>
+          </nav>
         </Card>
       </div>
     </div>
