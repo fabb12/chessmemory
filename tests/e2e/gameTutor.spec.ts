@@ -350,6 +350,63 @@ test('tutor grandi partite: si interrompe a metà frase, senza ascoltare la prop
   await expect(page.getByTestId('tutor-position')).toHaveText('Semimossa 9 di 33');
 });
 
+test('tutor grandi partite: «basta», «scusa», «aspetta» lo zittiscono e il tutor ascolta la richiesta successiva', async ({ page }) => {
+  await openTutor(page, false, '0');
+  await page.getByTestId('tutor-auto-seconds').fill('3');
+  await page.getByTestId('tutor-name-input').fill('Anna');
+  await page.getByTestId('tutor-name-save').click();
+  await page.getByTestId('tutor-mic').click();
+  const cancels = () => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
+  const interim = async (text: string) => {
+    for (let i = 0; i < 2; i++) await page.evaluate((t) => (window as unknown as { __interim: (t: string) => void }).__interim(t), text);
+  };
+  const final = (text: string) => page.evaluate((t) => (window as unknown as { __say: (t: string) => void }).__say(t), text);
+
+  // Mentre il tutor spiega la mossa, «scusa» detto sopra la sua voce lo zittisce.
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  await page.getByTestId('tutor-skip').click();
+  await expect(page.getByTestId('tutor-explanation')).toBeVisible();
+  const before = await cancels();
+  await interim('il pedone occupa il centro scusa');
+  await expect.poll(cancels).toBeGreaterThan(before);
+  await expect(page.getByTestId('tutor-hold')).toBeVisible();
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = false));
+  // La frase finale arriva subito dopo: è già la richiesta, non serve aspettare.
+  const said0 = (await said(page)).length;
+  await final('scusa perché');
+  await expect(page.getByTestId('tutor-answer')).toBeVisible();
+  await expect(page.getByTestId('tutor-hold')).toHaveCount(0);
+  expect((await said(page)).length).toBeGreaterThan(said0);
+
+  // «Aspetta un attimo»: silenzio, e nessuna ripresa automatica (né pausa che scade, né conto alla rovescia).
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = true));
+  await page.getByTestId('tutor-repeat').click();
+  await page.waitForTimeout(100);
+  const before2 = await cancels();
+  await final('aspetta un attimo');
+  await expect.poll(cancels).toBeGreaterThan(before2);
+  await expect(page.getByTestId('tutor-hold')).toBeVisible();
+  await expect(page.getByTestId('tutor-countdown')).toHaveCount(0);
+  const position = await page.getByTestId('tutor-position').textContent();
+  const quiet = (await said(page)).length;
+  await page.waitForTimeout(4000);
+  expect((await said(page)).length).toBe(quiet);
+  await expect(page.getByTestId('tutor-position')).toHaveText(position!);
+
+  // «Continua» riprende da dove si era.
+  await page.evaluate(() => ((window as unknown as { __longSpeech: boolean }).__longSpeech = false));
+  await final('continua');
+  await expect(page.getByTestId('tutor-hold')).toHaveCount(0);
+  await expect.poll(async () => (await said(page)).length).toBeGreaterThan(quiet);
+  expect((await said(page)).at(-1)).toContain('Il Nero muove il pedone da e7 a e5.');
+
+  // Anche senza voce in corso, «stop» ferma la lezione e il pulsante «Continua» la riprende.
+  await final('stop');
+  await expect(page.getByTestId('tutor-hold')).toBeVisible();
+  await page.getByTestId('tutor-resume').click();
+  await expect(page.getByTestId('tutor-hold')).toHaveCount(0);
+});
+
 test('tutor grandi partite: tutte le richieste a voce funzionano', async ({ page }) => {
   await page.route('https://api.anthropic.com/**', async (route) => {
     const body = route.request().postDataJSON() as { messages: { content: string }[] };

@@ -28,7 +28,7 @@ import {
 import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
 import { NamePacer, phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type NameMoment, type Tone } from '../features/tutor/tone';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
-import { commandAtEnd, isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener, type VoiceCommand } from '../features/voice/listen';
+import { BARGE_IN_KINDS, commandAtEnd, interruptAtStart, isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener, type VoiceCommand } from '../features/voice/listen';
 import { currentSpeakingId, currentSpeechText, onSpoken, setVoiceVolume, speak, stopSpeaking, useSpeakingId, useVoiceVolume } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Uci } from '../types';
@@ -287,6 +287,17 @@ export function GameTutorPage() {
    * 'pause' = il perché è stato detto, tra poco si indica la mossa successiva.
    */
   const [teaching, setTeaching] = useState<'explain' | 'pause' | null>(null);
+  /**
+   * «Basta», «aspetta», «scusa»…: il tutor ha smesso di parlare e aspetta la richiesta
+   * successiva. Finché non arriva non riparte da solo (niente pausa che scade, niente
+   * conto alla rovescia); qualunque richiesta o azione sulla scacchiera lo fa ripartire.
+   */
+  const [hold, setHoldState] = useState(false);
+  const holdRef = useRef(false);
+  const setHold = useCallback((value: boolean) => {
+    holdRef.current = value;
+    setHoldState(value);
+  }, []);
 
   /**
    * Dice a voce che cosa fare adesso: quale pezzo muovere e da dove a dove
@@ -297,6 +308,7 @@ export function GameTutorPage() {
     (state: SessionState, prefix = '') => {
       if (!parsed || !game) return;
       setRunning(true);
+      setHold(false);
       setTeaching(null);
       speechTokenRef.current++;
       // La prima volta si saluta per nome.
@@ -313,7 +325,7 @@ export function GameTutorPage() {
       const instruction = call.endsWith(', ') ? what.charAt(0).toLowerCase() + what.slice(1) : what;
       say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${call}${instruction}`);
     },
-    [parsed, game],
+    [parsed, game, setHold, nameFor],
   );
 
   /**
@@ -326,6 +338,7 @@ export function GameTutorPage() {
       if (!parsed) return;
       const ply = state.ply;
       setRunning(true);
+      setHold(false);
       setFeedback({ tone, text: head });
       setExplanation({ ply, text: explanationFor(ply) });
       setTeaching('explain');
@@ -342,7 +355,7 @@ export function GameTutorPage() {
       const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SPEECH_WAIT_MS));
       void Promise.race([queue.get(ply), timeout]).then(say);
     },
-    [parsed, explanationFor],
+    [parsed, explanationFor, setHold],
   );
 
   const setSide = (next: UserSide) => {
@@ -477,12 +490,19 @@ export function GameTutorPage() {
 
   /** Comando già eseguito durante la frase (dalla trascrizione provvisoria): la versione finale non lo ripete. */
   const bargeRef = useRef<{ kind: string; at: number } | null>(null);
-  const isTalking = () => currentSpeakingId() !== null || Date.now() - lastSpokeRef.current < ECHO_GRACE_MS;
-  /** Un comando detto mentre il tutor parla, se non è l'eco della sua voce. */
+  // Dopo uno stop il tutor tace: la frase successiva è subito una richiesta, senza la pausa anti-eco.
+  const isTalking = () => currentSpeakingId() !== null || (!holdRef.current && Date.now() - lastSpokeRef.current < ECHO_GRACE_MS);
+  /**
+   * Un comando detto mentre il tutor parla, se non è l'eco della sua voce: un comando breve
+   * alla fine («…zitta», «…vai alla prossima») o un'interruzione all'inizio («scusa, …»).
+   */
   const bargeIn = (text: string) => {
-    const found = commandAtEnd(text);
-    if (!found || isEcho(found.phrase, currentSpeechText() || recentSpokenRef.current)) return null;
-    return found;
+    const spoken = currentSpeechText() || recentSpokenRef.current;
+    const atEnd = commandAtEnd(text);
+    if (atEnd && !isEcho(atEnd.phrase, spoken)) return atEnd;
+    const atStart = interruptAtStart(text);
+    if (atStart && !isEcho(atStart.phrase, spoken)) return atStart;
+    return null;
   };
 
   /** Trascrizione provvisoria: mentre il tutor parla basta dire «zitta» o «prossima» per interromperlo subito. */
@@ -490,8 +510,10 @@ export function GameTutorPage() {
   const interimSeenRef = useRef<{ key: string; at: number } | null>(null);
   const onInterim = (text: string) => {
     if (!isTalking()) return;
-    const found = bargeIn(text);
-    if (!found) return;
+    const barge = bargeIn(text);
+    if (!barge) return;
+    // A frase non finita una domanda è ancora incompleta: per ora il tutor tace soltanto.
+    const found = BARGE_IN_KINDS.has(barge.command.kind) ? barge : { ...barge, command: { kind: 'stop' } as VoiceCommand };
     // Con l'audio alto l'eco produce parole a caso che cambiano da un istante all'altro:
     // un comando vero resta uguale in due trascrizioni provvisorie di fila.
     const key = JSON.stringify(found.command);
@@ -549,8 +571,16 @@ export function GameTutorPage() {
 
   const runCommand = (command: VoiceCommand) => {
     setRunning(true);
-    if (command.kind === 'stop') return;
-    if (command.kind === 'next') {
+    if (command.kind === 'stop') {
+      // Silenzio subito, e si resta in ascolto della richiesta successiva.
+      speechTokenRef.current++;
+      stopSpeaking();
+      setHold(true);
+      return;
+    }
+    setHold(false);
+    if (command.kind === 'resume') resume();
+    else if (command.kind === 'next') {
       if (teaching) revealNext();
       else advance();
     }
@@ -561,6 +591,12 @@ export function GameTutorPage() {
       if ('where' in command) goToRef.current(command.where === 'start' ? 0 : parsed.moves.length);
       else goToRef.current((command.move - 1) * 2 + (command.color === 'b' ? 1 : 0));
     } else if (command.kind === 'question') void ask(command.text);
+  };
+  /** Dopo uno stop: si riprende da dove si era (la mossa successiva, o l'indicazione di quella attuale). */
+  const resume = () => {
+    setHold(false);
+    if (teaching === 'pause') revealNext();
+    else if (sessionRef.current) announce(sessionRef.current);
   };
   const onHeardRef = useRef<(text: string, typed?: boolean) => void>(onHeard);
   onHeardRef.current = onHeard;
@@ -633,7 +669,7 @@ export function GameTutorPage() {
   // non mentre il tutor parla o si aspetta una risposta.
   const finishedNow = parsed && session ? isFinished(parsed, session) : true;
   const answering = answer?.phase.status === 'busy';
-  const ticking = running && !paused && !teaching && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !answering;
+  const ticking = running && !paused && !hold && !teaching && autoSeconds > 0 && !finishedNow && !session?.deviation && !speaking && !answering;
   /** Tempo scaduto senza che la mossa sia stata fatta: la si considera fatta (perché, pausa, mossa successiva). */
   const onTimeout = () => advance();
   const advanceRef = useRef(onTimeout);
@@ -641,10 +677,10 @@ export function GameTutorPage() {
 
   // Dopo il perché: finita la voce e la pausa, la mossa successiva.
   useEffect(() => {
-    if (teaching !== 'pause' || speaking || answering || paused) return;
+    if (teaching !== 'pause' || speaking || answering || paused || hold) return;
     const timer = setTimeout(revealNext, nextDelay * 1000);
     return () => clearTimeout(timer);
-  }, [teaching, speaking, answering, paused, nextDelay, revealNext]);
+  }, [teaching, speaking, answering, paused, hold, nextDelay, revealNext]);
   useEffect(() => {
     if (!ticking) return;
     const timer = setInterval(() => {
@@ -885,9 +921,18 @@ export function GameTutorPage() {
               {explanation.text}
             </p>
           )}
+          {hold && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-accent-soft px-3 py-2" data-testid="tutor-hold">
+              <Icon name="chat" size={18} />
+              <p className="min-w-0 flex-1 text-sm font-semibold">{t.gameTutor.holdText}</p>
+              <Button size="sm" icon={<Icon name="play" size={16} />} onClick={resume} data-testid="tutor-resume">
+                {t.gameTutor.resumeLesson}
+              </Button>
+            </div>
+          )}
           {teaching && (
             <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-muted">{t.gameTutor.nextSoon}</p>
+              {!hold && <p className="text-sm text-muted">{t.gameTutor.nextSoon}</p>}
               <Button variant="secondary" size="sm" icon={<Icon name="arrowRight" size={16} />} onClick={revealNext} data-testid="tutor-reveal">
                 {t.gameTutor.nextNow}
               </Button>
@@ -944,7 +989,7 @@ export function GameTutorPage() {
               </Button>
             )}
           </div>
-          {running && autoSeconds > 0 && !finished && !session.deviation && !teaching && (
+          {running && autoSeconds > 0 && !finished && !session.deviation && !teaching && !hold && (
             <div className="flex items-center gap-3">
               <p className="text-sm font-semibold tabular-nums" data-testid="tutor-countdown" data-remaining={remaining}>
                 {t.gameTutor.countdown(remaining)}

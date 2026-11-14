@@ -111,3 +111,62 @@ describe('salta', () => {
     for (const text of ['salta', 'Salta la mossa', 'salta questa mossa', 'passa']) expect(parseCommand(text), text).toEqual({ kind: 'next' });
   });
 });
+
+describe('interrompere il tutor', () => {
+  it('capisce tanti modi di dire «smetti di parlare»', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    for (const text of [
+      'basta così',
+      'stop stop',
+      'ok basta',
+      'aspetta un attimo',
+      'aspetta aspetta',
+      'un momento per favore',
+      'fermati un attimo',
+      'fermo',
+      'silenzio',
+      'smettila',
+      'smetti di parlare',
+      'interrompi',
+      'pausa',
+      'scusa',
+      'scusami',
+      'ehi tutor stai zitto',
+      'fammi parlare',
+      'posso parlare?',
+      'ho una domanda',
+      'shh',
+    ]) {
+      expect(parseCommand(text), text).toEqual({ kind: 'stop' });
+    }
+  });
+
+  it('dopo l’interruzione conta la richiesta che segue', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    expect(parseCommand('aspetta, vai alla quinta mossa')).toEqual({ kind: 'goto', move: 5, color: 'w' });
+    expect(parseCommand('scusa, perché?')).toEqual({ kind: 'why' });
+    expect(parseCommand('basta, prossima mossa')).toEqual({ kind: 'next' });
+    expect(parseCommand('scusa, che apertura è questa?')).toEqual({ kind: 'question', text: 'scusa, che apertura è questa?' });
+    expect(parseCommand('stop eh')).toEqual({ kind: 'stop' });
+    // Parole che solo somigliano a un'interruzione non lo sono.
+    expect(parseCommand('perché il pedone si ferma in e5')?.kind).toBe('question');
+    expect(parseCommand('altro')).toBeNull();
+  });
+
+  it('«continua» riprende la lezione', async () => {
+    const { parseCommand } = await import('../../src/features/voice/listen');
+    for (const text of ['continua', 'ok continua', 'riprendi', 'vai pure', 'prosegui per favore']) expect(parseCommand(text), text).toEqual({ kind: 'resume' });
+  });
+
+  it('trova l’interruzione all’inizio di una frase detta sopra la voce del tutor', async () => {
+    const { interruptAtStart, commandAtEnd } = await import('../../src/features/voice/listen');
+    expect(interruptAtStart('scusa che apertura è questa')).toEqual({
+      command: { kind: 'question', text: 'scusa che apertura è questa' },
+      phrase: 'scusa',
+    });
+    expect(interruptAtStart('aspetta un attimo')?.phrase).toBe('aspetta un attimo');
+    expect(interruptAtStart('il cavallo va in f3')).toBeNull();
+    expect(commandAtEnd('il cavallo sviluppa verso il centro aspetta un attimo')?.command).toEqual({ kind: 'stop' });
+    expect(commandAtEnd('il cavallo sviluppa verso il centro scusa')?.command).toEqual({ kind: 'stop' });
+  });
+});
