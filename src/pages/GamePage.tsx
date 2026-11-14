@@ -179,7 +179,7 @@ export function GamePage({ profile }: { profile: Profile }) {
 
           <Card className="space-y-2">
             <Link to={`/partite/${game.id}/tutor`} className={buttonClass('primary')} data-testid="game-tutor-link">
-              <Icon name="camera" size={18} />
+              <Icon name="play" size={18} />
               {t.gameTutor.open}
             </Link>
           </Card>
