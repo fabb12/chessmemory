@@ -4,7 +4,7 @@ import type { BoardView } from '../../src/features/assistant/boardReading';
 import { legalTransitions, matchTransition, touchedSquares } from '../../src/features/engine/moveMatcher';
 import { autoDetectCorners, candidateQuads, loadCalibration, saveCalibration } from '../../src/features/vision/calibration';
 import { cellToSquare, type Corners } from '../../src/features/vision/geometry';
-import { appearanceFromFen, geometryForView } from '../../src/features/vision/perspective';
+import { appearanceFromFen, FootprintLock, geometryForView } from '../../src/features/vision/perspective';
 import { StabilityTracker } from '../../src/features/vision/motion';
 import { classifyOccupancy, detectView, learnOccupancy, occupancyFromFen } from '../../src/features/vision/occupancy';
 import { analyzeFrame, toGray } from '../../src/features/vision/pipeline';
@@ -75,6 +75,30 @@ describe('pipeline di visione su scacchiera inclinata (~45°)', () => {
     expect(result.kind === 'match' && result.footprint).toBe('flat');
   });
 
+  it('stesso pezzo su un’altra casa: la mossa attesa NON deve risultare giusta', () => {
+    const fen = after(START, 'e4', 'e5');
+    // Il Maestro gioca Cf3, l'utente mette il cavallo in h3.
+    const result = detect(fen, after(fen, 'Nh3'), 'bottom', 'g1f3');
+    expect(result.kind === 'match' && result.transition.uci).not.toBe('g1f3');
+    expect(result.kind === 'match' && result.transition.uci).toBe('g1h3');
+    // E con la mossa giusta la precedenza funziona.
+    const right = detect(fen, after(fen, 'Nf3'), 'bottom', 'g1f3');
+    expect(right.kind === 'match' && right.transition.uci).toBe('g1f3');
+  });
+
+  it('cambiamenti estranei alla mossa (pezzo urtato): meglio chiedere che indovinare', () => {
+    const before = features(START);
+    const now = features(after(START, 'e4'), TILTED, { brightness: 0.93 });
+    const cells = featureChanges(before, now);
+    const changes = new Map<string, number>();
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) changes.set(cellToSquare(i, j, 'bottom'), cells[i * 8 + j]!);
+    // Due case lontane dalla mossa cambiano molto (un pezzo spostato, un riflesso).
+    changes.set('a5', 80);
+    changes.set('h4', 80);
+    const result = matchTransition({ fen: START, candidates: legalTransitions(START), changes, geometry: geometryForView('bottom'), preferred: 'e2e4' });
+    expect(result.kind).toBe('unsure');
+  });
+
   it('nessun cambiamento: «none»', () => {
     expect(detect(START, START).kind).toBe('none');
   });
@@ -127,6 +151,44 @@ describe('matcher delle mosse', () => {
     const guided = matchTransition({ fen: START, candidates, changes, preferred: 'e2e4' });
     expect(plain.kind).toBe('unsure');
     expect(guided.kind === 'match' && guided.transition.uci).toBe('e2e4');
+  });
+});
+
+describe('blocco dell’inclinazione', () => {
+  it('si blocca dopo 3 mosse con la stessa impronta e si riapre dopo 3 letture incerte', () => {
+    const lock = new FootprintLock();
+    lock.record('steep');
+    lock.record('flat');
+    lock.record('steep');
+    lock.record('steep');
+    expect(lock.locked).toBeNull();
+    lock.record('steep');
+    expect(lock.locked).toBe('steep');
+    lock.record('flat');
+    expect(lock.locked).toBe('steep');
+    lock.record(null);
+    lock.record(null);
+    expect(lock.locked).toBe('steep');
+    lock.record(null);
+    expect(lock.locked).toBeNull();
+  });
+
+  it('con l’impronta bloccata il matcher usa solo quella; se è sbagliata chiede invece di indovinare', () => {
+    const fen = after(START, 'e4');
+    const before = features(fen);
+    const now = features(after(fen, 'Nf6'));
+    const cells = featureChanges(before, now);
+    const changes = new Map<string, number>();
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) changes.set(cellToSquare(i, j, 'bottom'), cells[i * 8 + j]!);
+    const input = { fen, candidates: legalTransitions(fen), changes, geometry: geometryForView('bottom') };
+    const free = matchTransition(input);
+    expect(free.kind === 'match' && free.footprint).toBe('flat');
+    const locked = matchTransition({ ...input, footprint: 'flat' });
+    expect(locked.kind === 'match' && locked.transition.uci).toBe('g8f6');
+    expect(locked.kind === 'match' && locked.footprint).toBe('flat');
+    // Impronta bloccata sbagliata: nessuna mossa inventata (il blocco si riapre dopo 3 letture incerte).
+    const wrong = matchTransition({ ...input, footprint: 'steep' });
+    expect(wrong.kind === 'match' && wrong.transition.uci !== 'g8f6').toBe(false);
   });
 });
 

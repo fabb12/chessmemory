@@ -100,3 +100,40 @@ export function appearanceFromFen(fen: string, geometry: BoardGeometry | null | 
   }
   return out;
 }
+
+/**
+ * Con la fotocamera ferma l'inclinazione non cambia: dopo qualche mossa
+ * riconosciuta con la stessa impronta, quella si blocca (meno libertà = meno
+ * mosse sbagliate «spiegate» con un'inclinazione di comodo). Si riapre con una
+ * nuova calibrazione o se le letture smettono di tornare.
+ */
+export class FootprintLock {
+  private votes = new Map<FootprintName, number>();
+  private unsureInRow = 0;
+  locked: FootprintName | null = null;
+
+  constructor(
+    private readonly confirmations = 3,
+    private readonly maxUnsure = 3,
+  ) {}
+
+  /** Esito di un controllo: impronta della mossa accettata, oppure null se la lettura era incerta. */
+  record(footprint: FootprintName | null): void {
+    if (!footprint) {
+      if (this.locked && ++this.unsureInRow >= this.maxUnsure) this.reset();
+      return;
+    }
+    this.unsureInRow = 0;
+    if (this.locked) return;
+    const n = (this.votes.get(footprint) ?? 0) + 1;
+    // Conta solo una serie di conferme uguali.
+    this.votes = new Map([[footprint, n]]);
+    if (n >= this.confirmations) this.locked = footprint;
+  }
+
+  reset(): void {
+    this.votes.clear();
+    this.unsureInRow = 0;
+    this.locked = null;
+  }
+}
