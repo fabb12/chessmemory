@@ -32,6 +32,7 @@ import {
   type UserSide,
 } from '../features/tutor/gameSession';
 import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
+import { phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type Tone } from '../features/tutor/tone';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { plausibleCorners, type Corners } from '../features/vision/geometry';
@@ -188,7 +189,11 @@ export function GameTutorPage() {
   const greetedRef = useRef(false);
   /** Il tutor chiama spesso l'allievo per nome, alternando le frasi per non suonare ripetitivo. */
   const nameTurnRef = useRef(0);
-  const nextOf = <T,>(list: readonly T[]): T => list[nameTurnRef.current++ % list.length]!;
+  // Tono di parlata scelto dall'allievo (frasi del tutor e istruzioni per Claude).
+  const tone = useTone();
+  const toneRef = useRef<Tone>(tone);
+  toneRef.current = tone;
+  const ph = () => phrases(toneRef.current);
   const setName = useCallback((value: string) => {
     const clean = value.trim().slice(0, 40);
     nameRef.current = clean;
@@ -277,7 +282,7 @@ export function GameTutorPage() {
   useEffect(() => {
     if (!parsed || !game) return;
     const cache = getExplanationCache();
-    const key = (ply: number) => explanationKey(game.id, ply);
+    const key = (ply: number) => explanationKey(game.id, ply, tone);
     void cache.warm(parsed.moves.map((_, k) => key(k + 1))).then(() => setTextsVersion((v) => v + 1));
     if (!apiKey) {
       queueRef.current = null;
@@ -298,6 +303,7 @@ export function GameTutorPage() {
           game: `${game.white} – ${game.black}, ${game.event} ${game.year}`,
           comment: move.comment,
           continuation: formatLine(playLine(move.fen, parsed.moves.slice(ply, ply + 4).map((m) => m.uci)), false),
+          tone: TONE_PROMPTS[tone],
         });
       },
       onReady: (ply, text) => {
@@ -309,7 +315,7 @@ export function GameTutorPage() {
     queueRef.current = queue;
     queue.advance((sessionRef.current?.ply ?? 0) + 1);
     return () => queue.dispose();
-  }, [parsed, game, apiKey]);
+  }, [parsed, game, apiKey, tone]);
 
   const explanationFor = useCallback(
     (ply: number): string => {
@@ -317,7 +323,7 @@ export function GameTutorPage() {
       if (!parsed || !move) return '';
       return (
         queueRef.current?.peek(ply) ??
-        (game ? getExplanationCache().peek(explanationKey(game.id, ply)) : undefined) ??
+        (game ? getExplanationCache().peek(explanationKey(game.id, ply, toneRef.current)) : undefined) ??
         reasonOf(fenAt(parsed, ply - 1), move, parsed.moves[ply - 2], parsed)
       );
     },
@@ -352,16 +358,16 @@ export function GameTutorPage() {
       speechTokenRef.current++;
       const who = nameRef.current;
       // La prima volta si saluta per nome.
-      const hello = who && !greetedRef.current ? `${t.gameTutor.hello(who)} ` : '';
+      const hello = who && !greetedRef.current ? `${ph().hello(who)} ` : '';
       if (who) greetedRef.current = true;
       const say = (text: string) => speak(`${hello}${prefix} ${text}`.trim(), 'game-tutor');
-      if (isFinished(parsed, state)) return say(t.gameTutor.finished(t.games.result[game.result] ?? game.result, who));
+      if (isFinished(parsed, state)) return say(ph().finished(t.games.result[game.result] ?? game.result, who));
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
       if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, who));
       const what = moveInstruction(state.fen, move);
       // Quasi sempre il nome, con frasi che si alternano.
-      const call = who ? nextOf(t.gameTutor.callName)(who) : '';
+      const call = ph().call(who, nameTurnRef.current++);
       const instruction = call.endsWith(', ') ? what.charAt(0).toLowerCase() + what.slice(1) : what;
       say(`${t.gameTutor.moveNumber(move.moveNumber, t.sides[move.color], move.color === 'w' ? game.white : game.black)}. ${call}${instruction}`);
     },
@@ -476,7 +482,7 @@ export function GameTutorPage() {
     const text = ply > 0 ? explanationFor(ply) : t.gameTutor.whyNothing;
     speechTokenRef.current++;
     setAnswer({ question: t.gameTutor.whyQuestion, phase: { status: 'done', value: text } });
-    speak(nameRef.current ? `${t.gameTutor.whyTo(nameRef.current)} ${text}` : text, 'game-tutor');
+    speak(nameRef.current || toneRef.current !== 'normal' ? `${ph().whyTo(nameRef.current)} ${text}` : text, 'game-tutor');
   }, [parsed, explanationFor]);
 
   /** Domanda libera sulla partita: risponde Claude, con il contesto della posizione. */
@@ -508,6 +514,7 @@ export function GameTutorPage() {
           current,
           question: text,
           student: nameRef.current,
+          tone: TONE_PROMPTS[toneRef.current],
           history: historyRef.current,
         });
         historyRef.current = [...historyRef.current, { question: text, answer: reply }].slice(-3);
@@ -562,13 +569,19 @@ export function GameTutorPage() {
   const onInterimRef = useRef(onInterim);
   onInterimRef.current = onInterim;
 
-  const onHeard = (text: string) => {
+  /** `typed` = scritto nella casella: non può essere l'eco della voce, e interrompe sempre. */
+  const onHeard = (text: string, typed = false) => {
+    if (typed) {
+      speechTokenRef.current++;
+      stopSpeaking();
+      lastSpokeRef.current = 0;
+    }
     const barge = bargeRef.current;
     bargeRef.current = null;
     // Già eseguito mentre si parlava: la frase finale non lo ripete.
     if (barge && Date.now() - barge.at < 6000 && commandAtEnd(text)?.command.kind === barge.kind) return;
     let command = parseCommand(text);
-    if (isTalking()) {
+    if (!typed && isTalking()) {
       // Mentre il tutor parla si può interromperlo, ma solo con un comando breve
       // («zitta», «prossima», «vai alla quinta mossa»…) che non sia l'eco della sua stessa voce.
       const found = bargeIn(text);
@@ -585,7 +598,7 @@ export function GameTutorPage() {
         awaitingNameRef.current = false;
         setName(heardName);
         greetedRef.current = true;
-        if (sessionRef.current) announce(sessionRef.current, t.gameTutor.nice(heardName));
+        if (sessionRef.current) announce(sessionRef.current, ph().nice(heardName));
         return;
       }
       // Un comando o una domanda: il nome si potrà dire (o scrivere) più tardi.
@@ -610,7 +623,7 @@ export function GameTutorPage() {
     } else if (command.kind === 'ready') arrangedRef.current();
     else if (command.kind === 'question') void ask(command.text);
   };
-  const onHeardRef = useRef(onHeard);
+  const onHeardRef = useRef<(text: string, typed?: boolean) => void>(onHeard);
   onHeardRef.current = onHeard;
   const jumpRef = useRef<(target: SessionState) => void>(() => undefined);
   const goToRef = useRef<(ply: number) => void>(() => undefined);
@@ -696,7 +709,7 @@ export function GameTutorPage() {
     if (!s) return;
     if (trackerRef.current) {
       setRemaining(autoSeconds);
-      announce(s, t.gameTutor.reminder(nameRef.current));
+      announce(s, ph().reminder(nameRef.current));
     } else advance();
   };
   const advanceRef = useRef(onTimeout);
@@ -752,7 +765,7 @@ export function GameTutorPage() {
         const who = nameRef.current;
         teach(
           state,
-          !guess ? t.gameTutor.wellDone(label, who, who ? nextOf(t.gameTutor.praise)(who) : '') : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label),
+          !guess ? ph().wellDone(label, who, nameTurnRef.current++) : outcome.firstTry ? t.gameTutor.correct(label, who) : t.gameTutor.correctLater(label),
         );
         return;
       }
@@ -761,7 +774,7 @@ export function GameTutorPage() {
         setShowHint(true);
         if (!guess) {
           const expected = expectedMove(parsed, current)!;
-          const text = t.gameTutor.deviationWrongOrder(moveInstruction(current.fen, expected), nameRef.current);
+          const text = ph().wrong(moveInstruction(current.fen, expected), nameRef.current);
           setFeedback({ tone: 'bad', text });
           speechTokenRef.current++;
           speak(text, 'game-tutor');
@@ -996,6 +1009,7 @@ export function GameTutorPage() {
         playedEval: judgement.value.evaluation,
         masterEval: masterLine ? formatScore(masterLine.score, expected.color === 'w') : formatScore(analysis.score, expected.color === 'w'),
         refutation: after.lines[0] ? formatLine(playLine(deviation.fen, after.lines[0].pv.slice(0, 6)), false) : '',
+        tone: TONE_PROMPTS[tone],
       });
       if (sessionRef.current?.deviation?.uci !== deviation.uci) return;
       setWhy({ status: 'done', value: text });
@@ -1053,8 +1067,8 @@ export function GameTutorPage() {
 
   /** Scacchiera vera di nuovo allineata alla partita (vista dalla fotocamera o con «pronto»). */
   const onAligned = () => {
-    setFeedback({ tone: 'good', text: t.gameTutor.aligned(nameRef.current) });
-    if (!teaching) announce(sessionRef.current ?? session, t.gameTutor.aligned(nameRef.current));
+    setFeedback({ tone: 'good', text: ph().aligned(nameRef.current) });
+    if (!teaching) announce(sessionRef.current ?? session, ph().aligned(nameRef.current));
   };
   alignedRef.current = onAligned;
 
@@ -1139,7 +1153,7 @@ export function GameTutorPage() {
 
         {finished && !teaching && (
           <p className="text-lg font-semibold" data-testid="tutor-next">
-            {t.gameTutor.finished(t.games.result[game.result] ?? game.result, name)}
+            {phrases(tone).finished(t.games.result[game.result] ?? game.result, name)}
           </p>
         )}
         {next && guess && (
@@ -1230,7 +1244,7 @@ export function GameTutorPage() {
               greetedRef.current = false;
               if (wasWaiting && sessionRef.current) {
                 greetedRef.current = true;
-                announce(sessionRef.current, t.gameTutor.nice(value));
+                announce(sessionRef.current, ph().nice(value));
               }
             }}
           >
@@ -1288,6 +1302,24 @@ export function GameTutorPage() {
           </label>
         </div>
         <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
+          {t.gameTutor.toneLabel}
+          <select
+            value={tone}
+            onChange={(e) => {
+              setTone(e.target.value as Tone);
+              greetedRef.current = false;
+            }}
+            className="min-h-10 rounded-xl border border-line bg-surface px-3"
+            data-testid="tutor-tone"
+          >
+            {TONES.map((value) => (
+              <option key={value} value={value}>
+                {TONE_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
           {t.gameTutor.volume}
           <input
             type="range"
@@ -1322,7 +1354,7 @@ export function GameTutorPage() {
             const text = question.trim();
             if (!text) return;
             setQuestion('');
-            onHeardRef.current(text);
+            onHeardRef.current(text, true);
           }}
         >
           <input

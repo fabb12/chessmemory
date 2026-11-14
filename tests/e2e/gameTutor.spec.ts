@@ -630,3 +630,53 @@ test('tutor grandi partite: «salta» con la fotocamera non obbliga a rifare le 
   const lines = await said(page);
   expect(lines.filter((l) => l.includes('Marco')).length).toBeGreaterThanOrEqual(4);
 });
+
+test('tutor grandi partite: tono di parlata per frasi e Claude', async ({ page }) => {
+  const systems: string[] = [];
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const body = route.request().postDataJSON() as { system: { text: string }[]; messages: { content: string }[] };
+    systems.push(body.system.map((b) => b.text).join('\n'));
+    const last = String(body.messages[body.messages.length - 1]?.content ?? '');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: 'msg_t',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-haiku-5-5',
+        content: [{ type: 'text', text: last.includes('Domanda:') ? 'Risposta.' : 'Spiegazione.' }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+  await openTutor(page, true, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await page.getByTestId('tutor-name-input').fill('Marco');
+  await page.getByTestId('tutor-name-save').click();
+  await expect.poll(() => systems.length).toBeGreaterThan(0);
+  expect(systems[0]).not.toContain('Tono di parlata');
+
+  // Formale: dà del Lei, anche a Claude si chiede di farlo (e le spiegazioni si rigenerano).
+  await page.getByTestId('tutor-tone').selectOption('formal');
+  await expect.poll(() => systems.some((s) => s.includes('Dai del Lei'))).toBe(true);
+  const click = async (square: string) => page.locator(`[data-square="${square}"]`).first().click();
+  await click('e2');
+  await click('e4');
+  await expect(page.getByTestId('tutor-feedback')).toHaveText('Ottima mossa, Marco. 1.e4.');
+
+  // Offensivo: prese in giro scherzose, solo sul gioco.
+  await page.getByTestId('tutor-tone').selectOption('offensive');
+  await page.getByTestId('tutor-reveal').click();
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toMatch(/schiappa|zuccone|brocco|lumaca/);
+  await page.getByTestId('tutor-question').fill('chi ha vinto?');
+  await page.getByTestId('tutor-ask').click();
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Risposta.');
+  expect(systems.at(-1)).toContain('insulti scherzosi');
+  // La scelta resta.
+  await page.reload();
+  await expect(page.getByTestId('tutor-tone')).toHaveValue('offensive');
+});

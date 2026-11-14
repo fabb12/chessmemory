@@ -622,6 +622,15 @@ export interface MasterMoveInput {
   comment?: string;
   /** Le mosse successive della partita (notazione italiana), per capire il piano. */
   continuation: string;
+  /** Istruzione sul tono di parlata (vuota = normale). */
+  tone?: string;
+}
+
+/** Il prompt di sistema in cache, più l'eventuale istruzione sul tono (fuori dalla cache, cambia poco). */
+function systemWithTone(text: string, tone?: string): Anthropic.Beta.BetaTextBlockParam[] {
+  const blocks: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+  if (tone) blocks.push({ type: 'text', text: `Tono di parlata: ${tone}` });
+  return blocks;
 }
 
 const MASTER_SYSTEM = `Sei un istruttore di scacchi che accompagna un allievo (principiante o intermedio) mentre rigioca sulla scacchiera una partita storica di un grande maestro.
@@ -638,7 +647,7 @@ export async function explainMasterMove(input: MasterMoveInput): Promise<string>
     const message = await createMessage(created.client, created.sdk, {
       max_tokens: 4000,
       output_config: { effort: 'low' },
-      system: [{ type: 'text', text: MASTER_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: systemWithTone(MASTER_SYSTEM, input.tone),
       messages: [
         {
           role: 'user',
@@ -670,6 +679,7 @@ export interface DeviationInput {
   masterEval: string;
   /** Migliore variante di Stockfish dopo la mossa dell'utente, in notazione italiana. */
   refutation: string;
+  tone?: string;
 }
 
 /** «Perché la mia mossa non va bene?»: chiamata live, solo su richiesta dell'utente. */
@@ -681,7 +691,7 @@ export async function explainDeviation(input: DeviationInput): Promise<string> {
     const message = await createMessage(created.client, created.sdk, {
       max_tokens: 4000,
       output_config: { effort: 'low' },
-      system: EXPLAIN_SYSTEM,
+      system: input.tone ? systemWithTone(EXPLAIN_SYSTEM, input.tone) : EXPLAIN_SYSTEM,
       messages: [
         {
           role: 'user',
@@ -717,6 +727,7 @@ export interface GameQuestionInput {
   question: string;
   /** Nome dell'allievo, se lo ha detto: la risposta lo chiama per nome. */
   student?: string;
+  tone?: string;
   /** Domande e risposte precedenti, per le domande di seguito («e se invece…?»). */
   history: { question: string; answer: string }[];
 }
@@ -745,7 +756,7 @@ Mossa indicata adesso: ${input.current}${input.student ? `\nL'allievo si chiama 
     const message = await createMessage(created.client, created.sdk, {
       max_tokens: 4000,
       output_config: { effort: 'low' },
-      system: [{ type: 'text', text: QUESTION_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: systemWithTone(QUESTION_SYSTEM, input.tone),
       messages,
     });
     recordUsage('explanation', message);
