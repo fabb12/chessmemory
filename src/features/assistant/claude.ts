@@ -22,7 +22,60 @@ import type { VisionResult } from '../vision/hybrid';
  * viene inviata soltanto ad api.anthropic.com. Non entra nei backup né nel cloud.
  */
 
-export const ASSISTANT_MODEL = 'claude-opus-5-5';
+// ───── Modello di Claude (scelto dall'utente, salvato su questo dispositivo) ─────
+
+export interface ClaudeModel {
+  id: string;
+  /** Prezzo indicativo per milione di token (ingresso / uscita), in dollari. */
+  price: string;
+  /** Supporta la modalità veloce (`speed: 'fast'`). */
+  fast: boolean;
+  /** Supporta il ripiego lato server su un altro modello se la richiesta viene rifiutata. */
+  fallbacks: boolean;
+}
+
+export const CLAUDE_MODELS: readonly ClaudeModel[] = [
+  { id: 'claude-haiku-5-5', price: '0,10 / 0,50', fast: false, fallbacks: false },
+  { id: 'claude-sonnet-5-5', price: '2 / 10', fast: false, fallbacks: true },
+  { id: 'claude-opus-5-5', price: '4 / 20', fast: true, fallbacks: true },
+  { id: 'claude-fable-5-2', price: '8 / 40', fast: true, fallbacks: true },
+];
+
+/** Modello predefinito: Haiku, il più rapido ed economico. */
+export const DEFAULT_MODEL = 'claude-haiku-5-5';
+
+const MODEL_STORAGE = 'cm.anthropic.model';
+const modelListeners = new Set<() => void>();
+
+export function getModel(): ClaudeModel {
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(MODEL_STORAGE);
+  } catch {
+    // archivio non disponibile: modello predefinito
+  }
+  return CLAUDE_MODELS.find((m) => m.id === id) ?? CLAUDE_MODELS.find((m) => m.id === DEFAULT_MODEL)!;
+}
+
+export function setModel(id: string): void {
+  try {
+    localStorage.setItem(MODEL_STORAGE, id);
+  } catch {
+    // preferenza non salvata
+  }
+  modelListeners.forEach((l) => l());
+}
+
+export function useModel(): ClaudeModel {
+  return useSyncExternalStore(
+    (l) => {
+      modelListeners.add(l);
+      return () => modelListeners.delete(l);
+    },
+    getModel,
+    getModel,
+  );
+}
 
 const KEY_STORAGE = 'cm.anthropic.apiKey';
 const keyListeners = new Set<() => void>();
@@ -127,7 +180,8 @@ function mapError(error: unknown, sdk: typeof Anthropic | null): AssistantError 
 }
 
 type BetaMessage = Anthropic.Beta.BetaMessage;
-type CreateParams = Anthropic.Beta.MessageCreateParamsNonStreaming;
+/** Parametri della richiesta senza modello: lo aggiunge `createMessage` con le opzioni che quel modello supporta. */
+type CreateParams = Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'betas' | 'fallbacks' | 'speed'>;
 
 // ───── Consumo di token (per mostrarlo all'utente) ─────
 
@@ -179,11 +233,18 @@ export function useAssistantUsage(): AssistantUsage {
  * limite di richieste a parte: se viene rifiutata si ripete subito a velocità normale.
  */
 async function createMessage(client: Anthropic, sdk: typeof Anthropic, params: CreateParams): Promise<BetaMessage> {
-  if (!getFastMode()) return client.beta.messages.create(params);
+  const model = getModel();
+  const base: Anthropic.Beta.MessageCreateParamsNonStreaming = {
+    ...params,
+    model: model.id,
+    // Se il modello rifiuta la richiesta, il server la ripete su un altro modello (Haiku non lo prevede).
+    ...(model.fallbacks ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+  };
+  if (!model.fast || !getFastMode()) return client.beta.messages.create(base);
   try {
-    return await client.beta.messages.create({ ...params, speed: 'fast' });
+    return await client.beta.messages.create({ ...base, speed: 'fast' });
   } catch (error) {
-    if (error instanceof sdk.RateLimitError || error instanceof sdk.BadRequestError) return client.beta.messages.create(params);
+    if (error instanceof sdk.RateLimitError || error instanceof sdk.BadRequestError) return client.beta.messages.create(base);
     throw error;
   }
 }
@@ -407,10 +468,7 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
       createMessage(created.client, created.sdk, {
-        model: ASSISTANT_MODEL,
         max_tokens: 8000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
         output_config: { effort, format: { type: 'json_schema', schema: READING_SCHEMA } },
         // Le istruzioni fisse vanno nel prompt di sistema, in cache: dalla seconda lettura
         // (entro 5 minuti) costano circa un ventesimo. Dopo, solo la foto e il poco che cambia.
@@ -524,10 +582,7 @@ export async function explainPosition(input: ExplainInput): Promise<string> {
     const side = input.fen.split(' ')[1] === 'b' ? 'il Nero' : 'il Bianco';
     const player = input.playerSide ? `\nL'utente gioca con ${input.playerSide === 'w' ? 'il Bianco' : 'il Nero'}: parla dal suo punto di vista.` : '';
     const message = await createMessage(created.client, created.sdk, {
-      model: ASSISTANT_MODEL,
       max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       output_config: { effort: 'low' },
       system: EXPLAIN_SYSTEM,
       messages: [
@@ -581,10 +636,7 @@ export async function explainMasterMove(input: MasterMoveInput): Promise<string>
     const created = await createClient();
     sdk = created.sdk;
     const message = await createMessage(created.client, created.sdk, {
-      model: ASSISTANT_MODEL,
       max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       output_config: { effort: 'low' },
       system: [{ type: 'text', text: MASTER_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [
@@ -627,10 +679,7 @@ export async function explainDeviation(input: DeviationInput): Promise<string> {
     const created = await createClient();
     sdk = created.sdk;
     const message = await createMessage(created.client, created.sdk, {
-      model: ASSISTANT_MODEL,
       max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       output_config: { effort: 'low' },
       system: EXPLAIN_SYSTEM,
       messages: [
@@ -692,10 +741,7 @@ Mossa indicata adesso: ${input.current}`;
     });
     messages.push({ role: 'user', content: messages.length === 0 ? `${context}\n\nDomanda: ${input.question}` : `(Posizione ora: ${input.fen}; mossa indicata: ${input.current})\n${input.question}` });
     const message = await createMessage(created.client, created.sdk, {
-      model: ASSISTANT_MODEL,
       max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       output_config: { effort: 'low' },
       system: [{ type: 'text', text: QUESTION_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages,

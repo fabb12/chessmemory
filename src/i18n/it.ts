@@ -343,6 +343,21 @@ export const it = {
       planLead: 'Nessuno scacco forzato in vista: ecco come continuare.',
       show: 'Guardala sulla scacchiera',
     },
+    model: {
+      label: 'Modello di Claude (prezzo per milione di token, ingresso / uscita)',
+      names: {
+        'claude-haiku-5-5': 'Haiku 5.5',
+        'claude-sonnet-5-5': 'Sonnet 5.5',
+        'claude-opus-5-5': 'Opus 5.5',
+        'claude-fable-5-2': 'Fable 5.2',
+      } as Record<string, string>,
+      help: {
+        'claude-haiku-5-5': 'Il più rapido ed economico: va bene per spiegazioni e domande.',
+        'claude-sonnet-5-5': 'Più preciso nelle letture difficili, costa circa 20 volte Haiku.',
+        'claude-opus-5-5': 'Il più accurato per leggere le foto; permette la lettura rapida.',
+        'claude-fable-5-2': 'Il più potente, anche il più caro e lento.',
+      } as Record<string, string>,
+    },
     fast: {
       label: 'Lettura rapida',
       help: 'Fino a 3 volte più rapida, ma costa il doppio.',
