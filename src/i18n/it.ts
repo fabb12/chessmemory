@@ -299,8 +299,8 @@ export const it = {
   },
   analyze: {
     title: 'Analizza la partita',
-    homeCardTitle: 'Analizza dal vivo con la fotocamera',
-    homeCardText: 'Inquadra la scacchiera: mosse migliori, linea vincente e spiegazione a voce.',
+    homeCardTitle: 'Analizza la partita con due foto',
+    homeCardText: 'Fotografa la scacchiera: mosse migliori, linea vincente e spiegazione.',
     key: {
       title: 'Analisi con la fotocamera',
       label: 'Chiave API Anthropic',
@@ -309,28 +309,37 @@ export const it = {
       remove: 'Rimuovi la chiave',
       saved: (tail: string) => `Chiave salvata (${tail})`,
       invalid: 'Non sembra una chiave Anthropic valida: deve iniziare con «sk-ant-».',
-      needed: 'Per riconoscere la scacchiera da foto e fotocamera serve una chiave API di Anthropic (Claude). Senza chiave puoi comunque sistemare i pezzi a mano e analizzarli.',
+      needed: 'Con la chiave API di Anthropic (Claude) la lettura delle foto è più precisa. Senza chiave legge solo YOLO, oppure sistemi i pezzi a mano.',
+    },
+    shots: {
+      intro: 'Due foto della scacchiera: una dal tuo lato, una di lato. Al resto pensano YOLO e Claude.',
+      start: 'Fotografa la posizione',
+      again: 'Fotografa la nuova posizione',
+      upload: 'Carica foto (1 o 2)',
+      title: (n: number, total: number, name: string) => `Foto ${n} di ${total} · ${name}`,
+      steps: [
+        { title: 'dal tuo lato', how: 'Telefono inclinato di circa 45°, tutta la scacchiera nella cornice.' },
+        { title: 'di lato', how: 'Spostati sul lato destro e scatta allo stesso modo: si vedono i pezzi coperti.' },
+      ],
+      take: 'Scatta',
+      skip: 'Basta la prima foto',
+      cancel: 'Annulla',
+      thumb: (n: number) => `Foto ${n}`,
+      summary: (shots: number, seconds: number, source: string) =>
+        `${shots === 1 ? '1 foto' : `${shots} foto`} · ${seconds.toLocaleString('it-IT', { maximumFractionDigits: 1 })} s · ${
+          source === 'local' ? 'YOLO, senza Claude' : source === 'hybrid' ? 'YOLO + Claude' : 'Claude'
+        }`,
     },
     camera: {
-      start: 'Accendi la fotocamera',
-      stop: 'Spegni',
-      capture: 'Leggi la posizione',
-      upload: 'Carica una foto',
-      denied: 'Non è stato possibile usare la fotocamera. Controlla i permessi del browser oppure carica una foto.',
-      guide: 'Tieni la scacchiera dentro il quadrato',
-      tipsTitle: 'Come inquadrare',
-      tips: [
-        'Telefono inclinato di 45–60° rispetto al tavolo, con tutta la scacchiera nel riquadro.',
-        'Luce uniforme, senza riflessi né ombre nette.',
-        'Nel tutor tieni il telefono fermo su un supporto: ogni spostamento sembra una mossa.',
-      ],
-      lastUpdate: (time: string) => `Ultimo aggiornamento: ${time}`,
+      denied: 'Non è stato possibile usare la fotocamera. Controlla i permessi del browser oppure carica le foto.',
     },
-    reading: 'Claude sta leggendo la scacchiera…',
-    readDone: 'Posizione letta: controlla che i pezzi siano giusti.',
-    readTime: (s: number) => `${s.toLocaleString('it-IT', { maximumFractionDigits: 1 })} s`,
+    detector: {
+      missing: 'Modello YOLO non installato: i pezzi li legge Claude (vedi public/models/README.md).',
+      error: 'Modello YOLO non caricato: i pezzi li legge Claude.',
+    } as Record<string, string>,
+    options: 'Opzioni di lettura',
+    reading: 'Leggo la scacchiera…',
     confidence: { high: 'Lettura sicura', medium: 'Lettura abbastanza sicura', low: 'Lettura incerta: controlla bene' } as Record<string, string>,
-    sideUnknown: 'Non so chi deve muovere: ho fatto un’ipotesi, cambiala con il pulsante sopra la scacchiera.',
     turn: 'Tocca a',
     evaluate: 'Valuta la posizione',
     evaluating: 'Stockfish sta calcolando…',
@@ -349,7 +358,7 @@ export const it = {
       rate: 'Troppe richieste in poco tempo: riprova tra qualche secondo.',
       network: 'Connessione assente: la lettura con Claude richiede internet. Puoi comunque sistemare i pezzi a mano.',
       refusal: 'Claude non ha potuto elaborare questa richiesta.',
-      unreadable: 'Non sono riuscito a riconoscere la scacchiera. Prova con una foto più nitida, inclinata di circa 45–60°, oppure sistema i pezzi a mano.',
+      unreadable: 'Scacchiera non riconosciuta. Rifai le foto con tutta la scacchiera nella cornice, oppure sistema i pezzi a mano.',
       other: 'Si è verificato un errore con Claude. Riprova.',
       engine: 'Il motore di analisi non è disponibile su questo dispositivo.',
     } as Record<string, string>,
@@ -369,8 +378,7 @@ export const it = {
       detected: (side: string) => `Pezzi bianchi ${side} nella foto.`,
       sides: { bottom: 'in basso', top: 'in alto', left: 'a sinistra', right: 'a destra' } as Record<string, string>,
     },
-    fixed: (n: number, squares: string[]) =>
-      `Ho corretto ${n === 1 ? '1 casa' : `${n} case`} (${squares.join(', ')}): la lettura della foto non era una posizione possibile, ho scelto quella legale più vicina alla precedente.`,
+    fixed: (squares: string[]) => `Corrette con le regole: ${squares.join(', ')}.`,
     moveFound: (san: string) => `Mossa riconosciuta: ${san}.`,
     side: {
       label: 'Io sono',
@@ -379,8 +387,8 @@ export const it = {
     turnMine: (side: string) => `Tocca a te (${side})`,
     turnTheirs: (side: string) => `Tocca all’avversario (${side})`,
     opponent: {
-      waiting: 'Aspetta la sua mossa: appena la gioca vedrai la tua risposta migliore.',
-      threat: (move: string) => `La sua mossa più pericolosa è ${move} (freccia rossa): pensa già a come risponderesti.`,
+      waiting: 'Tocca all’avversario.',
+      threat: (move: string) => `La sua mossa più pericolosa: ${move} (freccia rossa).`,
     },
     win: {
       mate: (n: number) => (n === 1 ? 'Matto in 1!' : `Matto in ${n}!`),
@@ -406,54 +414,9 @@ export const it = {
         'claude-fable-5-2': 'Il più potente, anche il più caro e lento.',
       } as Record<string, string>,
     },
-    clip: {
-      button: 'Clip 2 s (più precisa)',
-      recording: (pct: number) => `Registro… ${pct}%`,
-      how: 'Clip breve: tieni la scacchiera inquadrata e sposta appena il telefono di lato per 2 secondi. YOLO legge i pezzi da più angoli (i pezzi coperti in una vista si vedono nelle altre) e Claude riceve anche la vista più diversa.',
-      views: (n: number) => `Letta da ${n} inquadrature`,
-    },
     fast: {
       label: 'Lettura rapida',
       help: 'Fino a 3 volte più rapida, ma costa il doppio.',
-    },
-    live: {
-      start: 'Avvia la modalità tutor',
-      stop: 'Ferma la modalità tutor',
-      videoHow: 'Gioca normalmente: a ogni mossa riconosciuta il tutor ti dice la mossa migliore e le minacce.',
-      photoHow: 'Dopo ogni mossa togli la mano e premi «Scatta foto».',
-      mode: {
-        label: 'Come osserva la scacchiera',
-        video: 'Video continuo',
-        photo: 'Foto a ogni mossa',
-      },
-      shoot: 'Scatta foto',
-      repeat: 'Ripeti',
-      why: 'Perché?',
-      usage: (reads: number, explains: number, tokens: number, cached: number, local: number) =>
-        `Claude in questa sessione: ${reads} ${reads === 1 ? 'lettura' : 'letture'}, ${explains} ${explains === 1 ? 'spiegazione' : 'spiegazioni'}, circa ${tokens.toLocaleString('it-IT')} token${
-          cached ? ` (+${cached.toLocaleString('it-IT')} dalla cache, quasi gratis)` : ''
-        }. Mosse riconosciute senza Claude: ${local}.`,
-      banner: {
-        reading: 'Leggo la scacchiera…',
-        moving: 'Mano sulla scacchiera: aspetto che sia ferma…',
-        thinking: 'Calcolo le mosse…',
-        mine: (move: string) => `Tocca a te: gioca ${move}`,
-        mineNoMove: 'Tocca a te',
-        theirs: 'Tocca all’avversario: aspetto la sua mossa',
-        waiting: 'Inquadra tutta la scacchiera…',
-        verifying: 'Non sono sicuro della posizione: ricontrollo…',
-        noChange: 'Nessuna mossa nuova nella foto: fai la mossa, togli la mano e scatta di nuovo.',
-      },
-      history: 'Mosse viste',
-      sources: { local: 'vista sul dispositivo', claude: 'letta da Claude' } as Record<string, string>,
-      detector: {
-        missing: 'Modello YOLO non installato: i pezzi li legge Claude (vedi public/models/README.md).',
-        error: 'Modello YOLO non caricato: i pezzi li legge Claude.',
-      } as Record<string, string>,
-      wrong: 'Mossa sbagliata? Rileggi la scacchiera',
-      calibrated: 'Griglia verde = dove vedo le case. Se non combacia, trascina gli angoli.',
-      recalibrate: 'Rileva di nuovo la scacchiera',
-      corner: { topLeft: 'Angolo in alto a sinistra', topRight: 'Angolo in alto a destra', bottomRight: 'Angolo in basso a destra', bottomLeft: 'Angolo in basso a sinistra' },
     },
     candidates: {
       title: 'Mosse consigliate',
