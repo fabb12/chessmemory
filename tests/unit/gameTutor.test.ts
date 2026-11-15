@@ -73,13 +73,35 @@ describe('pre-fetching delle spiegazioni', () => {
     const queue = new PrefetchQueue({ cache, key: (ply) => explanationKey('test-game', ply), fetch, total: 10, lookahead: 3 });
     queue.advance(1);
     expect(await queue.get(3)).toBe('spiegazione 3');
-    expect(fetch.mock.calls.map((c) => c[0])).toEqual([1, 2, 3]);
+    expect(await queue.get(2)).toBe('spiegazione 2');
+    // La 3 serviva subito: è passata davanti alla 2, ancora in attesa.
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual([1, 3, 2]);
     // Già pronte: lettura sincrona, nessuna nuova richiesta.
     expect(queue.peek(2)).toBe('spiegazione 2');
     expect(queue.readyAhead(1)).toBe(3);
     queue.advance(2);
     expect(await queue.get(4)).toBe('spiegazione 4');
     expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('in parallelo: più richieste insieme e quella urgente passa in testa', async () => {
+    const cache = new ExplanationCache();
+    const started: number[] = [];
+    let running = 0;
+    let peak = 0;
+    const fetch = vi.fn(async (ply: number) => {
+      started.push(ply);
+      peak = Math.max(peak, ++running);
+      await new Promise((r) => setTimeout(r, 5));
+      running--;
+      return `p ${ply}`;
+    });
+    const queue = new PrefetchQueue({ cache, key: (ply) => explanationKey('par-game', ply), fetch, total: 10, lookahead: 5, concurrency: 2 });
+    queue.advance(1);
+    expect(await queue.get(5)).toBe('p 5');
+    expect(peak).toBe(2);
+    // La 5 serviva subito: parte subito dopo le prime due, prima della 3 e della 4.
+    expect(started.slice(0, 3)).toEqual([1, 2, 5]);
   });
 
   it('le spiegazioni restano in IndexedDB per la prossima volta', async () => {

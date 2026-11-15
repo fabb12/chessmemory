@@ -533,6 +533,215 @@ Na6 21.Nxg7+ Kd8 22.Qf6+!! {Anche la donna viene sacrificata.} Nxf6 23.Be7# {Mat
 33.Qd2 Nxe3 34.Qxe3 Nxc2 35.Qb6 Ba8 {L'alfiere guarda il re bianco lungo la lunga diagonale: il Nero ha l'iniziativa.} 36.Rxd6 {Il Bianco prende pedoni, ma il suo re è troppo scoperto.} Rb7 37.Qxa6 Rxb3 38.Rxe6 Rxb2 39.Qc4 Kh8 40.e5 Qa7+
 41.Kh1 Bxg2+ {L'alfiere si sacrifica sul re: la mossa decisiva.} 42.Kxg2 Nd4+ {Scacco di scoperta della torre in b2: Karpov abbandona.}`,
   },
+  {
+    id: 'rotlewi-rubinstein-1907',
+    title: "L'Immortale di Rubinstein",
+    white: 'Georg Rotlewi',
+    black: 'Akiba Rubinstein',
+    event: 'Łódź',
+    year: 1907,
+    result: '0-1',
+    opening: 'Gambetto di donna rifiutato, Tarrasch simmetrica',
+    themes: ['attack', 'sacrifice'],
+    summary:
+      'Rubinstein lascia la donna in presa e scatena i due alfieri contro l’arrocco bianco: una cascata di sacrifici che finisce in un matto inevitabile.',
+    intro:
+      "Łódź, 1907: Akiba Rubinstein, uno dei più grandi giocatori di inizio Novecento, ha il Nero contro Georg Rotlewi. La partita è nota come «l’Immortale di Rubinstein». Il Bianco perde un paio di tempi e Rubinstein punta i suoi due alfieri sulle diagonali che portano al re bianco. Al momento giusto offre la donna, poi una torre, poi l’altra: ogni sacrificio apre una linea in più. Osserva gli alfieri in b7 e b6: da lontano decidono la partita.",
+    lessons: [
+      'Due alfieri puntati sull’arrocco valgono più della donna, se le diagonali si aprono.',
+      'Un sacrificio di donna è giusto quando il calcolo porta al matto.',
+      'Le mosse di pedone lente in apertura (a3, b4) regalano tempi all’avversario.',
+    ],
+    pgn: `1.d4 d5 2.Nf3 e6 3.e3 c5 4.c4 Nc6 5.Nc3 Nf6 6.dxc5 Bxc5 7.a3 a6 8.b4 Bd6 9.Bb2 O-O 10.Qd2?! {La donna in d2 è poco attiva: il Bianco perde tempo.} Qe7
+11.Bd3 dxc4 12.Bxc4 b5 13.Bd3 Rd8 14.Qe2 Bb7 {L'alfiere sulla lunga diagonale punta già verso il re bianco.} 15.O-O Ne5 16.Nxe5 Bxe5 17.f4?! {Indebolisce la diagonale a7–g1 e il re bianco.} Bc7 18.e4 Rac8
+19.e5 Bb6+ {Ora anche il secondo alfiere guarda il re.} 20.Kh1 Ng4! {Il cavallo minaccia Dxh2 matto.} 21.Be4 Qh4 22.g3 Rxc3!! {Rubinstein lascia la donna in presa: le linee si aprono.} 23.gxh4 Rd2!! {Un altro sacrificio: la torre devia la donna bianca dalla difesa.}
+24.Qxd2 Bxe4+ 25.Qg2 Rh3 {Il matto in h2 non si può più evitare: il Bianco abbandona.}`,
+  },
+  {
+    id: 'lasker-thomas-1912',
+    title: 'La caccia al re',
+    white: 'Edward Lasker',
+    black: 'George Thomas',
+    event: 'Londra, partita amichevole',
+    year: 1912,
+    result: '1-0',
+    opening: 'Difesa olandese',
+    themes: ['attack', 'sacrifice'],
+    summary:
+      'Un sacrificio di donna in h7 e il re nero viene trascinato da g8 fino a g1, dove riceve matto: la caccia al re più famosa della storia.',
+    intro:
+      "Londra, 1912: Edward Lasker gioca una partita amichevole contro Sir George Thomas. Il Nero apre con la Difesa olandese e arrocca, ma lascia il suo re con pochi difensori. Lasker sacrifica la donna in h7 e da quel momento il re nero è costretto a camminare, scacco dopo scacco, attraverso tutta la scacchiera fino alla prima traversa, dove riceve matto da una semplice mossa del re bianco. È la lezione perfetta sul re scoperto: una volta uscito dal suo rifugio, non trova più riparo.",
+    lessons: [
+      'Un re tirato fuori dal suo arrocco raramente trova di nuovo un riparo.',
+      'Gli scacchi continui tolgono all’avversario il tempo di difendersi.',
+      'Anche i pedoni (h4, g3) e il re possono partecipare all’attacco di matto.',
+    ],
+    pgn: `1.d4 e6 2.Nf3 f5 {La Difesa olandese: il Nero controlla e4 ma indebolisce il suo re.} 3.Nc3 Nf6 4.Bg5 Be7 5.Bxf6 Bxf6 6.e4 fxe4 7.Nxe4 b6 8.Ne5 O-O 9.Bd3 Bb7
+10.Qh5 {Minaccia Dxh7 matto? Non ancora, ma la donna punta già in h7.} Qe7? {Il Nero non vede il colpo.} 11.Qxh7+!! {Sacrificio di donna: il re è costretto a uscire.} Kxh7 12.Nxf6+ {Scacco di scoperta dell'alfiere d3.} Kh6
+13.Neg4+ Kg5 14.h4+ Kf4 15.g3+ Kf3 16.Be2+ Kg2 17.Rh2+ Kg1 {Il re nero è arrivato sulla prima traversa del Bianco.} 18.Kd2# {Matto con una mossa di re: la torre a1 e il re chiudono ogni uscita.}`,
+  },
+  {
+    id: 'levitsky-marshall-1912',
+    title: 'La pioggia di monete d’oro',
+    white: 'Stepan Levitsky',
+    black: 'Frank Marshall',
+    event: 'Breslavia',
+    year: 1912,
+    result: '0-1',
+    opening: 'Difesa francese',
+    themes: ['attack', 'sacrifice'],
+    summary:
+      'Marshall mette la donna in una casa dove può essere presa in tre modi diversi: secondo la leggenda, il pubblico entusiasta lanciò monete d’oro sulla scacchiera.',
+    intro:
+      "Breslavia, 1912: l’americano Frank Marshall, maestro delle trappole e degli attacchi, ha il Nero contro Stepan Levitsky. La partita è diventata leggendaria per la mossa finale: Marshall porta la donna in g3, dove può essere catturata da due pedoni e da una torre. Ma qualunque cattura perde: ogni risposta del Bianco lascia un matto o la perdita di materiale decisivo. Si racconta che gli spettatori, entusiasti, abbiano lanciato monete d’oro sulla scacchiera. Impara a guardare tutte le catture possibili, anche quelle che sembrano assurde.",
+    lessons: [
+      'Una donna «in presa» può essere la mossa più forte, se ogni cattura perde.',
+      'Le colonne semiaperte (f) sono strade per le torri verso il re.',
+      'Contro un attacco serve contare tutte le risposte dell’avversario, non solo la più ovvia.',
+    ],
+    pgn: `1.d4 e6 2.e4 d5 3.Nc3 c5 4.Nf3 Nc6 5.exd5 exd5 6.Be2 Nf6 7.O-O Be7 8.Bg5 O-O 9.dxc5 Be6 10.Nd4 Bxc5 11.Nxe6 fxe6 {Il Nero ha un pedone isolato, ma ora la colonna f è aperta per le torri.}
+12.Bg4 Qd6 13.Bh3 Rae8 14.Qd2 Bb4 15.Bxf6 Rxf6 16.Rad1 Qc5 17.Qe2 Bxc3 18.bxc3 Qxc3 19.Rxd5? {Il Bianco prende un pedone, ma lascia il cavallo nero entrare in d4.} Nd4!
+20.Qh5 Ref8 {Entrambe le torri nere guardano il lato di re bianco.} 21.Re5 Rh6 22.Qg5 Rxh3 23.Rc5 Qg3!!! {La donna si offre a tre catture: hxg3 Ce2 matto, fxg3 Ce2+ e Txf1 matto, Dxg3 Ce2+ e Cxg3. Il Bianco abbandona.}`,
+  },
+  {
+    id: 'bernstein-capablanca-1914',
+    title: 'La traversa indifesa',
+    white: 'Ossip Bernstein',
+    black: 'José Raúl Capablanca',
+    event: 'Mosca, partita di esibizione',
+    year: 1914,
+    result: '0-1',
+    opening: 'Gambetto di donna rifiutato',
+    themes: ['strategy', 'endgame'],
+    summary:
+      'Capablanca, il genio della semplicità, vince con una mossa sola: la donna in b2 sfrutta la debolezza dell’ultima traversa bianca.',
+    intro:
+      "Mosca, 1914: José Raúl Capablanca, il cubano che di lì a pochi anni diventerà campione del mondo, affronta Ossip Bernstein. Capablanca era famoso per uno stile limpido, quasi senza sforzo. In questa partita le posizioni sembrano tranquille, con pezzi scambiati uno dopo l’altro; ma il Bianco trascura un dettaglio: il suo re non ha una «casa di fuga» e l’ultima traversa è difesa solo dalle torri. La mossa finale è una delle più belle e istruttive della storia: impara a controllare sempre la tua prima traversa.",
+    lessons: [
+      'Un re senza casa di fuga rischia il matto sull’ultima traversa.',
+      'Un pezzo che difende due cose insieme è sovraccarico: basta attaccarne una.',
+      'Uno stile semplice e pulito è spesso il più efficace.',
+    ],
+    pgn: `1.d4 d5 2.Nf3 Nf6 3.c4 e6 4.Nc3 Be7 5.Bg5 O-O 6.e3 Nbd7 7.Rc1 b6 8.cxd5 exd5 9.Qa4 Bb7 10.Ba6 Bxa6 11.Qxa6 c5 12.Bxf6 Nxf6 13.dxc5 bxc5
+14.O-O Qb6 15.Qe2 c4 {Il Nero accetta i pedoni «sospesi» c e d in cambio di spazio e attività.} 16.Rfd1 Rfd8 17.Nd4 Bb4 18.b3 Rac8 19.bxc4 dxc4 20.Rc2 Bxc3 21.Rxc3 Nd5 22.Rc2 c3 {Il pedone passato in c3 lega i pezzi bianchi.}
+23.Rdc1 Rc5 24.Nb3 Rc6 25.Nd4 Rc7 26.Nb5 Rc5 27.Nxc3? {Sembra che il Bianco abbia vinto il pedone, ma…} Nxc3 28.Rxc3 Rxc3 29.Rxc3 Qb2!! {La donna attacca la torre e minaccia Db1 matto: la torre non può difendere tutto. Il Bianco abbandona.}`,
+  },
+  {
+    id: 'samisch-nimzowitsch-1923',
+    title: "L'Immortale dello zugzwang",
+    white: 'Friedrich Sämisch',
+    black: 'Aron Nimzowitsch',
+    event: 'Copenaghen',
+    year: 1923,
+    result: '0-1',
+    opening: 'Difesa Ovest-indiana',
+    themes: ['strategy'],
+    summary:
+      'Alla fine il Bianco ha ancora tutti i pezzi, ma qualunque mossa faccia peggiora la sua posizione: è lo zugzwang, l’obbligo di muovere che diventa una condanna.',
+    intro:
+      "Copenaghen, 1923: Aron Nimzowitsch, il grande teorico degli scacchi moderni, ha il Nero contro Friedrich Sämisch. Nimzowitsch sacrifica un cavallo per due pedoni e per l’iniziativa, porta le torri sulla colonna f e poi… non attacca più. Lascia che sia il Bianco a rovinarsi da solo: alla fine ogni mossa bianca perde materiale o la partita. Si chiama zugzwang, ed è raro vederlo con tanti pezzi sulla scacchiera. Impara come il controllo delle case e la mancanza di mosse utili possono decidere una partita.",
+    lessons: [
+      'Lo zugzwang: a volte l’avversario perde solo perché è obbligato a muovere.',
+      'Due torri raddoppiate su una colonna aperta paralizzano la difesa.',
+      'Togliere mosse all’avversario può valere più di un attacco diretto.',
+    ],
+    pgn: `1.d4 Nf6 2.c4 e6 3.Nf3 b6 4.g3 Bb7 5.Bg2 Be7 6.Nc3 O-O 7.O-O d5 8.Ne5 c6 9.cxd5 cxd5 10.Bf4 a6 11.Rc1 b5 12.Qb3 Nc6 13.Nxc6 Bxc6 14.h3 Qd7 15.Kh2 Nh5
+16.Bd2 f5 {Il Nero prende spazio sul lato di re e prepara la colonna f.} 17.Qd1 b4 18.Nb1 Bb5 19.Rg1 Bd6 20.e4 fxe4! 21.Qxh5 Rxf2 {Nimzowitsch dà un cavallo per due pedoni e la settima traversa.}
+22.Qg5 Raf8 23.Kh1 R8f5 24.Qe3 Bd3 {Il Bianco è legato: la donna non lascia e3, il cavallo non esce da b1.} 25.Rce1 h6!! {Una mossa d'attesa: il Bianco non ha mosse utili, ognuna perde materiale. Abbandona.}`,
+  },
+  {
+    id: 'botvinnik-capablanca-1938',
+    title: 'Il pedone che decide',
+    white: 'Mikhail Botvinnik',
+    black: 'José Raúl Capablanca',
+    event: 'Torneo AVRO, Paesi Bassi',
+    year: 1938,
+    result: '1-0',
+    opening: 'Difesa Nimzo-indiana',
+    themes: ['strategy', 'sacrifice', 'endgame'],
+    summary:
+      'Botvinnik costruisce il centro con pazienza, poi sacrifica l’alfiere per spingere il pedone e fino alla promozione: la combinazione più famosa del futuro campione.',
+    intro:
+      "Torneo AVRO, 1938: Mikhail Botvinnik, che diventerà campione del mondo, batte l’ex campione Capablanca. Il Nero si espande sul lato di donna, il Bianco spinge i pedoni al centro: e4, e5, f4, f5. Quando le linee si aprono, il pedone bianco arriva in e6 e diventa un mostro. Botvinnik sacrifica l’alfiere, poi il cavallo, e il re bianco cammina fino a h5 per sfuggire agli scacchi mentre il pedone promuove. È una lezione di strategia e di calcolo: il centro conta più del lato di donna.",
+    lessons: [
+      'Un attacco al centro è più forte di un’espansione sul lato.',
+      'Un pedone passato avanzato vale un pezzo, se è sostenuto.',
+      'Per sfuggire agli scacchi perpetui il re deve trovare la strada giusta.',
+    ],
+    pgn: `1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.e3 d5 5.a3 Bxc3+ 6.bxc3 c5 7.cxd5 exd5 8.Bd3 O-O 9.Ne2 b6 10.O-O Ba6 11.Bxa6 Nxa6 12.Bb2 Qd7 13.a4 Rfe8 14.Qd3 c4 {Il Nero chiude il lato di donna: ora il Bianco può avanzare al centro.}
+15.Qc2 Nb8 16.Rae1 Nc6 17.Ng3 Na5 18.f3 Nb3 19.e4 {Il piano del Bianco: e4, e5 e f4–f5.} Qxa4 20.e5 Nd7 21.Qf2 g6 22.f4 f5 23.exf6 Nxf6 24.f5 Rxe1 25.Rxe1 Re8 26.Re6 Rxe6 27.fxe6 {Il pedone in e6 è a due passi dalla promozione.} Kg7
+28.Qf4 Qe8 29.Qe5 Qe7 30.Ba3!! {Sacrifica l'alfiere per deviare la donna nera dalla difesa.} Qxa3 31.Nh5+! gxh5 32.Qg5+ Kf8 33.Qxf6+ Kg8 34.e7 {Il pedone minaccia di promuovere.} Qc1+
+35.Kf2 Qc2+ 36.Kg3 Qd3+ 37.Kh4 Qe4+ 38.Kxh5 Qe2+ 39.Kh4 Qe4+ 40.g4 Qe1+ 41.Kh5 {Gli scacchi sono finiti: il pedone promuove. Il Nero abbandona.}`,
+  },
+  {
+    id: 'spassky-bronstein-1960',
+    title: 'Il gambetto di re al cinema',
+    white: 'Boris Spassky',
+    black: 'David Bronstein',
+    event: 'Campionato sovietico, Leningrado',
+    year: 1960,
+    result: '1-0',
+    opening: 'Gambetto di re accettato',
+    themes: ['opening', 'attack', 'sacrifice'],
+    summary:
+      'Un Gambetto di re romantico in pieno Novecento: Spassky lascia la torre, sacrifica pezzi e mette il re nero sotto un fuoco incrociato. La posizione finale è comparsa in un film di James Bond.',
+    intro:
+      "Leningrado, 1960: il giovane Boris Spassky, futuro campione del mondo, gioca il Gambetto di re contro David Bronstein, uno dei giocatori più creativi del secolo. Il Bianco dà un pedone, poi un’intera torre, per aprire le linee verso il re nero. Il cavallo che salta in f7 e la donna che arriva in e4 chiudono la partita in poche mosse. La posizione finale è così bella che è stata usata nel film «Dalla Russia con amore». Osserva come lo sviluppo e le linee aperte valgono più della torre persa.",
+    lessons: [
+      'Nel Gambetto di re il Bianco dà materiale per aprire la colonna f e attaccare.',
+      'Un cavallo che arriva in f7 o in d6 vicino al re è spesso decisivo.',
+      'Quando il re avversario è scoperto, una torre in meno conta poco.',
+    ],
+    pgn: `1.e4 e5 2.f4 {Il Gambetto di re: un pedone per aprire la colonna f.} exf4 3.Nf3 d5 4.exd5 Bd6 5.Nc3 Ne7 6.d4 O-O 7.Bd3 Nd7 8.O-O h6 9.Ne4 Nxd5 10.c4 Ne3 11.Bxe3 fxe3
+12.c5 Be7 13.Bc2 Re8 14.Qd3 {Donna e alfiere puntano in h7.} e2 15.Nd6!! {Spassky lascia la torre f1: il cavallo entra in d6 vicino al re nero.} Nf8 16.Nxf7! exf1=Q+ 17.Rxf1 {Il Bianco ha una torre in meno, ma tutti i suoi pezzi attaccano.}
+Bf5 18.Qxf5 Qd7 19.Qf4 Bf6 20.N3e5 Qe7 21.Bb3 {L'alfiere inchioda lungo la diagonale verso g8.} Bxe5 22.Nxe5+ Kh7 23.Qe4+ {Il matto è vicino: Bronstein abbandona.}`,
+  },
+  {
+    id: 'short-timman-1991',
+    title: 'La passeggiata del re',
+    white: 'Nigel Short',
+    black: 'Jan Timman',
+    event: 'Tilburg',
+    year: 1991,
+    result: '1-0',
+    opening: 'Difesa Alekhine',
+    themes: ['attack', 'strategy'],
+    summary:
+      'Con le donne ancora sulla scacchiera, Short porta il proprio re da g1 a g5 per dare matto: la marcia del re più audace della storia moderna.',
+    intro:
+      "Tilburg, 1991: l’inglese Nigel Short, che due anni dopo sfiderà Kasparov per il titolo, affronta l’olandese Jan Timman. La posizione è quasi bloccata: il Bianco ha la donna in f6 e una torre in d7 che chiudono il re nero, ma gli manca un pezzo per dare matto. Allora Short fa una cosa incredibile: con le donne ancora in gioco, porta il suo re in avanti, Rh2, Rg3, Rf4, Rg5, fino ad arrivare in h6 per dare matto. È la prova che il re è un pezzo forte, se l’avversario non può dargli scacco.",
+    lessons: [
+      'Il re è un pezzo d’attacco quando l’avversario non ha pezzi per dargli scacco.',
+      'In una posizione bloccata, il pezzo che manca per il matto può essere il re.',
+      'Le case nere deboli attorno al re (f6, h6, g7) sono un invito all’attacco.',
+    ],
+    pgn: `1.e4 Nf6 2.e5 Nd5 3.d4 d6 4.Nf3 g6 {La Difesa Alekhine: il Nero invita il Bianco ad avanzare per poi attaccare i suoi pedoni.} 5.Bc4 Nb6 6.Bb3 Bg7 7.Qe2 Nc6 8.O-O O-O 9.h3 a5 10.a4 dxe5 11.dxe5 Nd4 12.Nxd4 Qxd4
+13.Re1 e6 14.Nd2 Nd5 15.Nf3 Qc5 16.Qe4 Qb4 17.Bc4 Nb6 18.b3 Nxc4 19.bxc4 Re8 20.Rd1 Qc5 21.Qh4 b6 22.Be3 Qc6 23.Bh6 Bh8 {Il Bianco ha preso le case nere intorno al re.} 24.Rd8 Bb7 25.Rad1 Bg7
+26.R8d7 Rf8 27.Bxg7 Kxg7 28.R1d4 Rae8 29.Qf6+ Kg8 {Donna in f6 e torre in d7: manca solo un pezzo per il matto.} 30.h4 h5 31.Kh2! {Il re bianco parte per la sua passeggiata.} Rc8 32.Kg3 Rce8 33.Kf4 Bc8 34.Kg5 {Il re arriverà in h6 e darà matto con Dg7: Timman abbandona.}`,
+  },
+  {
+    id: 'aronian-anand-2013',
+    title: "L'Immortale di Anand",
+    white: 'Levon Aronian',
+    black: 'Viswanathan Anand',
+    event: 'Wijk aan Zee',
+    year: 2013,
+    result: '0-1',
+    opening: 'Difesa Semi-Slava, variante Meran',
+    themes: ['attack', 'sacrifice'],
+    summary:
+      'Anand lascia una torre e contrattacca con due alfieri e un cavallo: in 23 mosse il numero due del mondo è travolto.',
+    intro:
+      "Wijk aan Zee, 2013: l’ex campione del mondo Viswanathan Anand ha il Nero contro Levon Aronian, allora secondo nella classifica mondiale. In una Semi-Slava molto studiata Aronian cattura un pedone in h7 con il cavallo; Anand risponde con un contrattacco preparato a casa, lascia una torre e scatena i due alfieri contro il re bianco. Ogni pezzo nero entra in gioco con tempo. Anand stesso la considera una delle sue migliori partite. Impara come l’iniziativa e l’attività dei pezzi valgono più di una torre.",
+    lessons: [
+      'Il contrattacco con tempo vale più del materiale.',
+      'Due alfieri sulle diagonali verso il re sono un’arma terribile.',
+      'Prendere pedoni con i pezzi lontano dal centro (Cxh7) può lasciare il re senza difesa.',
+    ],
+    pgn: `1.d4 d5 2.c4 c6 3.Nf3 Nf6 4.Nc3 e6 5.e3 Nbd7 6.Bd3 dxc4 7.Bxc4 b5 8.Bd3 Bd6 9.O-O O-O 10.Qc2 Bb7 11.a3 Rc8 12.Ng5 c5 {Il Nero ignora la minaccia e colpisce al centro.} 13.Nxh7 Ng4!
+14.f4 cxd4 15.exd4 Bc5! {L'alfiere inchioda il pedone d4 al re bianco.} 16.Be2 Nde5! 17.Bxg4 Bxd4+ 18.Kh1 Nxg4 19.Nxf8 f5! {Anand lascia la torre: conta l'attacco.} 20.Ng6 Qf6 21.h3 Qxg6
+22.Qe2 Qh5 23.Qd3 Be3 {Nessuna difesa contro le minacce di matto e la perdita di materiale: Aronian abbandona.}`,
+  },
 ];
 
 const gameById = new Map(FAMOUS_GAMES.map((g) => [g.id, g]));

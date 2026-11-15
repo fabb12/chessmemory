@@ -541,6 +541,8 @@ export const it = {
     praise: [(n: string) => `Bravo ${n}!`, (n: string) => `Ottimo ${n}!`, (n: string) => `Esatto ${n}!`, (n: string) => `Molto bene ${n}!`] as ((n: string) => string)[],
     resumed: 'Perfetto, riprendo da qui.',
     toneLabel: 'Tono di parlata',
+    masterLessons: 'Le lezioni di questa partita:',
+    masterTip: 'Maestro istruttivo: presenta la partita, spiega ogni mossa come a lezione (idea, che cosa osservare, principio), fa domande guida quando tocca a te e alla fine riassume le lezioni.',
     volume: 'Volume della voce',
     echoTip: 'Se il tutor si interrompe da solo, abbassa il volume o usa le cuffie: il microfono sente l’altoparlante.',
     logTitle: (n: number) => (n === 0 ? 'Storico della lezione' : `Storico della lezione (${n})`),

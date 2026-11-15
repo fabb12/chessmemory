@@ -26,10 +26,22 @@ import {
   type UserSide,
 } from '../features/tutor/gameSession';
 import { instruction as moveInstruction, reasonOf } from '../features/tutor/moveReason';
-import { NamePacer, phrases, setTone, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type NameMoment, type Tone } from '../features/tutor/tone';
+import { ACKS, MASTER_VOICE, NamePacer, phrases, setTone, THINKING_PROMPTS, TONE_LABELS, TONE_PROMPTS, TONES, useTone, type NameMoment, type Tone } from '../features/tutor/tone';
 import { PrefetchQueue } from '../features/tutor/prefetchQueue';
 import { BARGE_IN_KINDS, commandAtEnd, interruptAtStart, isEcho, listeningSupported, parseCommand, parseName, ScreenAwake, VoiceListener, type VoiceCommand } from '../features/voice/listen';
-import { currentSpeakingId, currentSpeechText, onSpoken, setVoiceVolume, speak, stopSpeaking, useSpeakingId, useVoiceVolume } from '../features/voice/speech';
+import {
+  currentSpeakingId,
+  currentSpeechText,
+  onSpoken,
+  SentenceSplitter,
+  setSpeakDefaults,
+  setVoiceVolume,
+  speak,
+  speakNext,
+  stopSpeaking,
+  useSpeakingId,
+  useVoiceVolume,
+} from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Uci } from '../types';
 import { applyUci } from '../utils/chess';
@@ -38,16 +50,16 @@ import { playLine } from '../components/mistakes/LineViewer';
 
 /** Profondità di Stockfish per giudicare le deviazioni: veloce, l'analisi parte prima che l'utente muova. */
 const JUDGE_DEPTH = 12;
-/** Quanto si aspetta la spiegazione di Claude prima di leggere quella locale. */
-const SPEECH_WAIT_MS = 3500;
+/** Quanto si aspetta la spiegazione di Claude prima di leggere quella locale (poca attesa: il tutor deve rispondere subito). */
+const SPEECH_WAIT_MS = 1500;
 /** Dopo quanti secondi il tutor passa da solo alla mossa successiva (0 = mai). Modificabile nella pagina. */
 const AUTO_SECONDS_KEY = 'cm.tutor.autoSeconds';
 const DEFAULT_AUTO_SECONDS = 30;
 /** Pausa (secondi) tra la spiegazione della mossa appena fatta e l'indicazione della successiva. */
 const NEXT_DELAY_KEY = 'cm.tutor.nextDelay';
-const DEFAULT_NEXT_DELAY = 4;
+const DEFAULT_NEXT_DELAY = 2;
 /** Dopo che la voce del tutor tace, per un attimo il microfono ignora ciò che sente (la coda della sua frase). */
-const ECHO_GRACE_MS = 900;
+const ECHO_GRACE_MS = 600;
 
 function loadSeconds(key: string, fallback: number): number {
   try {
@@ -176,6 +188,15 @@ export function GameTutorPage() {
   const toneRef = useRef<Tone>(tone);
   toneRef.current = tone;
   const ph = () => phrases(toneRef.current);
+  const isMaster = () => toneRef.current === 'master';
+  // Il Maestro parla un po' più lento e grave; gli altri toni con la voce normale.
+  useEffect(() => {
+    setSpeakDefaults(tone === 'master' ? MASTER_VOICE : {});
+    return () => setSpeakDefaults({});
+  }, [tone]);
+  /** Il Maestro presenta la partita una sola volta, all'inizio. */
+  const introDoneRef = useRef(false);
+  const thinkTurnRef = useRef(0);
   const setName = useCallback((value: string) => {
     const clean = value.trim().slice(0, 40);
     nameRef.current = clean;
@@ -235,7 +256,9 @@ export function GameTutorPage() {
       cache,
       key,
       total: parsed.moves.length,
-      lookahead: 3,
+      // Più mosse pronte in anticipo, due richieste alla volta: la spiegazione c'è già quando serve.
+      lookahead: 5,
+      concurrency: 2,
       fetch: (ply) => {
         const move = parsed.moves[ply - 1]!;
         const player = move.color === 'w' ? `${game.white} (Bianco)` : `${game.black} (Nero)`;
@@ -247,6 +270,7 @@ export function GameTutorPage() {
           comment: move.comment,
           continuation: formatLine(playLine(move.fen, parsed.moves.slice(ply, ply + 4).map((m) => m.uci)), false),
           tone: TONE_PROMPTS[tone],
+          teacher: tone === 'master',
         });
       },
       onReady: (ply, text) => {
@@ -314,11 +338,22 @@ export function GameTutorPage() {
       // La prima volta si saluta per nome.
       const hello = nameRef.current && !greetedRef.current ? `${ph().hello(nameFor('greet'))} ` : '';
       if (nameRef.current) greetedRef.current = true;
-      const say = (text: string) => speak(`${hello}${prefix} ${text}`.trim(), 'game-tutor');
-      if (isFinished(parsed, state)) return say(ph().finished(t.games.result[game.result] ?? game.result, nameFor('attention')));
+      // Maestro: all'inizio della partita prima la presentazione (contesto e che cosa osservare).
+      const intro = isMaster() && state.ply === 0 && !introDoneRef.current ? `${game.intro} ` : '';
+      if (intro) introDoneRef.current = true;
+      const say = (text: string) => speak(`${hello}${prefix} ${intro}${text}`.trim(), 'game-tutor');
+      if (isFinished(parsed, state)) {
+        const end = ph().finished(t.games.result[game.result] ?? game.result, nameFor('attention'));
+        // Maestro: a fine partita il riepilogo delle lezioni.
+        return say(isMaster() ? `${end} ${t.gameTutor.masterLessons} ${game.lessons.join(' ')}` : end);
+      }
       if (state.deviation) return say('');
       const move = expectedMove(parsed, state)!;
-      if (isGuessTurn(parsed, state, sideRef.current)) return say(t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, nameFor('routine')));
+      if (isGuessTurn(parsed, state, sideRef.current)) {
+        const turn = t.gameTutor.yourTurn(move.color === 'w' ? game.white : game.black, nameFor('routine'));
+        // Maestro: una domanda guida per allenare il metodo di pensiero.
+        return say(isMaster() ? `${turn} ${THINKING_PROMPTS[thinkTurnRef.current++ % THINKING_PROMPTS.length]}` : turn);
+      }
       const what = moveInstruction(state.fen, move);
       // Il nome solo ogni tanto (o se non è appena stato detto), con frasi che si alternano.
       const call = ph().call(nameFor('routine'), nameTurnRef.current++);
@@ -451,6 +486,16 @@ export function GameTutorPage() {
         return;
       }
       setAnswer({ question: text, phase: { status: 'busy' } });
+      // Risposta immediata a voce mentre Claude prepara quella vera: il tutor non resta muto.
+      speak(ACKS[nameTurnRef.current++ % ACKS.length]!, 'game-tutor', { log: false });
+      const splitter = new SentenceSplitter();
+      const token = speechTokenRef.current;
+      const onText = (soFar: string) => {
+        if (token !== speechTokenRef.current) return;
+        // Ogni frase completa si legge appena arriva, senza aspettare il resto.
+        for (const sentence of splitter.push(soFar)) speakNext(sentence, 'game-tutor', { log: false });
+        setAnswer((a) => (a && a.question === text ? { question: text, phase: { status: 'done', value: soFar } } : a));
+      };
       const move = expectedMove(parsed, s);
       const guess = isGuessTurn(parsed, s, sideRef.current);
       const current = !move
@@ -469,15 +514,19 @@ export function GameTutorPage() {
           student: nameRef.current,
           tone: TONE_PROMPTS[toneRef.current],
           history: historyRef.current,
+          onText,
         });
         historyRef.current = [...historyRef.current, { question: text, answer: reply }].slice(-3);
+        if (token !== speechTokenRef.current) return;
         setAnswer((a) => (a && a.question === text ? { question: text, phase: { status: 'done', value: reply } } : a));
-        speak(reply, 'game-tutor');
+        const rest = splitter.flush(reply);
+        if (rest) speakNext(rest, 'game-tutor', { log: false });
+        addLog('tutor', reply);
       } catch {
         setAnswer((a) => (a && a.question === text ? { question: text, phase: { status: 'error' } } : a));
       }
     },
-    [parsed, game, apiKey, explanationFor],
+    [parsed, game, apiKey, explanationFor, addLog],
   );
 
   /** In attesa del nome detto a voce (dopo «Come ti chiami?»). */
@@ -1128,6 +1177,7 @@ export function GameTutorPage() {
             onChange={(e) => {
               setTone(e.target.value as Tone);
               greetedRef.current = false;
+              introDoneRef.current = false;
               pacerRef.current.reset();
             }}
             className="min-h-10 rounded-xl border border-line bg-surface px-3"
@@ -1140,6 +1190,11 @@ export function GameTutorPage() {
             ))}
           </select>
         </label>
+        {tone === 'master' && (
+          <p className="text-xs text-muted" data-testid="tutor-master-tip">
+            {t.gameTutor.masterTip}
+          </p>
+        )}
         <label className="flex flex-wrap items-center gap-3 text-sm font-semibold">
           {t.gameTutor.volume}
           <input

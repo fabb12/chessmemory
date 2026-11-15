@@ -6,11 +6,12 @@ import { useSyncExternalStore } from 'react';
  * Le spiegazioni restano sempre corrette: cambia solo il modo di dirle.
  */
 
-export type Tone = 'formal' | 'friendly' | 'playful' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
+export type Tone = 'master' | 'formal' | 'friendly' | 'playful' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
 
-export const TONES: readonly Tone[] = ['formal', 'friendly', 'playful', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
+export const TONES: readonly Tone[] = ['master', 'formal', 'friendly', 'playful', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
 
 export const TONE_LABELS: Record<Tone, string> = {
+  master: 'Maestro istruttivo',
   formal: 'Formale',
   friendly: 'Amichevole',
   playful: 'Simpatico e scherzoso',
@@ -36,6 +37,17 @@ interface ToneLines {
 }
 
 const LINES: Record<Tone, ToneLines> = {
+  master: {
+    hello: 'Buongiorno {n}, oggi studiamo insieme una partita da maestri.',
+    nice: 'Piacere, {n}. Mettiti comodo: guarderemo ogni mossa chiedendoci il perché.',
+    call: ['{n}, osserva bene: ', 'Ora, {n}, ', 'Seguimi, {n}: ', 'Guarda la scacchiera, {n}: '],
+    praise: ['Esatto, {n}.', 'Bene, {n}, ricorda questa idea.', 'Giusto, {n}.', 'Molto bene, {n}.'],
+    reminder: '{n}, prenditi il tempo: guarda le minacce, poi muovi.',
+    wrong: '{n}, fermiamoci un attimo: non è questa la mossa. Rimetti il pezzo e gioca: ',
+    finished: 'La partita è finita, {n}: {r}. Ripensiamo a che cosa abbiamo imparato.',
+    whyTo: 'Ragioniamo insieme, {n}:',
+    aligned: 'Bene {n}, la scacchiera è pronta: riprendiamo la lezione.',
+  },
   normal: {
     hello: 'Ciao {n}!',
     nice: 'Piacere, {n}! Iniziamo.',
@@ -139,6 +151,8 @@ const LINES: Record<Tone, ToneLines> = {
 
 /** Istruzioni per Claude: come parlare all'allievo. */
 export const TONE_PROMPTS: Record<Tone, string> = {
+  master:
+    'Parla come un maestro di scacchi esperto e paziente che fa lezione: tono calmo, autorevole e didattico; dai del tu. Collega la mossa a un principio generale (sviluppo, centro, sicurezza del re, pezzi attivi, struttura pedonale) e indica all’allievo che cosa osservare sulla scacchiera.',
   normal: '',
   formal: 'Dai del Lei all’allievo, con un tono formale e cortese.',
   friendly: 'Tono caldo, amichevole e incoraggiante; dai del tu.',
@@ -150,6 +164,29 @@ export const TONE_PROMPTS: Record<Tone, string> = {
   offensive:
     'Tono da maestro burbero che prende in giro l’allievo con insulti scherzosi e coloriti (schiappa, testone, brocco…), riferiti solo al suo modo di giocare: mai parolacce pesanti, mai insulti su aspetto, origine, genere, religione o altre caratteristiche personali. La spiegazione resta corretta e utile.',
 };
+
+// ───── Maestro istruttivo ─────
+
+/** Voce del Maestro: un po' più lenta e grave, per scandire la lezione. */
+export const MASTER_VOICE = { rate: 0.92, pitch: 0.9 } as const;
+
+/**
+ * Domande guida che il Maestro fa prima di una mossa da indovinare: il metodo
+ * di pensiero da allenare (minacce, scacchi, catture, pezzi inattivi…).
+ */
+export const THINKING_PROMPTS: readonly string[] = [
+  'Prima di muovere chiediti: che cosa minaccia l’avversario?',
+  'Guarda prima scacchi, catture e minacce.',
+  'Quale pezzo sta lavorando poco? Forse è il momento di migliorarlo.',
+  'Dove si trova il re avversario, e quanti difensori ha?',
+  'Pensa al centro: chi lo controlla?',
+  'C’è un pezzo indifeso, tuo o dell’avversario?',
+  'Quale piano avrebbe un maestro in questa posizione?',
+  'Se toccasse all’avversario, che cosa farebbe?',
+];
+
+/** Frasi brevi per rispondere subito mentre Claude prepara la risposta (non finiscono nello storico). */
+export const ACKS: readonly string[] = ['Vediamo.', 'Bella domanda.', 'Ci penso un attimo.', 'Ottima domanda, vediamo.'];
 
 /** Sostituisce il nome; senza nome toglie il segnaposto e la punteggiatura che lo accompagnava. */
 function fill(template: string, name: string, extra: Record<string, string> = {}): string {

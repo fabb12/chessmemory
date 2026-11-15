@@ -55,3 +55,14 @@ describe('voce attivabile e disattivabile', () => {
     expect(synth.speak).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('lettura a frasi di una risposta che arriva a pezzi', () => {
+  it('consegna ogni frase completa una sola volta, senza spezzare i numeri di mossa', async () => {
+    const { SentenceSplitter } = await import('../../src/features/voice/speech');
+    const s = new SentenceSplitter();
+    expect(s.push('Il cavallo va in')).toEqual([]);
+    expect(s.push('Il cavallo va in f3 e controlla il centro. Dopo 12.')).toEqual(['Il cavallo va in f3 e controlla il centro.']);
+    expect(s.push('Il cavallo va in f3 e controlla il centro. Dopo 12. Cxe5 il Nero perde un pedone! Poi')).toEqual(['Dopo 12. Cxe5 il Nero perde un pedone!']);
+    expect(s.flush('Il cavallo va in f3 e controlla il centro. Dopo 12. Cxe5 il Nero perde un pedone! Poi arrocca.')).toBe('Poi arrocca.');
+  });
+});
