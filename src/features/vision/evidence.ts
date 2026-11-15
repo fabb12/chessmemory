@@ -121,6 +121,32 @@ export function fuseEvidence(...sources: (Evidence | null | undefined)[]): Evide
   });
 }
 
+/**
+ * Fusione di più inquadrature della STESSA posizione (clip breve, telefono che si
+ * sposta un poco): ogni fotogramma vede i pezzi da un angolo diverso, quindi un
+ * pezzo nascosto dietro uno più alto in una vista compare nelle altre.
+ *
+ * Le viste non sono indipendenti (stesso modello, stessa luce): si fa una media
+ * pesata, non il prodotto. Una casa «vuota» in una vista è un indizio debole
+ * (il pezzo può essere coperto o sfuggito al modello), una casa con un pezzo
+ * rilevato è un indizio forte: per questo il peso cresce con l'occupazione vista.
+ * Un pezzo coperto in una vista su tre resta; un falso pezzo in una vista su tre sparisce.
+ */
+export function fuseViews(views: readonly (Evidence | null | undefined)[]): Evidence | null {
+  const valid = views.filter((v): v is Evidence => !!v && v.length === 64);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0]!;
+  return Array.from({ length: 64 }, (_, k) => {
+    const p: CellProbs = {};
+    for (const view of valid) {
+      const cell = view[k]!;
+      const weight = 0.5 + 0.5 * (1 - (cell['.'] ?? 0));
+      for (const s of SYMBOLS) p[s] = (p[s] ?? 0) + weight * (cell[s] ?? 0);
+    }
+    return normalize(p);
+  });
+}
+
 export function bestSymbol(p: CellProbs): { symbol: string; probability: number } {
   let symbol = '.';
   let probability = -1;

@@ -285,6 +285,27 @@ export const CONCEPTS: readonly Concept[] = [
     taskPrompt: 'Calcola la combinazione vincente.',
   },
 
+  {
+    id: 'anastasia-mate',
+    title: 'Il matto di Anastasia',
+    category: 'tactics',
+    difficulty: 5,
+    summary: 'Cavallo e torre lavorano insieme: un sacrificio di donna apre la colonna h e il re resta in trappola.',
+    principle:
+      'Quando un cavallo in e7 toglie al re le case g8 e g6, una torre sulla colonna h dà matto: per aprire la colonna si può sacrificare anche la donna, purché ogni risposta sia forzata.',
+    taskPrompt: 'Trova la combinazione di matto.',
+  },
+  {
+    id: 'boden-mate',
+    title: 'Il matto di Boden',
+    category: 'tactics',
+    difficulty: 5,
+    summary: 'Due alfieri sulle diagonali incrociate danno matto al re arroccato, dopo un sacrificio di donna che apre la strada.',
+    principle:
+      'Due alfieri che incrociano le loro diagonali davanti al re coprono tutte le case di fuga. Se un pedone ripara il re, un sacrificio lo devia e apre la diagonale decisiva.',
+    taskPrompt: 'Sacrifica per aprire le diagonali e dai matto.',
+  },
+
   // ───────────── Finali ─────────────
   {
     id: 'queen-mate',
@@ -385,5 +406,25 @@ export const CONCEPTS: readonly Concept[] = [
     principle:
       'Geometria del re: in diagonale il re percorre la stessa distanza che in linea retta, ma può avvicinarsi a due obiettivi insieme. È lo studio di Richard Réti (1921).',
     taskPrompt: 'Trova la mossa di re che salva la partita.',
+  },
+  {
+    id: 'lucena',
+    title: 'La posizione di Lucena: costruire il ponte',
+    category: 'endgames',
+    difficulty: 5,
+    summary: 'Torre e pedone contro torre: il re esce dal suo rifugio e la torre fa da «ponte» contro gli scacchi.',
+    principle:
+      'Nel finale di torre con il pedone in settima, il re che sta davanti al pedone deve uscire; la torre si porta sulla quarta traversa per poi interporsi agli scacchi laterali: è il «ponte».',
+    taskPrompt: 'Prepara l’uscita del re costruendo il ponte.',
+  },
+  {
+    id: 'philidor-defense',
+    title: 'La difesa di Philidor',
+    category: 'endgames',
+    difficulty: 5,
+    summary: 'Con la torre sulla terza traversa il difensore impedisce al re avversario di avanzare e pareggia.',
+    principle:
+      'Contro torre e pedone, la torre del difensore resta sulla sua terza traversa finché il pedone non avanza; quando il pedone arriva lì, la torre va in fondo e dà scacco da dietro, perché il re avversario non ha più riparo.',
+    taskPrompt: 'Difendi con la tecnica di Philidor.',
   },
 ];

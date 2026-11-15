@@ -2,7 +2,7 @@ import type { Side } from '../../types';
 import type { BoardReading } from '../assistant/claude';
 import { resolveReading, type ReadingReference, type ResolvedReading } from '../assistant/boardResolve';
 import type { BoardView } from '../assistant/boardReading';
-import { evidenceGrid, uncertainCount, detectionsToEvidence, type Evidence } from './evidence';
+import { evidenceGrid, fuseViews, uncertainCount, detectionsToEvidence, type Evidence } from './evidence';
 import { plausibleCorners, type Corners } from './geometry';
 import { refineCorners, type GrayImage } from './gridFit';
 import { detectorStatus, detectPieces } from './pieceDetector';
@@ -25,6 +25,8 @@ export interface VisionResult {
   refined: boolean;
   /** Evidenza YOLO per casa (ordine della foto), se il modello c'è e gli angoli sono noti. */
   evidence: Evidence | null;
+  /** Inquadrature fuse nell'evidenza (1 = foto singola, di più con la clip breve). */
+  views?: number;
 }
 
 const GRAY_SIDE = 480;
@@ -87,6 +89,20 @@ export async function analyzeImage(base64Jpeg: string, corners: Corners | null):
   } finally {
     image.close();
   }
+}
+
+/**
+ * Clip breve: la stessa scacchiera vista da più fotogrammi (il primo è il più
+ * nitido, gli altri leggermente spostati). Gli angoli vengono rifiniti su ogni
+ * fotogramma (il telefono si muove un poco) e le letture YOLO fuse con `fuseViews`:
+ * la parallasse tra le viste rivela i pezzi coperti da quelli più alti.
+ */
+export async function analyzeBurst(images: readonly string[], corners: Corners | null): Promise<VisionResult> {
+  const results: VisionResult[] = [];
+  for (const image of images) results.push(await analyzeImage(image, corners));
+  const first = results[0] ?? { corners, refined: false, evidence: null };
+  const seen = results.filter((r) => r.evidence);
+  return { corners: first.corners, refined: first.refined, evidence: fuseViews(seen.map((r) => r.evidence)), views: seen.length };
 }
 
 export interface LocalInput {

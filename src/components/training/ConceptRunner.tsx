@@ -71,6 +71,7 @@ export function ConceptRunner({ item, orientationPref, onComplete }: ConceptRunn
             title={t.task.recallTitle}
             prompt={concept.taskPrompt}
             orientation={resolveOrientation(orientationPref, exercise.sideToMove)}
+            concept={concept}
             onComplete={(result) => {
               setRecall(result);
               setPhase('explain');
@@ -97,6 +98,7 @@ export function ConceptRunner({ item, orientationPref, onComplete }: ConceptRunn
             prompt={t.task.recognizePrompt}
             orientation={resolveOrientation(orientationPref, transferExercise.sideToMove)}
             explainOnSuccess
+            concept={concept}
             onComplete={(result) => finish(recall, explain, result)}
           />
         )}

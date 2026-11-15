@@ -33,11 +33,11 @@ import { fenToPosition, positionToFen, startPosition, validatePosition, type Edi
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
 import { fromCrop, toCrop, type Corners, type Rect } from '../features/vision/geometry';
-import { analyzeImage, localBoardReading, resolveLocal, trustLocal, type VisionResult } from '../features/vision/hybrid';
+import { analyzeBurst, analyzeImage, localBoardReading, resolveLocal, trustLocal, type VisionResult } from '../features/vision/hybrid';
 import { loadDetector, useDetectorStatus } from '../features/vision/pieceDetector';
 import { loadCalibration, saveCalibration } from '../features/vision/calibration';
 import { cellChanges, changesBySquare, inferMove } from '../features/vision/localMove';
-import { captureFrame, frameDifference, frameSignature, MOTION, sampleSquares } from '../utils/frames';
+import { captureFrame, frameDifference, frameSignature, MOTION, pickClipFrames, sampleSquares, type ClipFrame } from '../utils/frames';
 import { prepareImage, READING_PHOTO_SIDE } from '../utils/image';
 import { formatLine, localSquares, sanToLocal, setFlippedSquares } from '../utils/notation';
 import { setVoiceEnabled, speak, speechSupported, stopSpeaking } from '../features/voice/speech';
@@ -48,6 +48,15 @@ const SAMPLE_MS = 400;
 const STILL_SAMPLES = 2;
 /** Intervallo minimo tra due letture con Claude. */
 const MIN_READ_GAP_MS = 1500;
+/** Clip breve: fotogrammi e intervallo (circa 2 secondi in tutto, non video continuo). */
+const CLIP_FRAMES = 8;
+const CLIP_GAP_MS = 250;
+
+/** Inquadrature in più della clip breve: per YOLO (`frames`) e per Claude (`extra`, la vista più diversa). */
+interface ClipImages {
+  frames: string[];
+  extra: string[];
+}
 
 interface HistoryEntry {
   /** Mosse in SAN inglese (si traducono quando si mostrano, con la numerazione scelta). */
@@ -105,6 +114,10 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
   const [explanation, setExplanation] = useState<Phase<string>>({ status: 'idle' });
   // Modalità tutor: osserva di continuo la scacchiera e dice (a voce) la mossa migliore.
   const [live, setLive] = useState(false);
+  /** Clip breve in registrazione (0–1), null = ferma. */
+  const [clipProgress, setClipProgress] = useState<number | null>(null);
+  /** Inquadrature usate nell'ultima lettura (1 = foto singola). */
+  const [readViews, setReadViews] = useState(1);
   const [tutorText, setTutorText] = useState('');
   // Numerazione invertita: il Nero sta sulle righe 1-2 della scacchiera fisica.
   const [flipSquares, setFlipSquares] = useState(() => loadPref(FLIP_SQUARES_KEY) === '1');
@@ -275,7 +288,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
 
   // ───── Lettura della scacchiera con Claude ─────
   const read = useCallback(
-    async (image: string, rect: Rect | null, auto: boolean, fromCamera: boolean, localGuess: string | null = null) => {
+    async (image: string, rect: Rect | null, auto: boolean, fromCamera: boolean, localGuess: string | null = null, clip: ClipImages | null = null) => {
       if (busy.current) return;
       busy.current = true;
       setReading({ status: 'busy' });
@@ -289,9 +302,11 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
         // 1. Visione locale (angoli rifiniti + YOLO), se la scacchiera è già stata trovata.
         const quad = fromCamera && rect && cornersRef.current ? toCrop(rect, cornersRef.current) : null;
         let vision: VisionResult | null = null;
+        // Clip breve: YOLO su tutte le inquadrature, fuse casa per casa (pezzi coperti in una vista, visti nelle altre).
+        const local = (found: Corners) => (clip ? analyzeBurst([image, ...clip.frames], found) : analyzeImage(image, found));
         if (quad) {
           try {
-            vision = await analyzeImage(image, quad);
+            vision = await local(quad);
           } catch {
             vision = null;
           }
@@ -336,10 +351,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
             lastRawPlacement: lastRaw.current,
             vision,
             flippedCoordinates: flipSquaresRef.current,
-            analyze: vision ? undefined : (found) => analyzeImage(image, found),
+            analyze: vision ? undefined : local,
+            extraImages: clip?.extra,
           });
         }
         setReadSeconds((performance.now() - started) / 1000);
+        setReadViews(clip ? 1 + clip.frames.length : 1);
         setReading({ status: 'done', value: result });
         setLastUpdate(Date.now());
         lastRaw.current = result.rawPlacement;
@@ -425,6 +442,34 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
     },
     [read],
   );
+  /**
+   * Clip breve (~2 s, non video continuo): alcuni fotogrammi mentre il telefono si
+   * sposta appena di lato. Si scartano quelli mossi; il più nitido è la foto
+   * principale, gli altri danno a YOLO (e a Claude, il più diverso) altri angoli
+   * di vista per i pezzi coperti da quelli più alti.
+   */
+  const captureClip = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || busy.current || clipProgress !== null) return;
+    const frames: ClipFrame[] = [];
+    for (let k = 0; k < CLIP_FRAMES; k++) {
+      setClipProgress(k / CLIP_FRAMES);
+      const frame = captureFrame(video, cornersRef.current);
+      const signature = frameSignature(video);
+      if (frame && signature) frames.push({ frame, signature });
+      if (k < CLIP_FRAMES - 1) await new Promise((r) => window.setTimeout(r, CLIP_GAP_MS));
+    }
+    setClipProgress(null);
+    const picked = pickClipFrames(frames);
+    if (!picked) return;
+    readSignature.current = picked.best.signature;
+    snapshot.current = cornersRef.current ? sampleSquares(video, cornersRef.current) : null;
+    lastReadAt.current = Date.now();
+    void read(picked.best.frame.data, picked.best.frame.rect, false, true, null, {
+      frames: picked.others.map((o) => o.frame.data),
+      extra: picked.farthest ? [picked.farthest.frame.data] : [],
+    });
+  }, [read, clipProgress]);
   const captureAndReadRef = useRef(captureAndRead);
   captureAndReadRef.current = captureAndRead;
 
@@ -941,9 +986,18 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 >
                   {t.analyze.camera.capture}
                 </Button>
+                <Button
+                  icon={<Icon name="camera" size={18} />}
+                  onClick={() => void captureClip()}
+                  disabled={!apiKey || reading.status === 'busy' || clipProgress !== null}
+                  data-testid="capture-clip"
+                >
+                  {clipProgress !== null ? t.analyze.clip.recording(Math.round(clipProgress * 100)) : t.analyze.clip.button}
+                </Button>
                 <Button variant="ghost" onClick={stopCamera}>
                   {t.analyze.camera.stop}
                 </Button>
+                <p className="basis-full text-xs text-muted">{t.analyze.clip.how}</p>
               </>
             ) : (
               <Button icon={<Icon name="camera" size={18} />} onClick={() => void startCamera()} data-testid="camera-start">
@@ -1013,6 +1067,12 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
                 <p className="font-semibold">
                   {t.analyze.confidence[reading.value.confidence]} · {t.analyze.readDone}
                   {readSeconds !== null && <span className="font-normal text-muted"> ({t.analyze.readTime(readSeconds)})</span>}
+                  {readViews > 1 && (
+                    <span className="font-normal text-muted" data-testid="read-views">
+                      {' '}
+                      · {t.analyze.clip.views(readViews)}
+                    </span>
+                  )}
                 </p>
                 {reading.value.moves.length > 0 && !live && (
                   <p className="text-muted" data-testid="read-moves">

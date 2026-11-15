@@ -350,6 +350,8 @@ export interface ReadOptions {
   flippedCoordinates?: boolean;
   /** Visione locale da fare dopo, con gli angoli trovati da Claude (prima lettura o foto dalla galleria). */
   analyze?: (corners: Corners) => Promise<VisionResult>;
+  /** Altre inquadrature della stessa posizione (clip breve), per i pezzi coperti nella foto principale. */
+  extraImages?: string[];
 }
 
 const CORNER = {
@@ -509,6 +511,11 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
       ? '\n\nThe coordinates printed on this board are REVERSED: the Black army was set up next to the printed ranks 1-2 and White next to 7-8. Do NOT use the printed numbers or letters to decide white_side: decide only by where the White pieces actually stand.'
       : '';
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
+    const extraImages = (options.extraImages ?? []).slice(0, 2).map((data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } }) as const);
+    // Clip breve: le altre viste servono solo a vedere i pezzi coperti; la griglia e gli angoli restano quelli della prima foto.
+    const viewsHint = extraImages.length
+      ? `\n\nThe ${extraImages.length === 1 ? 'next image is another view' : 'next images are other views'} of the SAME position, taken a moment later from a slightly different angle. Use ${extraImages.length === 1 ? 'it' : 'them'} only to identify pieces that are hidden behind taller pieces or unclear in the FIRST photo. Report the grid, white_side and corners exactly as seen in the FIRST photo.`
+      : '';
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
       createMessage(created.client, created.sdk, {
@@ -518,7 +525,13 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
         // (entro 5 minuti) costano circa un ventesimo. Dopo, solo la foto e il poco che cambia.
         system: [{ type: 'text', text: READING_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: [
-          { role: 'user', content: hint + flippedHint + detectorHint + extra ? [image, { type: 'text', text: (hint + flippedHint + detectorHint + extra).trim() }] : [image] },
+          {
+            role: 'user',
+            content:
+              hint + flippedHint + detectorHint + viewsHint + extra
+                ? [image, ...extraImages, { type: 'text', text: (hint + flippedHint + detectorHint + viewsHint + extra).trim() }]
+                : [image],
+          },
         ],
       }).then((message) => {
         recordUsage('reading', message);
@@ -822,6 +835,57 @@ Mossa indicata adesso: ${input.current}${input.student ? `\nL'allievo si chiama 
     const message = input.onText
       ? await streamMessage(created.client, created.sdk, params, input.onText)
       : await createMessage(created.client, created.sdk, params);
+    recordUsage('explanation', message);
+    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+    const text = textOf(message);
+    if (!text) throw new AssistantError('unreadable');
+    return text;
+  } catch (error) {
+    throw mapError(error, sdk);
+  }
+}
+
+// ───────────── Lezioni del percorso ─────────────
+
+export interface LessonInput {
+  concept: string;
+  principle: string;
+  /** Posizione iniziale dell'esercizio (FEN). */
+  fen: string;
+  /** Variante della soluzione, in notazione italiana. */
+  line: string;
+  explanation: string;
+  tone?: string;
+}
+
+const LESSON_SYSTEM = `Sei un maestro di scacchi esperto e paziente. Il tuo allievo (principiante o intermedio) ha appena risolto un esercizio di una lezione e ti chiede di spiegargli meglio PERCHÉ la soluzione funziona.
+Spiega come a lezione, in italiano semplice, in 4–6 frasi brevi, senza elenchi né titoli:
+1) che cosa c'era di speciale nella posizione (pezzi, case deboli, minacce);
+2) perché ogni mossa della soluzione è necessaria e che cosa succederebbe con un'altra mossa naturale;
+3) il principio generale e come riconoscerlo in una partita vera.
+La soluzione è corretta: non contraddirla e non inventare varianti diverse. Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
+
+/** «Spiegamelo meglio»: il perché di una lezione del percorso, più approfondito. */
+export async function explainLesson(input: LessonInput): Promise<string> {
+  let sdk: typeof Anthropic | null = null;
+  try {
+    const created = await createClient();
+    sdk = created.sdk;
+    const message = await createMessage(created.client, created.sdk, {
+      max_tokens: 2000,
+      output_config: { effort: 'low' },
+      system: systemWithTone(LESSON_SYSTEM, input.tone),
+      messages: [
+        {
+          role: 'user',
+          content: `Lezione: ${input.concept}
+Principio: ${input.principle}
+Posizione (FEN): ${input.fen}
+Soluzione: ${input.line}
+Spiegazione breve già data: ${input.explanation}`,
+        },
+      ],
+    });
     recordUsage('explanation', message);
     if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
     const text = textOf(message);

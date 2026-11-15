@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ConceptRunner } from '../components/training/ConceptRunner';
+import { LessonPath } from '../components/training/LessonPath';
 import { SessionSummary } from '../components/training/SessionSummary';
 import { Button } from '../components/ui/Button';
 import { Card, PageTitle } from '../components/ui/Card';
@@ -10,8 +11,9 @@ import { findConcept } from '../data/exercises';
 import { db } from '../db/database';
 import type { Profile, SessionRecord } from '../db/schema';
 import { buildItem, DEFAULT_SESSION_CONFIG } from '../features/learning/sessionBuilder';
+import { lessonAfter, passedLessons } from '../features/learning/path';
 import { currentStreak } from '../features/progress/streak';
-import { useActiveSession, useNow, useSessions } from '../hooks/useData';
+import { useActiveSession, useAttempts, useNow, useSessions } from '../hooks/useData';
 import { useTrainingPlan, useTrainingProposals } from '../hooks/useTrainingPlan';
 import { formatRelativeDay, t } from '../i18n';
 import { finishSession, recordConceptResult, startSession } from '../services/progress';
@@ -62,6 +64,7 @@ export function TrainPage({ profile }: { profile: Profile }) {
   const handled = useRef(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const elapsed = useElapsed(active?.startedAt);
+  const attempts = useAttempts();
 
   const practiceConcept = params.get('concetto');
   const wantsStart = params.get('avvia') === '1' || Boolean(practiceConcept);
@@ -87,7 +90,9 @@ export function TrainPage({ profile }: { profile: Profile }) {
     if (practiceConcept) {
       const concept = findConcept(practiceConcept);
       const card = concept ? await db.cards.get(concept.id) : undefined;
-      const item = concept ? buildItem(concept.id, card ? 'review' : 'new', card?.reps ?? 0) : null;
+      // Lezione del percorso: sempre completa, con la fase OSSERVA in cui il tutor mostra l'idea.
+      const lesson = params.get('lezione') === '1';
+      const item = concept ? buildItem(concept.id, card && !lesson ? 'review' : 'new', card?.reps ?? 0) : null;
       if (item) await startSession({ items: [item], estimatedSeconds: 0 });
     } else if (plan && plan.items.length > 0) {
       await startSession(plan);
@@ -162,6 +167,27 @@ export function TrainPage({ profile }: { profile: Profile }) {
     else navigate('/');
   };
 
+  /** Avvia una lezione del percorso (chiudendo, se c'è, la lezione appena finita). */
+  const startLesson = async (conceptId: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (active) await finishSession();
+      setInterstitial(null);
+      const card = await db.cards.get(conceptId);
+      const item = buildItem(conceptId, 'new', card?.reps ?? 0);
+      if (item) await startSession({ items: [item], estimatedSeconds: 0 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Torna al percorso: la lezione è salvata e si chiude senza il riepilogo della sessione. */
+  const backToPath = async () => {
+    await finishSession();
+    setInterstitial(null);
+  };
+
   const handleConceptComplete = async (result: ConceptResult) => {
     if (!active || busy) return;
     setBusy(true);
@@ -196,6 +222,10 @@ export function TrainPage({ profile }: { profile: Profile }) {
   // ── Concetto appena completato ──
   if (interstitial) {
     const concept = findConcept(interstitial.conceptId);
+    // Lezione singola (dal percorso o dalla libreria): riepilogo e lezione successiva.
+    const lesson = active?.items.length === 1;
+    const passedNow = passedLessons(attempts ?? []).has(interstitial.conceptId);
+    const nextLesson = passedNow ? lessonAfter(interstitial.conceptId) : null;
     return (
       <div className="mx-auto max-w-md pt-6 text-center" data-testid="concept-done">
         <span className="mx-auto mb-4 flex size-16 animate-pop items-center justify-center rounded-full bg-ok-soft text-ok shadow-[0_0_0_8px_color-mix(in_srgb,var(--ok)_12%,transparent)]">
@@ -209,16 +239,38 @@ export function TrainPage({ profile }: { profile: Profile }) {
             {t.train.nextReview(formatRelativeDay(interstitial.nextDue, Date.now()))}
           </p>
         )}
-        <Button
-          size="lg"
-          block
-          className="mt-6"
-          icon={<Icon name="arrowRight" />}
-          data-testid="concept-next"
-          onClick={() => (interstitial.isLast ? void complete() : setInterstitial(null))}
-        >
-          {interstitial.isLast ? t.train.seeResults : t.train.nextConcept}
-        </Button>
+        {lesson && concept && (
+          <div className="mt-4 rounded-2xl border border-l-4 border-line border-l-accent bg-surface p-3.5 text-left" data-testid="lesson-takeaway">
+            <p className="text-xs font-bold uppercase tracking-wide text-accent-strong">{t.path.takeaway}</p>
+            <p className="mt-0.5">{concept.principle}</p>
+          </div>
+        )}
+        {lesson && nextLesson && (
+          <Button size="lg" block className="mt-6" icon={<Icon name="arrowRight" />} data-testid="lesson-next" onClick={() => void startLesson(nextLesson.id)}>
+            {t.path.nextLesson}: {nextLesson.title}
+          </Button>
+        )}
+        {lesson && !passedNow && (
+          <Button size="lg" block className="mt-6" icon={<Icon name="undo" />} data-testid="lesson-retry" onClick={() => void startLesson(interstitial.conceptId)}>
+            {t.path.redo}
+          </Button>
+        )}
+        {lesson ? (
+          <Button variant="secondary" size="lg" block className="mt-3" data-testid="concept-next" onClick={() => void backToPath()}>
+            {t.path.backToPath}
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            block
+            className="mt-6"
+            icon={<Icon name="arrowRight" />}
+            data-testid="concept-next"
+            onClick={() => (interstitial.isLast ? void complete() : setInterstitial(null))}
+          >
+            {interstitial.isLast ? t.train.seeResults : t.train.nextConcept}
+          </Button>
+        )}
       </div>
     );
   }
@@ -322,7 +374,9 @@ export function TrainPage({ profile }: { profile: Profile }) {
       <header>
         <PageTitle>{t.train.introTitle}</PageTitle>
       </header>
+      <LessonPath onStart={(id) => void startLesson(id)} />
       <Card>
+        <h2 className="mb-3 font-display text-lg font-semibold">{t.path.freeTitle}</h2>
         <fieldset data-testid="level-picker">
           <legend className="font-semibold">{t.train.chooseLevel}</legend>
           <div className="mt-2 flex flex-wrap gap-2">

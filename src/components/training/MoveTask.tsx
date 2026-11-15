@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { t } from '../../i18n';
-import type { Exercise, MoveTaskResult, Uci } from '../../types';
+import type { Concept, Exercise, MoveTaskResult, Uci } from '../../types';
 import { applyUci, fenAtStep, parseUci, pieceAt, solutionLine, type AppliedMove } from '../../utils/chess';
 import { formatLine, sanToLocal } from '../../utils/notation';
 import { evaluateMove, isAccepted } from '../../features/learning/evaluateMove';
@@ -19,6 +19,7 @@ import { ChessBoard, type BoardArrow } from '../chess/ChessBoard';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { SpeakButton } from '../ui/SpeakButton';
+import { WhyPanel } from './WhyPanel';
 
 interface MoveTaskProps {
   exercise: Exercise;
@@ -27,6 +28,8 @@ interface MoveTaskProps {
   orientation: 'white' | 'black';
   /** Mostra la spiegazione anche dopo una risposta corretta. */
   explainOnSuccess?: boolean;
+  /** Con il concetto, la spiegazione è quella completa del tutor (mossa per mossa, perché, principio). */
+  concept?: Concept;
   onComplete: (result: MoveTaskResult) => void;
   testId?: string;
 }
@@ -44,6 +47,7 @@ export function MoveTask({
   prompt,
   orientation,
   explainOnSuccess = false,
+  concept,
   onComplete,
   testId = 'move-task',
 }: MoveTaskProps) {
@@ -242,8 +246,16 @@ export function MoveTask({
               {state.usedAlternative && bestSan && (
                 <p className="mt-1 text-sm">{t.task.alternativeText(sanToLocal(bestSan))}</p>
               )}
-              {explainOnSuccess && <p className="mt-2">{exercise.explanation}</p>}
-              {explainOnSuccess && <SpeakButton className="mt-2" text={exercise.explanation} auto />}
+              {concept ? (
+                <WhyPanel exercise={exercise} concept={concept} />
+              ) : (
+                explainOnSuccess && (
+                  <>
+                    <p className="mt-2">{exercise.explanation}</p>
+                    <SpeakButton className="mt-2" text={exercise.explanation} auto />
+                  </>
+                )
+              )}
             </div>
           )}
 
@@ -254,8 +266,14 @@ export function MoveTask({
                 {t.task.failedTitle}
               </p>
               <p className="mt-1 font-semibold">{t.task.failedText(remainingLine)}</p>
-              <p className="mt-2">{exercise.explanation}</p>
-              <SpeakButton className="mt-2" text={`${t.task.failedText(remainingLine)} ${exercise.explanation}`} auto />
+              {concept ? (
+                <WhyPanel exercise={exercise} concept={concept} lead={t.task.failedText(remainingLine)} />
+              ) : (
+                <>
+                  <p className="mt-2">{exercise.explanation}</p>
+                  <SpeakButton className="mt-2" text={`${t.task.failedText(remainingLine)} ${exercise.explanation}`} auto />
+                </>
+              )}
             </div>
           )}
         </div>
