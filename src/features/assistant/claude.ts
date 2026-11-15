@@ -350,8 +350,6 @@ export interface ReadOptions {
   flippedCoordinates?: boolean;
   /** Visione locale da fare dopo, con gli angoli trovati da Claude (prima lettura o foto dalla galleria). */
   analyze?: (corners: Corners) => Promise<VisionResult>;
-  /** Altre inquadrature della stessa posizione (clip breve), per i pezzi coperti nella foto principale. */
-  extraImages?: string[];
 }
 
 const CORNER = {
@@ -511,11 +509,6 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
       ? '\n\nThe coordinates printed on this board are REVERSED: the Black army was set up next to the printed ranks 1-2 and White next to 7-8. Do NOT use the printed numbers or letters to decide white_side: decide only by where the White pieces actually stand.'
       : '';
     const image = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Jpeg } } as const;
-    const extraImages = (options.extraImages ?? []).slice(0, 2).map((data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } }) as const);
-    // Clip breve: le altre viste servono solo a vedere i pezzi coperti; la griglia e gli angoli restano quelli della prima foto.
-    const viewsHint = extraImages.length
-      ? `\n\nThe ${extraImages.length === 1 ? 'next image is another view' : 'next images are other views'} of the SAME position, taken a moment later from a slightly different angle. Use ${extraImages.length === 1 ? 'it' : 'them'} only to identify pieces that are hidden behind taller pieces or unclear in the FIRST photo. Report the grid, white_side and corners exactly as seen in the FIRST photo.`
-      : '';
 
     const ask = (effort: 'low' | 'medium', extra: string) =>
       createMessage(created.client, created.sdk, {
@@ -528,8 +521,8 @@ export async function readBoardFromImage(base64Jpeg: string, options: ReadOption
           {
             role: 'user',
             content:
-              hint + flippedHint + detectorHint + viewsHint + extra
-                ? [image, ...extraImages, { type: 'text', text: (hint + flippedHint + detectorHint + viewsHint + extra).trim() }]
+              hint + flippedHint + detectorHint + extra
+                ? [image, { type: 'text', text: (hint + flippedHint + detectorHint + extra).trim() }]
                 : [image],
           },
         ],

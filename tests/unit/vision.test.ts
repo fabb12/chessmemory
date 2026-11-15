@@ -2,7 +2,6 @@ import { Chess } from 'chess.js';
 import { describe, expect, it } from 'vitest';
 import { placementToRanks, ranksToGrid, type BoardView } from '../../src/features/assistant/boardReading';
 import { cellToSquare, cropAround, homography, plausibleCorners, type Corners } from '../../src/features/vision/geometry';
-import { cellChanges, changesBySquare, inferMove, SAMPLES_PER_SIDE } from '../../src/features/vision/localMove';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const SQUARE: Corners = [
@@ -71,70 +70,5 @@ describe('geometria della scacchiera', () => {
         }
       }
     }
-  });
-});
-
-/** Campionamento finto: ogni casa ha un «colore» uniforme; i pezzi lo cambiano. */
-function fakeSamples(fen: string, view: BoardView, light = 0): Float32Array {
-  const chess = new Chess(fen);
-  const perCell = SAMPLES_PER_SIDE * SAMPLES_PER_SIDE * 3;
-  const out = new Float32Array(64 * perCell);
-  for (let i = 0; i < 8; i++) {
-    for (let j = 0; j < 8; j++) {
-      const sq = cellToSquare(i, j, view);
-      const piece = chess.get(sq as 'a1');
-      const base = (i + j) % 2 === 0 ? 200 : 110;
-      const value = piece ? (piece.color === 'w' ? 235 : 40) + 'pnbrqk'.indexOf(piece.type) * 3 : base;
-      out.fill(value + light, (i * 8 + j) * perCell, (i * 8 + j + 1) * perCell);
-    }
-  }
-  return out;
-}
-
-describe('mossa riconosciuta senza Claude', () => {
-  const play = (moves: string[]) => {
-    const chess = new Chess();
-    moves.forEach((m) => chess.move(m));
-    return chess.fen();
-  };
-
-  it('riconosce una mossa semplice, anche con la luce cambiata', () => {
-    const before = START_FEN;
-    const after = play(['e4']);
-    const changes = changesBySquare(cellChanges(fakeSamples(before, 'bottom'), fakeSamples(after, 'bottom', 12)), 'bottom');
-    const result = inferMove(before, changes);
-    expect(result).toMatchObject({ kind: 'move', uci: 'e2e4', san: 'e4' });
-  });
-
-  it('riconosce arrocco e cattura con la foto presa dal lato del Nero', () => {
-    const base = play(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5']);
-    const castled = play(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'O-O']);
-    let changes = changesBySquare(cellChanges(fakeSamples(base, 'top'), fakeSamples(castled, 'top')), 'top');
-    expect(inferMove(base, changes)).toMatchObject({ kind: 'move', san: 'O-O' });
-
-    const beforeCapture = play(['e4', 'd5']);
-    const afterCapture = play(['e4', 'd5', 'exd5']);
-    changes = changesBySquare(cellChanges(fakeSamples(beforeCapture, 'left'), fakeSamples(afterCapture, 'left')), 'left');
-    expect(inferMove(beforeCapture, changes)).toMatchObject({ kind: 'move', san: 'exd5' });
-  });
-
-  it('tollera le teste dei pezzi che coprono un po\' le case dietro', () => {
-    const changes = changesBySquare(cellChanges(fakeSamples(START_FEN, 'bottom'), fakeSamples(play(['e4']), 'bottom')), 'bottom');
-    changes.set('e3', 14);
-    changes.set('e5', 14);
-    expect(inferMove(START_FEN, changes)).toMatchObject({ kind: 'move', san: 'e4' });
-  });
-
-  it('nessun cambiamento: niente mossa', () => {
-    const changes = changesBySquare(cellChanges(fakeSamples(START_FEN, 'bottom'), fakeSamples(START_FEN, 'bottom', 20)), 'bottom');
-    expect(inferMove(START_FEN, changes)).toEqual({ kind: 'none' });
-  });
-
-  it('se cambia una sola casa (o qualcosa di estraneo) chiede a Claude', () => {
-    const changes = new Map<string, number>([['e2', 60]]);
-    expect(inferMove(START_FEN, changes).kind).toBe('unsure');
-    const odd = changesBySquare(cellChanges(fakeSamples(START_FEN, 'bottom'), fakeSamples(play(['e4']), 'bottom')), 'bottom');
-    odd.set('a8', 200);
-    expect(inferMove(START_FEN, odd)).toEqual({ kind: 'unsure', reason: 'other-changes' });
   });
 });
