@@ -13,6 +13,7 @@ import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { InfoPage } from '../pages/InfoPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { PlayPage } from '../pages/PlayPage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
@@ -31,6 +32,7 @@ function ScrollToTop() {
 const TITLES: [RegExp, string][] = [
   [/^\/allenati/, t.nav.train],
   [/^\/strategie/, t.nav.strategies],
+  [/^\/gioca/, t.play.title],
   [/^\/analizza/, t.analyze.title],
   [/^\/partite/, t.games.title],
   [/^\/progressi/, t.dna.title],
@@ -103,6 +105,7 @@ export function App() {
             <Route path="/allenati" element={<TrainPage profile={profile} />} />
             <Route path="/strategie" element={<StrategiesPage />} />
             <Route path="/strategie/:id" element={<ConceptPage profile={profile} />} />
+            <Route path="/gioca" element={<PlayPage profile={profile} />} />
             <Route path="/analizza" element={<AnalyzePage profile={profile} />} />
             <Route path="/partite" element={<GamesPage />} />
             <Route path="/partite/:id" element={<GamePage profile={profile} />} />
