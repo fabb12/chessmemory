@@ -14,6 +14,8 @@ export type VoiceCommand =
   | { kind: 'back' }
   /** Basta parlare: il tutor tace e aspetta la richiesta successiva. */
   | { kind: 'stop' }
+  /** «Basta», «non voglio più giocare», «spegni il microfono»: fine della lezione, il microfono si spegne. */
+  | { kind: 'quit' }
   /** Dopo uno stop: si riprende la lezione da dove era rimasta. */
   | { kind: 'resume' }
   /** «Pronto»: i pezzi sulla scacchiera vera sono stati sistemati. */
@@ -85,6 +87,39 @@ const STOP_WORD =
 const STOP_TAIL = '(?: (?:un attimo|un momento|un secondo|un po|per un attimo|tutor|subito|ti prego|pure))*';
 const STOP_AT_START = new RegExp(`^${STOP_WORD}${STOP_TAIL}(?: ${STOP_WORD}${STOP_TAIL})*(?=\\s|$)`);
 
+/**
+ * Modi di dire «ho finito, smettiamo»: il tutor saluta e spegne il microfono.
+ * «Basta» da solo chiude la lezione; «basta, prossima mossa» resta un'interruzione seguita dal comando.
+ */
+const QUIT = new RegExp(
+  '^(?:' +
+    [
+      'basta(?: (?:basta|cosi|per oggi|per adesso|per ora|giocare|con gli scacchi|con la lezione|lezione|grazie))*',
+      'per oggi basta',
+      'non (?:voglio|ho voglia di|mi va di|ho piu voglia di) (?:piu )?(?:giocare|continuare|fare lezione|studiare|andare avanti)(?: (?:piu|adesso|ora|oggi|con te))*',
+      'non (?:voglio|mi va) piu',
+      'non ho (?:piu )?voglia',
+      'smettiamo(?: qui| di giocare| per oggi)?',
+      'smettiamola',
+      'smetto(?: di giocare)?',
+      'finiamo(?: qui| la lezione)?',
+      'abbiamo finito',
+      'ho finito(?: di giocare)?',
+      'chiudiamo(?: qui)?',
+      'chiudi(?: (?:il )?microfono)?',
+      'spegni(?: (?:il )?microfono)?',
+      'spegniti',
+      'fine(?: della)? lezione',
+      'ci fermiamo qui',
+      'fermiamoci qui',
+      'lasciamo (?:stare|perdere)',
+      'ciao ciao',
+      'arrivederci',
+      'ci vediamo',
+    ].join('|') +
+    ')$',
+);
+
 /** Frasi per riprendere dopo uno stop. */
 const RESUME = /^(continua|continuiamo|riprendi|riprendiamo|prosegui|proseguiamo|vai pure|puoi continuare|puoi andare avanti|riparti da qui|dove eravamo)$/;
 
@@ -93,6 +128,7 @@ export function parseCommand(heard: string): VoiceCommand | null {
   const full = normalize(ordinalDigits(heard));
   const text = full.replace(FILLER_START, '').replace(FILLER_END, '').trim() || full;
   if (!text) return null;
+  if (QUIT.test(text)) return { kind: 'quit' };
   // «Aspetta, vai alla quinta mossa», «scusa, che apertura è?»: prima si interrompe, poi conta il resto.
   const stop = STOP_AT_START.exec(text);
   if (stop) {
@@ -332,7 +368,7 @@ export function isEcho(heard: string, speaking: string): boolean {
 const COMMON_WORDS = new Set(['vai', 'alla', 'al', 'a', 'la', 'il', 'lo', 'le', 'mossa', 'del', 'di', 'e', 'torna', 'ok', 'dai']);
 
 /** Mentre il tutor parla, solo questi comandi lo interrompono: gli altri aspettano che finisca. */
-export const BARGE_IN_KINDS: ReadonlySet<VoiceCommand['kind']> = new Set(['stop', 'next', 'goto']);
+export const BARGE_IN_KINDS: ReadonlySet<VoiceCommand['kind']> = new Set(['stop', 'quit', 'next', 'goto']);
 
 /** Il nome detto a voce: «mi chiamo Marco», «sono Anna Maria», «Luca». null se non sembra un nome. */
 export function parseName(heard: string): string | null {

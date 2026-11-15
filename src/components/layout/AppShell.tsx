@@ -67,6 +67,21 @@ export function AppShell({ children, bare = false, banner }: AppShellProps) {
             )}
             {!bare && (
               <NavLink
+                to="/impostazioni"
+                aria-label={t.nav.settings}
+                title={t.nav.settings}
+                data-testid="nav-settings"
+                className={({ isActive }) =>
+                  `order-last inline-flex size-10 items-center sm:size-11 justify-center rounded-xl border ${
+                    isActive ? 'border-accent bg-accent text-on-accent' : 'border-line bg-surface text-muted hover:text-fg'
+                  }`
+                }
+              >
+                <Icon name="settings" size={20} />
+              </NavLink>
+            )}
+            {!bare && (
+              <NavLink
                 to="/profilo"
                 aria-label={t.nav.profile}
                 title={t.nav.profile}

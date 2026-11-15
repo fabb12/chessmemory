@@ -21,14 +21,21 @@ export const FAMOUS_PLAYERS: readonly FamousPlayer[] = [
   { id: 'morphy', name: 'Paul Morphy' },
   { id: 'anderssen', name: 'Adolf Anderssen' },
   { id: 'steinitz', name: 'Wilhelm Steinitz' },
+  { id: 'rubinstein', name: 'Akiba Rubinstein' },
+  { id: 'marshall', name: 'Frank Marshall' },
+  { id: 'capablanca', name: 'José Raúl Capablanca' },
   { id: 'reti', name: 'Richard Réti' },
+  { id: 'nimzowitsch', name: 'Aron Nimzowitsch' },
+  { id: 'botvinnik', name: 'Mikhail Botvinnik' },
   { id: 'fischer', name: 'Bobby Fischer' },
   { id: 'spassky', name: 'Boris Spassky' },
   { id: 'karpov', name: 'Anatoly Karpov' },
   { id: 'kasparov', name: 'Garry Kasparov' },
+  { id: 'short', name: 'Nigel Short' },
   { id: 'deep-blue', name: 'Deep Blue' },
   { id: 'anand', name: 'Viswanathan Anand' },
   { id: 'topalov', name: 'Veselin Topalov' },
+  { id: 'aronian', name: 'Levon Aronian' },
   { id: 'carlsen', name: 'Magnus Carlsen' },
 ];
 
@@ -48,11 +55,26 @@ const LENGTH_TOP = 6;
 
 export const RANKINGS: Record<'elegant' | 'strategic' | 'shocking' | 'instructive' | 'important', readonly string[]> = {
   // Sacrifici a catena e matti con pochi pezzi: la bellezza pura delle combinazioni.
-  elegant: ['immortal-game', 'evergreen-game', 'kasparov-topalov', 'opera-game', 'game-of-the-century', 'reti-tartakower', 'steinitz-bardeleben'],
+  elegant: [
+    'immortal-game',
+    'evergreen-game',
+    'kasparov-topalov',
+    'rotlewi-rubinstein-1907',
+    'opera-game',
+    'levitsky-marshall-1912',
+    'game-of-the-century',
+    'lasker-thomas-1912',
+    'aronian-anand-2013',
+    'reti-tartakower',
+    'steinitz-bardeleben',
+  ],
   // Piani lunghi, piccoli vantaggi accumulati, finali tecnici.
   strategic: [
     'fischer-spassky-6',
+    'samisch-nimzowitsch-1923',
+    'botvinnik-capablanca-1938',
     'carlsen-anand-2013-5',
+    'bernstein-capablanca-1914',
     'carlsen-karjakin-2016-10',
     'spassky-fischer-3',
     'anand-carlsen-2013-6',
@@ -60,15 +82,16 @@ export const RANKINGS: Record<'elegant' | 'strategic' | 'shocking' | 'instructiv
     'carlsen-nepomniachtchi-2021-6',
   ],
   // Colpi di scena: il computer che batte il campione, un tredicenne che sacrifica la donna, il re trascinato in d1.
-  shocking: ['deep-blue-kasparov-6', 'kasparov-topalov', 'game-of-the-century', 'reti-tartakower', 'legal-mate-game', 'immortal-game', 'carlsen-nepomniachtchi-2021-6'],
+  shocking: ['deep-blue-kasparov-6', 'levitsky-marshall-1912', 'short-timman-1991', 'lasker-thomas-1912', 'kasparov-topalov', 'game-of-the-century', 'reti-tartakower', 'legal-mate-game', 'immortal-game', 'carlsen-nepomniachtchi-2021-6'],
   // Un'idea chiara da portarsi a casa: sviluppo, trappole, re al centro, finali.
-  instructive: ['opera-game', 'legal-mate-game', 'carlsen-anand-2013-5', 'fischer-spassky-6', 'steinitz-bardeleben', 'evergreen-game', 'carlsen-anand-2014-6'],
+  instructive: ['opera-game', 'legal-mate-game', 'bernstein-capablanca-1914', 'lasker-thomas-1912', 'carlsen-anand-2013-5', 'fischer-spassky-6', 'steinitz-bardeleben', 'evergreen-game', 'carlsen-anand-2014-6'],
   // Partite che hanno cambiato la storia degli scacchi o deciso un titolo mondiale.
   important: [
     'deep-blue-kasparov-6',
     'karpov-kasparov-1985-24',
     'fischer-spassky-6',
     'game-of-the-century',
+    'botvinnik-capablanca-1938',
     'carlsen-anand-2013-5',
     'carlsen-nepomniachtchi-2021-6',
     'immortal-game',

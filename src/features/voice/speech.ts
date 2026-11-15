@@ -44,8 +44,7 @@ export function speechSupported(): boolean {
 }
 
 let speakingId: string | null = null;
-/** Frase in corso (per riconoscere, nel microfono, l'eco della voce dell'app). */
-let currentUtterance: SpeechSynthesisUtterance | null = null;
+/** Testo che l'app sta pronunciando (per riconoscere, nel microfono, l'eco della sua voce). */
 let currentText = '';
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -55,22 +54,39 @@ function italianVoice(): SpeechSynthesisVoice | undefined {
   return voices.find((v) => v.lang === 'it-IT' && v.localService) ?? voices.find((v) => v.lang.toLowerCase().startsWith('it'));
 }
 
-/** Legge il testo; `id` identifica chi parla (per mostrare «Ferma» sul pulsante giusto). */
-export function speak(text: string, id = 'default'): void {
-  if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
-  const synth = window.speechSynthesis;
-  synth.cancel();
+/** Ultima frase in coda: solo la sua fine chiude il «sta parlando». */
+let lastUtterance: SpeechSynthesisUtterance | null = null;
+
+export interface SpeakOptions {
+  /** Moltiplica la velocità scelta dall'utente (es. 0,9 = un po' più lenta e scandita). */
+  rate?: number;
+  /** Tono della voce (0–2, 1 = normale). */
+  pitch?: number;
+  /** false = non avvisa `onSpoken` (chi parla registra lui il testo completo). */
+  log?: boolean;
+}
+
+let defaultOptions: SpeakOptions = {};
+
+/** Velocità e tono predefiniti per chi non li passa (es. la voce del «Maestro»). */
+export function setSpeakDefaults(options: SpeakOptions): void {
+  defaultOptions = options;
+}
+
+function utter(text: string, id: string, options: SpeakOptions): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(spokenChess(text));
   utterance.lang = 'it-IT';
   const voice = italianVoice();
   if (voice) utterance.voice = voice;
-  utterance.rate = getVoiceRate();
+  const opts = { ...defaultOptions, ...options };
+  utterance.rate = Math.max(0.5, Math.min(2, getVoiceRate() * (opts.rate ?? 1)));
+  utterance.pitch = opts.pitch ?? 1;
   utterance.volume = getVoiceVolume();
-  // Solo la frase in corso chiude il «sta parlando»: quella interrotta da cancel()
+  // Solo l'ultima frase in coda chiude il «sta parlando»: quella interrotta da cancel()
   // segnala la sua fine più tardi e non deve far credere che la nuova sia finita.
   const done = () => {
-    if (currentUtterance !== utterance) return;
-    currentUtterance = null;
+    if (lastUtterance !== utterance) return;
+    lastUtterance = null;
     currentText = '';
     if (speakingId === id) {
       speakingId = null;
@@ -79,12 +95,65 @@ export function speak(text: string, id = 'default'): void {
   };
   utterance.onend = done;
   utterance.onerror = done;
-  currentUtterance = utterance;
+  return utterance;
+}
+
+/** Legge il testo; `id` identifica chi parla (per mostrare «Ferma» sul pulsante giusto). */
+export function speak(text: string, id = 'default', options: SpeakOptions = {}): void {
+  if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const utterance = utter(text, id, options);
+  lastUtterance = utterance;
   currentText = utterance.text;
   speakingId = id;
   notify();
   synth.speak(utterance);
-  spokenListeners.forEach((l) => l(text, id));
+  if (options.log !== false) spokenListeners.forEach((l) => l(text, id));
+}
+
+/**
+ * Accoda una frase senza interrompere quella in corso (per leggere una risposta
+ * mentre arriva, frase dopo frase). Se a parlare è un altro `id`, lo interrompe.
+ */
+export function speakNext(text: string, id = 'default', options: SpeakOptions = {}): void {
+  if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
+  if (speakingId !== id || !lastUtterance) return speak(text, id, options);
+  const utterance = utter(text, id, options);
+  lastUtterance = utterance;
+  currentText = `${currentText} ${utterance.text}`.trim();
+  window.speechSynthesis.speak(utterance);
+  if (options.log !== false) spokenListeners.forEach((l) => l(text, id));
+}
+
+/**
+ * Divide in frasi un testo che arriva a pezzi: `push` riceve il testo arrivato
+ * finora e restituisce le frasi complete non ancora consegnate; `flush` il resto.
+ */
+export class SentenceSplitter {
+  private sent = 0;
+
+  push(soFar: string): string[] {
+    const out: string[] = [];
+    const re = /[.!?…:;]+["»”)]?\s+/g;
+    re.lastIndex = this.sent;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(soFar))) {
+      const end = match.index + match[0].length;
+      const sentence = soFar.slice(this.sent, end).trim();
+      // Non spezza dopo un numero di mossa («12.») o frasi troppo corte.
+      if (/\d\.\s*$/.test(soFar.slice(this.sent, match.index + 1)) || sentence.length < 12) continue;
+      out.push(sentence);
+      this.sent = end;
+    }
+    return out;
+  }
+
+  flush(full: string): string {
+    const rest = full.slice(this.sent).trim();
+    this.sent = full.length;
+    return rest;
+  }
 }
 
 const spokenListeners = new Set<(text: string, id: string) => void>();
@@ -102,7 +171,7 @@ export function currentSpeechText(): string {
 
 export function stopSpeaking(): void {
   if (!speechSupported()) return;
-  currentUtterance = null;
+  lastUtterance = null;
   currentText = '';
   window.speechSynthesis.cancel();
   speakingId = null;

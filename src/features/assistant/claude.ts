@@ -249,6 +249,50 @@ async function createMessage(client: Anthropic, sdk: typeof Anthropic, params: C
   }
 }
 
+/**
+ * Come `createMessage`, ma riceve il testo mentre viene scritto: `onText` riceve
+ * tutto il testo arrivato finora. Serve a far partire la voce alla prima frase,
+ * senza aspettare la risposta completa.
+ */
+async function streamMessage(client: Anthropic, sdk: typeof Anthropic, params: CreateParams, onText: (soFar: string) => void): Promise<BetaMessage> {
+  const model = getModel();
+  const base: Anthropic.Beta.MessageCreateParamsNonStreaming = {
+    ...params,
+    model: model.id,
+    ...(model.fallbacks ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+  };
+  let received = false;
+  const run = async (body: Anthropic.Beta.MessageCreateParamsNonStreaming) => {
+    let soFar = '';
+    const stream = client.beta.messages.stream(body);
+    stream.on('text', (delta: string) => {
+      received = true;
+      soFar += delta;
+      onText(soFar);
+    });
+    return (await stream.finalMessage()) as BetaMessage;
+  };
+  const attempt = async () => {
+    if (!model.fast || !getFastMode()) return run(base);
+    try {
+      return await run({ ...base, speed: 'fast' });
+    } catch (error) {
+      if (!received && (error instanceof sdk.RateLimitError || error instanceof sdk.BadRequestError)) return run(base);
+      throw error;
+    }
+  };
+  try {
+    return await attempt();
+  } catch (error) {
+    // Lo streaming non è arrivato (rete o proxy che non lo supportano): risposta intera, come prima.
+    const fatal = error instanceof sdk.AuthenticationError || error instanceof sdk.PermissionDeniedError || error instanceof sdk.RateLimitError;
+    if (received || fatal) throw error;
+    const message = await createMessage(client, sdk, params);
+    onText(textOf(message));
+    return message;
+  }
+}
+
 function textOf(message: BetaMessage): string {
   return message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
@@ -624,6 +668,8 @@ export interface MasterMoveInput {
   continuation: string;
   /** Istruzione sul tono di parlata (vuota = normale). */
   tone?: string;
+  /** Modalità Maestro istruttivo: spiegazione più didattica (idea, che cosa osservare, principio). */
+  teacher?: boolean;
 }
 
 /** Il prompt di sistema in cache, più l'eventuale istruzione sul tono (fuori dalla cache, cambia poco). */
@@ -641,6 +687,15 @@ Formato: due frasi brevi, al massimo 35 parole in tutto, senza elenchi né titol
 Niente premesse («Ottima domanda», «Questa mossa…»), niente ripetere la mossa per intero, niente gergo difficile né varianti lunghe. Il tono scelto non deve allungare il testo.
 Le mosse della partita sono storiche e corrette: non contraddirle e non inventare varianti diverse. Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
 
+const TEACHER_SYSTEM = `Sei un maestro di scacchi esperto che fa lezione a un allievo (principiante o intermedio) mentre rigioca sulla scacchiera una partita storica di un grande campione.
+L'allievo ha appena eseguito la mossa: spiegagli PERCHÉ il campione l'ha giocata, come farebbe un buon insegnante.
+Formato: tre frasi brevi, al massimo 60 parole in tutto, senza elenchi né titoli.
+1) L'idea concreta della mossa: che cosa ottiene, minaccia o impedisce.
+2) Che cosa osservare adesso sulla scacchiera (la risposta dell'avversario, un pezzo, una casa, un piano).
+3) «La lezione:» e il principio generale da ricordare.
+Niente premesse, niente varianti lunghe, niente gergo difficile. Le mosse della partita sono storiche e corrette: non contraddirle.
+Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
+
 /** Spiegazione breve di una mossa di una partita famosa (generata in anticipo e messa in cache). */
 export async function explainMasterMove(input: MasterMoveInput): Promise<string> {
   let sdk: typeof Anthropic | null = null;
@@ -650,7 +705,7 @@ export async function explainMasterMove(input: MasterMoveInput): Promise<string>
     const message = await createMessage(created.client, created.sdk, {
       max_tokens: 4000,
       output_config: { effort: 'low' },
-      system: systemWithTone(MASTER_SYSTEM, input.tone),
+      system: systemWithTone(input.teacher ? TEACHER_SYSTEM : MASTER_SYSTEM, input.tone),
       messages: [
         {
           role: 'user',
@@ -733,6 +788,8 @@ export interface GameQuestionInput {
   tone?: string;
   /** Domande e risposte precedenti, per le domande di seguito («e se invece…?»). */
   history: { question: string; answer: string }[];
+  /** Riceve la risposta mentre viene scritta (tutto il testo arrivato finora). */
+  onText?: (soFar: string) => void;
 }
 
 const QUESTION_SYSTEM = `Sei un istruttore di scacchi che accompagna un allievo (principiante o intermedio) mentre rigioca sulla sua scacchiera una partita storica di un grande maestro. L'allievo ti fa una domanda a voce.
@@ -756,12 +813,15 @@ Mossa indicata adesso: ${input.current}${input.student ? `\nL'allievo si chiama 
       messages.push({ role: 'assistant', content: h.answer });
     });
     messages.push({ role: 'user', content: messages.length === 0 ? `${context}\n\nDomanda: ${input.question}` : `(Posizione ora: ${input.fen}; mossa indicata: ${input.current})\n${input.question}` });
-    const message = await createMessage(created.client, created.sdk, {
-      max_tokens: 4000,
+    const params: CreateParams = {
+      max_tokens: 1500,
       output_config: { effort: 'low' },
       system: systemWithTone(QUESTION_SYSTEM, input.tone),
       messages,
-    });
+    };
+    const message = input.onText
+      ? await streamMessage(created.client, created.sdk, params, input.onText)
+      : await createMessage(created.client, created.sdk, params);
     recordUsage('explanation', message);
     if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
     const text = textOf(message);

@@ -12,6 +12,7 @@ import { GameTutorPage } from '../pages/GameTutorPage';
 import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { InfoPage } from '../pages/InfoPage';
+import { SettingsPage } from '../pages/SettingsPage';
 import { MemoryDnaPage } from '../pages/MemoryDnaPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { StrategiesPage } from '../pages/StrategiesPage';
@@ -109,6 +110,7 @@ export function App() {
             <Route path="/progressi" element={<MemoryDnaPage />} />
             <Route path="/memory-dna" element={<Navigate to="/progressi" replace />} />
             <Route path="/informazioni" element={<InfoPage />} />
+            <Route path="/impostazioni" element={<SettingsPage />} />
             <Route path="/profilo" element={<ProfilePage profile={profile} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

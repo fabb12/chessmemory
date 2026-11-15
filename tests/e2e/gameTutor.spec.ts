@@ -11,6 +11,7 @@ const FAKE_VOICE = `
       speak: (u) => {
         window.__said.push(u.text);
         window.__volume = u.volume;
+        window.__rate = u.rate;
         window.__current = u;
         if (!window.__longSpeech) setTimeout(() => u.onend && u.onend(), 30);
       },
@@ -58,6 +59,21 @@ async function openTutor(page: Page, withKey: boolean, nextDelay = '0') {
   await expect(page.getByTestId('game-tutor')).toBeVisible();
 }
 
+/** Risposta di Claude in streaming (eventi SSE), un pezzo di testo alla volta. */
+function sseBody(chunks: string[]): string {
+  const event = (type: string, data: object) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
+  return [
+    event('message_start', {
+      message: { id: 'msg_s', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 } },
+    }),
+    event('content_block_start', { index: 0, content_block: { type: 'text', text: '' } }),
+    ...chunks.map((text) => event('content_block_delta', { index: 0, delta: { type: 'text_delta', text } })),
+    event('content_block_stop', { index: 0 }),
+    event('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } }),
+    event('message_stop', {}),
+  ].join('');
+}
+
 const said = (page: Page) => page.evaluate(() => (window as unknown as { __said: string[] }).__said);
 
 test('tutor grandi partite: segue le mosse sulla scacchiera dello schermo e spiega subito il perché', async ({ page }) => {
@@ -91,7 +107,8 @@ test('tutor grandi partite: segue le mosse sulla scacchiera dello schermo e spie
   };
 
   // Appena aperta la pagina la coda ha preparato le prime mosse.
-  await expect.poll(() => asked.slice(0, 3)).toEqual(['1.e4', '1…e5', '2.Cf3']);
+  // (due richieste alla volta: l'ordine d'arrivo delle prime due può cambiare).
+  await expect.poll(() => [...asked.slice(0, 3)].sort()).toEqual(['1.e4', '1…e5', '2.Cf3']);
   // Modalità guidata (predefinita): quale pezzo, da dove e dove. Il perché arriva dopo la mossa.
   await expect(page.getByTestId('tutor-next')).toHaveText('Il Bianco muove il pedone da e2 a e4.');
   await expect(page.getByTestId('tutor-explanation')).toHaveCount(0);
@@ -191,10 +208,20 @@ test('tutor grandi partite: dopo N secondi passa da solo alla mossa successiva',
 test('tutor grandi partite: comandi a voce e domande sulla partita', async ({ page }) => {
   const questions: string[] = [];
   await page.route('https://api.anthropic.com/**', async (route) => {
-    const body = route.request().postDataJSON() as { messages: { content: string }[] };
+    const body = route.request().postDataJSON() as { messages: { content: string }[]; stream?: boolean };
     const last = String(body.messages[body.messages.length - 1]?.content ?? '');
     const isQuestion = last.includes('Domanda:');
     if (isQuestion) questions.push(last);
+    if (body.stream) {
+      // Le domande arrivano in streaming: la voce legge ogni frase appena è completa.
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: { 'access-control-allow-origin': '*' },
+        body: sseBody(['Ha vinto Morphy ', 'con un matto spettacolare. ', 'Guarda ', 'il finale!']),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -228,7 +255,10 @@ test('tutor grandi partite: comandi a voce e domande sulla partita', async ({ pa
   await expect(page.getByTestId('tutor-answer-text')).toHaveText('Spiegazione di Claude.');
 
   await say(page, 'chi ha vinto questa partita?');
-  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Ha vinto Morphy con un matto spettacolare.');
+  await expect(page.getByTestId('tutor-answer-text')).toHaveText('Ha vinto Morphy con un matto spettacolare. Guarda il finale!');
+  // Subito una frase breve, poi la risposta letta frase per frase; nello storico la risposta intera.
+  await expect.poll(() => said(page)).toEqual(expect.arrayContaining(['Ha vinto Morphy con un matto spettacolare.', 'Guarda il finale!']));
+  await expect(page.getByTestId('tutor-log-entry').last()).toContainText('Ha vinto Morphy con un matto spettacolare. Guarda il finale!');
   expect(questions[0]).toContain('Mosse giocate finora: 1.e4');
   expect(questions[0]).toContain('chi ha vinto');
 
@@ -255,11 +285,11 @@ test('tutor grandi partite: chiede il nome, si interrompe a voce e il microfono 
   const cancels = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
   await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('prossima mossa'));
   await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.');
-  // «Basta» ferma la spiegazione in corso.
+  // «Zitta» ferma la spiegazione in corso.
   await page.waitForTimeout(100);
   const before = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
   expect(before).toBeGreaterThan(cancels);
-  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('basta'));
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('zitta'));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0)).toBeGreaterThan(before);
   // Una frase qualsiasi mentre parla (non un comando) non lo interrompe.
   await page.getByTestId('tutor-reveal').click();
@@ -405,6 +435,16 @@ test('tutor grandi partite: «basta», «scusa», «aspetta» lo zittiscono e il
   await expect(page.getByTestId('tutor-hold')).toBeVisible();
   await page.getByTestId('tutor-resume').click();
   await expect(page.getByTestId('tutor-hold')).toHaveCount(0);
+
+  // «Basta, non voglio più giocare»: saluto, microfono spento, lezione ferma.
+  await page.waitForTimeout(700);
+  await final('non voglio più giocare');
+  await expect(page.getByTestId('tutor-mic')).toHaveText('Attiva il microfono');
+  await expect(page.getByTestId('tutor-hold')).toContainText('microfono spento');
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toContain('Spengo il microfono');
+  await page.reload();
+  // Alla prossima apertura il microfono resta spento.
+  await expect(page.getByTestId('tutor-mic')).toHaveText('Attiva il microfono');
 });
 
 test('tutor grandi partite: tutte le richieste a voce funzionano', async ({ page }) => {
@@ -492,12 +532,12 @@ test('tutor grandi partite: storico della lezione, volume e niente interruzioni 
   const before = await cancels();
   await interim('nero muove pedone e7 e5'); // eco
   await interim('il nero muove il pedone da e7');
-  await interim('basta'); // una sola volta: forse è rumore
+  await interim('zitta'); // una sola volta: forse è rumore
   await interim('nero muove il pedone');
   await page.waitForTimeout(300);
   expect(await cancels()).toBe(before);
-  await interim('basta');
-  await interim('basta');
+  await interim('zitta');
+  await interim('zitta');
   await expect.poll(cancels).toBeGreaterThan(before);
 
   // Volume della voce.
@@ -562,4 +602,40 @@ test('tutor grandi partite: tono di parlata per frasi e Claude', async ({ page }
   // La scelta resta.
   await page.reload();
   await expect(page.getByTestId('tutor-tone')).toHaveValue('offensive');
+});
+
+test('tutor grandi partite: Maestro istruttivo — presentazione, spiegazioni da lezione, domande guida e voce scandita', async ({ page }) => {
+  const systems: string[] = [];
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const body = route.request().postDataJSON() as { system: { text: string }[] };
+    systems.push(body.system.map((b) => b.text).join('\n'));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({
+        id: 'msg_m',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-haiku-5-5',
+        content: [{ type: 'text', text: 'Spiegazione del maestro.' }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    });
+  });
+  await page.addInitScript(() => localStorage.setItem('cm.tutor.tone', 'master'));
+  await openTutor(page, true, '60');
+  await page.getByTestId('tutor-auto-seconds').fill('0');
+  await expect(page.getByTestId('tutor-master-tip')).toBeVisible();
+  // Spiegazioni da lezione: idea, che cosa osservare, principio.
+  await expect.poll(() => systems.some((s) => s.includes('Che cosa osservare'))).toBe(true);
+  // All'inizio il Maestro presenta la partita, con la voce un po' più lenta.
+  await page.getByTestId('tutor-repeat').click();
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toContain('Teatro dell’Opera');
+  expect(await page.evaluate(() => (window as unknown as { __rate: number }).__rate)).toBeLessThan(1);
+  // Quando tocca all'allievo indovinare, una domanda guida.
+  await page.getByTestId('tutor-side').getByRole('button', { name: 'Indovina il Bianco' }).click();
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toMatch(/chiediti|minacc|centro|pezzo|re avversario|piano/);
 });

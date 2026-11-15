@@ -6,11 +6,12 @@ import { useSyncExternalStore } from 'react';
  * Le spiegazioni restano sempre corrette: cambia solo il modo di dirle.
  */
 
-export type Tone = 'formal' | 'friendly' | 'playful' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
+export type Tone = 'master' | 'formal' | 'friendly' | 'playful' | 'normal' | 'youthful' | 'rude' | 'unpleasant' | 'arrogant' | 'offensive';
 
-export const TONES: readonly Tone[] = ['formal', 'friendly', 'playful', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
+export const TONES: readonly Tone[] = ['master', 'formal', 'friendly', 'playful', 'normal', 'youthful', 'rude', 'unpleasant', 'arrogant', 'offensive'];
 
 export const TONE_LABELS: Record<Tone, string> = {
+  master: 'Maestro istruttivo',
   formal: 'Formale',
   friendly: 'Amichevole',
   playful: 'Simpatico e scherzoso',
@@ -33,9 +34,23 @@ interface ToneLines {
   finished: string;
   whyTo: string;
   aligned: string;
+  /** Saluto quando l'allievo chiude la lezione (il microfono si spegne). */
+  bye: string;
 }
 
 const LINES: Record<Tone, ToneLines> = {
+  master: {
+    hello: 'Buongiorno {n}, oggi studiamo insieme una partita da maestri.',
+    nice: 'Piacere, {n}. Mettiti comodo: guarderemo ogni mossa chiedendoci il perché.',
+    call: ['{n}, osserva bene: ', 'Ora, {n}, ', 'Seguimi, {n}: ', 'Guarda la scacchiera, {n}: '],
+    praise: ['Esatto, {n}.', 'Bene, {n}, ricorda questa idea.', 'Giusto, {n}.', 'Molto bene, {n}.'],
+    reminder: '{n}, prenditi il tempo: guarda le minacce, poi muovi.',
+    wrong: '{n}, fermiamoci un attimo: non è questa la mossa. Rimetti il pezzo e gioca: ',
+    finished: 'La partita è finita, {n}: {r}. Ripensiamo a che cosa abbiamo imparato.',
+    whyTo: 'Ragioniamo insieme, {n}:',
+    aligned: 'Bene {n}, la scacchiera è pronta: riprendiamo la lezione.',
+    bye: 'Va bene, {n}, per oggi chiudiamo la lezione. Spengo il microfono: quando vorrai riprendere, ti aspetto.',
+  },
   normal: {
     hello: 'Ciao {n}!',
     nice: 'Piacere, {n}! Iniziamo.',
@@ -46,6 +61,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Complimenti {n}, partita finita: {r}.',
     whyTo: 'Ecco perché, {n}:',
     aligned: 'Perfetto {n}, la scacchiera è allineata.',
+    bye: 'Va bene {n}, ci fermiamo qui. Spengo il microfono.',
   },
   formal: {
     hello: 'Buongiorno {n}.',
@@ -57,6 +73,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Complimenti {n}, la partita è conclusa: {r}.',
     whyTo: 'Le spiego il motivo, {n}:',
     aligned: 'Perfetto {n}, la scacchiera è allineata.',
+    bye: 'Come desidera, {n}. Ci fermiamo qui e spengo il microfono.',
   },
   friendly: {
     hello: 'Ciao {n}! Che bello vederti.',
@@ -68,6 +85,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Che bella partita, {n}! Finita: {r}.',
     whyTo: 'Ti spiego, {n}:',
     aligned: 'Perfetto {n}, ci siamo!',
+    bye: 'Va bene {n}, ci fermiamo qui! Spengo il microfono, a presto.',
   },
   playful: {
     hello: 'Ciao {n}! Pronto a far ballare i pezzi?',
@@ -79,6 +97,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Inchino e applausi!',
     whyTo: 'Ecco il trucco, {n}:',
     aligned: 'Perfetto {n}, tutto in ordine!',
+    bye: 'Ok {n}, i pezzi vanno a dormire! Spengo il microfono.',
   },
   youthful: {
     hello: 'Ehi {n}!',
@@ -90,6 +109,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'GG {n}! Partita finita: {r}.',
     whyTo: 'Ti spiego al volo, {n}:',
     aligned: 'Ok {n}, tutto a posto, si riparte!',
+    bye: 'Ok {n}, chiudiamo qui! Microfono spento, ciao!',
   },
   rude: {
     hello: '{n}. Cominciamo, non ho tutto il giorno.',
@@ -101,6 +121,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Era ora.',
     whyTo: 'Te lo dico una volta sola, {n}:',
     aligned: 'Bene {n}, finalmente la scacchiera è a posto.',
+    bye: 'Come vuoi, {n}. Spengo il microfono.',
   },
   unpleasant: {
     hello: 'Ah, {n}. Va bene, iniziamo.',
@@ -112,6 +133,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Sei arrivato in fondo, incredibile.',
     whyTo: 'Te lo spiego piano piano, {n}:',
     aligned: '{n}, ce l’hai fatta a sistemare i pezzi. Bravo, eh.',
+    bye: 'Già stanco, {n}? Va bene, spengo il microfono.',
   },
   arrogant: {
     hello: '{n}, oggi impari dal migliore.',
@@ -123,6 +145,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Grazie a me, ovviamente.',
     whyTo: 'Ascolta bene, {n}, perché lo dico io:',
     aligned: 'Perfetto {n}, ora possiamo continuare con la mia lezione.',
+    bye: 'Peccato, {n}: perdi la lezione del migliore. Spengo il microfono.',
   },
   offensive: {
     hello: 'Eccolo qua, {n} la schiappa!',
@@ -134,11 +157,14 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Sei sopravvissuto, scarpone!',
     whyTo: 'Senti qua, {n}, zuccone:',
     aligned: 'Era ora, {n}, mani di burro: scacchiera a posto.',
+    bye: 'Ti arrendi già, {n}, schiappa? Va bene, spengo il microfono.',
   },
 };
 
 /** Istruzioni per Claude: come parlare all'allievo. */
 export const TONE_PROMPTS: Record<Tone, string> = {
+  master:
+    'Parla come un maestro di scacchi esperto e paziente che fa lezione: tono calmo, autorevole e didattico; dai del tu. Collega la mossa a un principio generale (sviluppo, centro, sicurezza del re, pezzi attivi, struttura pedonale) e indica all’allievo che cosa osservare sulla scacchiera.',
   normal: '',
   formal: 'Dai del Lei all’allievo, con un tono formale e cortese.',
   friendly: 'Tono caldo, amichevole e incoraggiante; dai del tu.',
@@ -150,6 +176,29 @@ export const TONE_PROMPTS: Record<Tone, string> = {
   offensive:
     'Tono da maestro burbero che prende in giro l’allievo con insulti scherzosi e coloriti (schiappa, testone, brocco…), riferiti solo al suo modo di giocare: mai parolacce pesanti, mai insulti su aspetto, origine, genere, religione o altre caratteristiche personali. La spiegazione resta corretta e utile.',
 };
+
+// ───── Maestro istruttivo ─────
+
+/** Voce del Maestro: un po' più lenta e grave, per scandire la lezione. */
+export const MASTER_VOICE = { rate: 0.92, pitch: 0.9 } as const;
+
+/**
+ * Domande guida che il Maestro fa prima di una mossa da indovinare: il metodo
+ * di pensiero da allenare (minacce, scacchi, catture, pezzi inattivi…).
+ */
+export const THINKING_PROMPTS: readonly string[] = [
+  'Prima di muovere chiediti: che cosa minaccia l’avversario?',
+  'Guarda prima scacchi, catture e minacce.',
+  'Quale pezzo sta lavorando poco? Forse è il momento di migliorarlo.',
+  'Dove si trova il re avversario, e quanti difensori ha?',
+  'Pensa al centro: chi lo controlla?',
+  'C’è un pezzo indifeso, tuo o dell’avversario?',
+  'Quale piano avrebbe un maestro in questa posizione?',
+  'Se toccasse all’avversario, che cosa farebbe?',
+];
+
+/** Frasi brevi per rispondere subito mentre Claude prepara la risposta (non finiscono nello storico). */
+export const ACKS: readonly string[] = ['Vediamo.', 'Bella domanda.', 'Ci penso un attimo.', 'Ottima domanda, vediamo.'];
 
 /** Sostituisce il nome; senza nome toglie il segnaposto e la punteggiatura che lo accompagnava. */
 function fill(template: string, name: string, extra: Record<string, string> = {}): string {
@@ -172,6 +221,7 @@ export interface TonePhrases {
   finished(result: string, name: string): string;
   whyTo(name: string): string;
   aligned(name: string): string;
+  bye(name: string): string;
 }
 
 export function phrases(tone: Tone): TonePhrases {
@@ -186,6 +236,7 @@ export function phrases(tone: Tone): TonePhrases {
     finished: (r, n) => (tone === 'normal' && !n ? `Partita finita: ${r}.` : fill(l.finished, n, { r })),
     whyTo: (n) => fill(l.whyTo, n),
     aligned: (n) => fill(l.aligned, n),
+    bye: (n) => fill(l.bye, n),
   };
 }
 

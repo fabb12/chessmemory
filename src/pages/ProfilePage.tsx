@@ -2,12 +2,10 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AccountCard } from '../components/account/AccountCard';
 import { isSupabaseConfigured } from '../services/supabase';
-import { Button } from '../components/ui/Button';
+import { Button, buttonClass } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Icon } from '../components/ui/Icon';
-import { VoiceSettings } from '../components/ui/VoiceSettings';
-import { ApiKeyForm } from '../components/assistant/ApiKeyForm';
 import type { Profile } from '../db/schema';
 import type { AnalysisDepth } from '../features/engine/engine';
 import { useSessions } from '../hooks/useData';
@@ -174,18 +172,12 @@ export function ProfilePage({ profile }: { profile: Profile }) {
         </div>
       </Card>
 
-      <Card>
-        <SectionTitle>{t.voice.settingsTitle}</SectionTitle>
-        <div className="mt-3">
-          <VoiceSettings />
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle>{t.analyze.key.title}</SectionTitle>
-        <div className="mt-3">
-          <ApiKeyForm />
-        </div>
+      <Card className="flex flex-wrap items-center justify-between gap-3" data-testid="profile-settings-link">
+        <p className="text-sm">{t.settings.profileLink}</p>
+        <Link to="/impostazioni" className={buttonClass('secondary')}>
+          <Icon name="settings" size={18} />
+          {t.settings.open}
+        </Link>
       </Card>
 
       <Card>

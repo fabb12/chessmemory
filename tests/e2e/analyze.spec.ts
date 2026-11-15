@@ -230,14 +230,24 @@ test('analizza: con Opus la lettura rapida (che si può spegnere) e il ripiego l
     });
   });
   await openAnalyze(page);
+  // Il modello si sceglie nelle Impostazioni (Analizza mostra quello in uso e il collegamento).
+  await expect(page.getByTestId('model-link')).toContainText('Haiku 5.5');
+  await page.getByTestId('model-link').getByRole('link').click();
+  await expect(page.getByTestId('settings-page')).toBeVisible();
   // Con Haiku (predefinito) la lettura rapida non c'è.
   await expect(page.getByTestId('claude-model')).toHaveValue('claude-haiku-5-5');
   await expect(page.getByTestId('fast-toggle')).toHaveCount(0);
   await page.getByTestId('claude-model').selectOption('claude-opus-5-5');
+  await expect(page.getByTestId('fast-toggle')).toBeChecked();
+  await page.getByTestId('nav-settings').click();
+  await page.goBack();
+  await expect(page.getByTestId('model-link')).toContainText('Opus 5.5');
   await page.locator('input[type=file]').setInputFiles({ name: 'board.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByTestId('analyze-turn')).toBeVisible({ timeout: 30_000 });
   expect(bodies[0]).toMatchObject({ model: 'claude-opus-5-5', speed: 'fast', fallbacks: 'default' });
+  await page.getByTestId('nav-settings').click();
   await page.getByTestId('fast-toggle').uncheck();
+  await page.goBack();
   await page.locator('input[type=file]').setInputFiles({ name: 'board2.png', mimeType: 'image/png', buffer: PNG });
   await expect.poll(() => bodies.length).toBeGreaterThanOrEqual(2);
   expect(bodies[bodies.length - 1]).toMatchObject({ model: 'claude-opus-5-5' });

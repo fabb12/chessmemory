@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CLAUDE_MODELS, looksLikeApiKey, setApiKey, setModel, useApiKey, useModel } from '../../features/assistant/claude';
+import { Link } from 'react-router-dom';
+import { CLAUDE_MODELS, looksLikeApiKey, setApiKey, setFastMode, setModel, useApiKey, useFastMode, useModel } from '../../features/assistant/claude';
 import { t } from '../../i18n';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -30,7 +31,46 @@ export function ModelPicker() {
   );
 }
 
-/** Inserimento della chiave API di Anthropic (salvata solo su questo dispositivo) e scelta del modello. */
+/** Modello di Claude e, se il modello la permette, lettura rapida: la sezione delle Impostazioni. */
+export function ModelSettings() {
+  const model = useModel();
+  const fast = useFastMode();
+  return (
+    <div className="space-y-3">
+      <ModelPicker />
+      {model.fast && (
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={fast}
+            onChange={(e) => setFastMode(e.target.checked)}
+            className="mt-1 size-5 accent-[var(--accent)]"
+            data-testid="fast-toggle"
+          />
+          <span>
+            <span className="block text-sm font-semibold">{t.analyze.fast.label}</span>
+            <span className="block text-xs text-muted">{t.analyze.fast.help}</span>
+          </span>
+        </label>
+      )}
+    </div>
+  );
+}
+
+/** Riga breve con il modello in uso e il collegamento alle Impostazioni per cambiarlo. */
+export function ModelLink() {
+  const model = useModel();
+  return (
+    <p className="text-sm text-muted" data-testid="model-link">
+      {t.settings.modelInUse(t.analyze.model.names[model.id] ?? model.id)}{' '}
+      <Link to="/impostazioni" className="font-semibold text-accent-strong underline underline-offset-2">
+        {t.settings.change}
+      </Link>
+    </p>
+  );
+}
+
+/** Inserimento della chiave API di Anthropic (salvata solo su questo dispositivo). */
 export function ApiKeyForm() {
   const saved = useApiKey();
   const [draft, setDraft] = useState('');
@@ -46,7 +86,6 @@ export function ApiKeyForm() {
         <Button variant="secondary" icon={<Icon name="trash" size={16} />} onClick={() => setApiKey('')}>
           {t.analyze.key.remove}
         </Button>
-        <ModelPicker />
       </div>
     );
   }
@@ -99,7 +138,6 @@ export function ApiKeyForm() {
       <Button type="submit" icon={<Icon name="check" size={16} />}>
         {t.analyze.key.save}
       </Button>
-      <ModelPicker />
     </form>
   );
 }

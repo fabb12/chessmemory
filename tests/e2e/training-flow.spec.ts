@@ -191,7 +191,7 @@ test.describe('flusso completo di allenamento', () => {
     await page.getByTestId('resume-training').click();
     await expect(page.getByTestId('concept-runner')).toBeVisible();
 
-    for (const route of ['#/strategie', '#/progressi', '#/profilo', '#/informazioni']) {
+    for (const route of ['#/strategie', '#/progressi', '#/profilo', '#/impostazioni', '#/informazioni']) {
       await page.goto(`./${route}`);
       await expect(page.locator('h1')).toBeVisible();
       expect(await noOverflow(), route).toBe(true);
@@ -227,7 +227,7 @@ test.describe('flusso completo di allenamento', () => {
     await expect(page.getByTestId('item-progress')).toContainText('Concetto 1 di 1');
   });
 
-  test('voce: si accende e si spegne dalla barra e dal profilo, e i pulsanti Ascolta spariscono da spenta', async ({ page }) => {
+  test('voce: si accende e si spegne dalla barra e dalle impostazioni, e i pulsanti Ascolta spariscono da spenta', async ({ page }) => {
     await completeOnboarding(page);
     await page.goto('./#/strategie/pin');
     const toggle = page.getByTestId('voice-toggle');
@@ -239,8 +239,9 @@ test.describe('flusso completo di allenamento', () => {
     await expect(toggle).toHaveAttribute('aria-label', /Voce spenta/);
     await expect(page.getByTestId('speak-button')).toHaveCount(0);
 
-    // La scelta resta anche nel Profilo e dopo il ricaricamento
+    // La scelta resta anche nelle Impostazioni (raggiungibili dal Profilo) e dopo il ricaricamento
     await page.goto('./#/profilo');
+    await page.getByTestId('profile-settings-link').getByRole('link').click();
     await expect(page.getByTestId('voice-enabled')).not.toBeChecked();
     await page.reload();
     await expect(page.getByTestId('voice-toggle')).toHaveAttribute('aria-label', /Voce spenta/);
