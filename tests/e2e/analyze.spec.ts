@@ -260,13 +260,15 @@ test('analizza: con Opus la lettura rapida (che si può spegnere) e il ripiego l
  */
 const FAKE_CAMERA = `
 (() => {
-  const W = 640, H = 480, X0 = 120, Y0 = 40, S = 50;
+  const W = 640, H = 480, X0BASE = 120, Y0 = 40, S = 50;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   window.__board = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
   window.__hand = false;
   const ctx = canvas.getContext('2d');
   function draw() {
+    // window.__shake = true: il telefono si sposta un poco (clip breve da angoli diversi).
+    const X0 = X0BASE + (window.__shake ? Math.round(Math.random() * 10) : 0);
     ctx.fillStyle = '#5a6b4a'; ctx.fillRect(0, 0, W, H);
     const rows = window.__board.split('/');
     for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
@@ -374,6 +376,29 @@ test('modalità tutor: legge una volta, poi riconosce le mosse senza Claude e pa
   expect(spoken.some((text) => text.startsWith('Il Nero ha giocato e5. Tocca a te: ti consiglio'))).toBe(true);
   expect(spoken.at(-1)).toContain('Il Bianco minaccia matto');
   expect(JSON.stringify(counter.bodies.at(-1))).toContain('2–3 frasi');
+});
+
+test('clip breve: più inquadrature per YOLO e la vista più diversa anche a Claude', async ({ page }) => {
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+  const startGrid = START.split('/').map((row) => row.replace(/\d/g, (d) => '.'.repeat(Number(d))));
+  const counter = await mockClaude(page, startGrid, {
+    side_to_move: 'unknown',
+    board_corners: { top_left: { x: 83, y: 83 }, top_right: { x: 917, y: 83 }, bottom_right: { x: 917, y: 917 }, bottom_left: { x: 83, y: 917 } },
+  });
+  await page.addInitScript(FAKE_CAMERA);
+  await openAnalyze(page);
+  await page.getByTestId('camera-start').click();
+  await page.waitForFunction(() => (document.querySelector('[data-testid=camera-video]') as HTMLVideoElement | null)?.videoWidth === 640);
+  await page.evaluate(() => ((window as unknown as { __shake: boolean }).__shake = true));
+
+  await page.getByTestId('capture-clip').click();
+  await expect(page.getByTestId('capture-clip')).toContainText('Registro');
+  await expect(page.getByTestId('read-views')).toContainText('inquadrature', { timeout: 30_000 });
+  expect(counter.readings).toBe(1);
+  // Claude riceve la foto principale e la vista più diversa, con l'istruzione di usarla per i pezzi coperti.
+  const content = (counter.bodies[0]!.messages as { content: { type: string; text?: string }[] }[])[0]!.content;
+  expect(content.filter((b) => b.type === 'image')).toHaveLength(2);
+  expect(content.find((b) => b.type === 'text')?.text).toContain('SAME position');
 });
 
 test('modalità tutor con foto: legge solo quando scatti, una foto per mossa', async ({ page }) => {

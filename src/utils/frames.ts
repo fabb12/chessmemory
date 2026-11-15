@@ -133,6 +133,50 @@ export function frameSignature(video: HTMLVideoElement): Uint8Array | null {
   return out;
 }
 
+/**
+ * Nitidezza di una miniatura (energia del gradiente): serve a scegliere, nella
+ * clip breve, i fotogrammi non mossi.
+ */
+export function sharpness(signature: Uint8Array): number {
+  const side = Math.round(Math.sqrt(signature.length));
+  let sum = 0;
+  for (let y = 0; y < side - 1; y++) {
+    for (let x = 0; x < side - 1; x++) {
+      const v = signature[y * side + x]!;
+      const dx = signature[y * side + x + 1]! - v;
+      const dy = signature[(y + 1) * side + x]! - v;
+      sum += dx * dx + dy * dy;
+    }
+  }
+  return sum / Math.max(1, (side - 1) * (side - 1));
+}
+
+export interface ClipFrame {
+  frame: CapturedFrame;
+  signature: Uint8Array;
+}
+
+/**
+ * Sceglie i fotogrammi della clip: scarta quelli mossi, mette per primo il più
+ * nitido (la foto principale) e indica quello più diverso da lui (l'angolo di
+ * vista più lontano), da mostrare anche a Claude per i pezzi coperti.
+ */
+export function pickClipFrames(frames: readonly ClipFrame[], maxViews = 5): { best: ClipFrame; others: ClipFrame[]; farthest: ClipFrame | null } | null {
+  if (frames.length === 0) return null;
+  const scored = frames.map((f) => ({ f, s: sharpness(f.signature) })).sort((a, b) => b.s - a.s);
+  const top = scored[0]!.s;
+  const sharp = scored.filter((x) => x.s >= 0.6 * top).map((x) => x.f);
+  const best = sharp[0]!;
+  // Tra i nitidi, i più diversi dal migliore per primi: viste più varie = più occlusioni risolte.
+  const others = sharp
+    .slice(1)
+    .map((f) => ({ f, d: frameDifference(best.signature, f.signature) }))
+    .sort((a, b) => b.d - a.d)
+    .slice(0, maxViews - 1);
+  const farthest = others[0] && others[0].d > 0.02 ? others[0].f : null;
+  return { best, others: others.map((o) => o.f), farthest };
+}
+
 /** Frazione (0–1) di pixel cambiati tra due miniature. */
 export function frameDifference(a: Uint8Array, b: Uint8Array): number {
   if (a.length !== b.length || a.length === 0) return 1;

@@ -285,4 +285,40 @@ test.describe('flusso completo di allenamento', () => {
       expect(await page.locator('[data-testid^="game-link-"]').count()).toBeGreaterThanOrEqual(5);
     }
   });
+
+  test('percorso a step: lezione completa con il perché del tutor, poi si sblocca la successiva', async ({ page }) => {
+    await completeOnboarding(page);
+    await page.goto('./#/allenati');
+    const path = page.getByTestId('lesson-path');
+    await expect(path).toBeVisible();
+    await expect(page.getByTestId('path-progress')).toContainText('0 lezioni superate');
+    // Lezioni bloccate finché non si supera la precedente; si arriva al livello Maestro.
+    await expect(page.getByTestId('path-level-5')).toContainText('Maestro');
+    await expect(page.getByTestId('path-lesson-anastasia-mate')).toHaveAttribute('data-status', 'locked');
+    const firstTitle = await page.getByTestId('path-next').locator('p').nth(1).textContent();
+
+    await page.getByTestId('path-start').click();
+    // La lezione parte sempre dalla fase OSSERVA: il tutor mostra l'idea.
+    await expect(page.getByTestId('observe-phase')).toBeVisible();
+    await page.getByRole('button', { name: 'Ho capito, ora provo io' }).click();
+    const task = page.getByTestId('recall-task');
+    const exercise = exerciseOf(await task.getAttribute('data-exercise-id'));
+    for (const step of exercise.solution) await clickMove(task, step.move);
+    // Dopo la mossa giusta il tutor spiega perché: mossa per mossa e principio.
+    await expect(page.getByTestId('why-panel')).toBeVisible();
+    await expect(page.getByTestId('why-steps').locator('li')).toHaveCount(exercise.solution.reduce((n, s) => n + (s.reply ? 2 : 1), 0));
+    await expect(page.getByTestId('why-panel')).toContainText('Il principio da ricordare');
+    await page.getByRole('button', { name: 'Continua' }).click();
+    await answerQuestion(page);
+    await solveTask(page, 'transfer-task');
+
+    await expect(page.getByTestId('concept-done')).toBeVisible();
+    await expect(page.getByTestId('lesson-takeaway')).toBeVisible();
+    await expect(page.getByTestId('lesson-next')).toBeVisible();
+    // «Torna al percorso»: la prima lezione è superata e la seconda è sbloccata.
+    await page.getByTestId('concept-next').click();
+    await expect(page.getByTestId('path-next')).not.toContainText(firstTitle!);
+    await expect(page.getByTestId('path-progress')).toContainText('1 lezioni superate');
+  });
+
 });
