@@ -34,6 +34,8 @@ interface ToneLines {
   finished: string;
   whyTo: string;
   aligned: string;
+  /** Saluto quando l'allievo chiude la lezione (il microfono si spegne). */
+  bye: string;
 }
 
 const LINES: Record<Tone, ToneLines> = {
@@ -47,6 +49,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'La partita è finita, {n}: {r}. Ripensiamo a che cosa abbiamo imparato.',
     whyTo: 'Ragioniamo insieme, {n}:',
     aligned: 'Bene {n}, la scacchiera è pronta: riprendiamo la lezione.',
+    bye: 'Va bene, {n}, per oggi chiudiamo la lezione. Spengo il microfono: quando vorrai riprendere, ti aspetto.',
   },
   normal: {
     hello: 'Ciao {n}!',
@@ -58,6 +61,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Complimenti {n}, partita finita: {r}.',
     whyTo: 'Ecco perché, {n}:',
     aligned: 'Perfetto {n}, la scacchiera è allineata.',
+    bye: 'Va bene {n}, ci fermiamo qui. Spengo il microfono.',
   },
   formal: {
     hello: 'Buongiorno {n}.',
@@ -69,6 +73,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Complimenti {n}, la partita è conclusa: {r}.',
     whyTo: 'Le spiego il motivo, {n}:',
     aligned: 'Perfetto {n}, la scacchiera è allineata.',
+    bye: 'Come desidera, {n}. Ci fermiamo qui e spengo il microfono.',
   },
   friendly: {
     hello: 'Ciao {n}! Che bello vederti.',
@@ -80,6 +85,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Che bella partita, {n}! Finita: {r}.',
     whyTo: 'Ti spiego, {n}:',
     aligned: 'Perfetto {n}, ci siamo!',
+    bye: 'Va bene {n}, ci fermiamo qui! Spengo il microfono, a presto.',
   },
   playful: {
     hello: 'Ciao {n}! Pronto a far ballare i pezzi?',
@@ -91,6 +97,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Inchino e applausi!',
     whyTo: 'Ecco il trucco, {n}:',
     aligned: 'Perfetto {n}, tutto in ordine!',
+    bye: 'Ok {n}, i pezzi vanno a dormire! Spengo il microfono.',
   },
   youthful: {
     hello: 'Ehi {n}!',
@@ -102,6 +109,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'GG {n}! Partita finita: {r}.',
     whyTo: 'Ti spiego al volo, {n}:',
     aligned: 'Ok {n}, tutto a posto, si riparte!',
+    bye: 'Ok {n}, chiudiamo qui! Microfono spento, ciao!',
   },
   rude: {
     hello: '{n}. Cominciamo, non ho tutto il giorno.',
@@ -113,6 +121,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Era ora.',
     whyTo: 'Te lo dico una volta sola, {n}:',
     aligned: 'Bene {n}, finalmente la scacchiera è a posto.',
+    bye: 'Come vuoi, {n}. Spengo il microfono.',
   },
   unpleasant: {
     hello: 'Ah, {n}. Va bene, iniziamo.',
@@ -124,6 +133,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Sei arrivato in fondo, incredibile.',
     whyTo: 'Te lo spiego piano piano, {n}:',
     aligned: '{n}, ce l’hai fatta a sistemare i pezzi. Bravo, eh.',
+    bye: 'Già stanco, {n}? Va bene, spengo il microfono.',
   },
   arrogant: {
     hello: '{n}, oggi impari dal migliore.',
@@ -135,6 +145,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Grazie a me, ovviamente.',
     whyTo: 'Ascolta bene, {n}, perché lo dico io:',
     aligned: 'Perfetto {n}, ora possiamo continuare con la mia lezione.',
+    bye: 'Peccato, {n}: perdi la lezione del migliore. Spengo il microfono.',
   },
   offensive: {
     hello: 'Eccolo qua, {n} la schiappa!',
@@ -146,6 +157,7 @@ const LINES: Record<Tone, ToneLines> = {
     finished: 'Finita, {n}: {r}. Sei sopravvissuto, scarpone!',
     whyTo: 'Senti qua, {n}, zuccone:',
     aligned: 'Era ora, {n}, mani di burro: scacchiera a posto.',
+    bye: 'Ti arrendi già, {n}, schiappa? Va bene, spengo il microfono.',
   },
 };
 
@@ -209,6 +221,7 @@ export interface TonePhrases {
   finished(result: string, name: string): string;
   whyTo(name: string): string;
   aligned(name: string): string;
+  bye(name: string): string;
 }
 
 export function phrases(tone: Tone): TonePhrases {
@@ -223,6 +236,7 @@ export function phrases(tone: Tone): TonePhrases {
     finished: (r, n) => (tone === 'normal' && !n ? `Partita finita: ${r}.` : fill(l.finished, n, { r })),
     whyTo: (n) => fill(l.whyTo, n),
     aligned: (n) => fill(l.aligned, n),
+    bye: (n) => fill(l.bye, n),
   };
 }
 

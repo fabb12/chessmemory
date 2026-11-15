@@ -26,9 +26,40 @@ describe('comandi a voce del tutor', () => {
 });
 
 describe('interruzione, eco e nome', () => {
-  it('«basta», «stop», «aspetta» interrompono la voce', async () => {
+  it('«stop», «aspetta», «zitto» interrompono la voce', async () => {
     const { parseCommand } = await import('../../src/features/voice/listen');
-    for (const text of ['basta', 'Stop!', 'aspetta', 'zitto']) expect(parseCommand(text), text).toEqual({ kind: 'stop' });
+    for (const text of ['Stop!', 'aspetta', 'zitto']) expect(parseCommand(text), text).toEqual({ kind: 'stop' });
+  });
+
+  it('«basta», «non voglio giocare» e simili chiudono la lezione e spengono il microfono', async () => {
+    const { parseCommand, commandAtEnd } = await import('../../src/features/voice/listen');
+    for (const text of [
+      'basta',
+      'Basta!',
+      'basta così',
+      'ok basta',
+      'basta basta',
+      'basta per oggi',
+      'non voglio giocare',
+      'non voglio più giocare',
+      'Non ho voglia di giocare',
+      'non mi va di continuare',
+      'non voglio più',
+      'smettiamo',
+      'ho finito',
+      'finiamo qui',
+      'spegni il microfono',
+      'fine lezione',
+      'lasciamo perdere',
+      'arrivederci',
+    ]) {
+      expect(parseCommand(text), text).toEqual({ kind: 'quit' });
+    }
+    // Detto sopra la voce del tutor funziona lo stesso.
+    expect(commandAtEnd('il cavallo va in f3 basta')?.command).toEqual({ kind: 'quit' });
+    // «Basta» seguito da una richiesta resta un'interruzione con quella richiesta.
+    expect(parseCommand('basta, prossima mossa')).toEqual({ kind: 'next' });
+    expect(parseCommand('perché non voglio giocare la torre?')?.kind).toBe('question');
   });
 
   it('riconosce l’eco della voce dell’app', async () => {
@@ -116,9 +147,7 @@ describe('interrompere il tutor', () => {
   it('capisce tanti modi di dire «smetti di parlare»', async () => {
     const { parseCommand } = await import('../../src/features/voice/listen');
     for (const text of [
-      'basta così',
       'stop stop',
-      'ok basta',
       'aspetta un attimo',
       'aspetta aspetta',
       'un momento per favore',

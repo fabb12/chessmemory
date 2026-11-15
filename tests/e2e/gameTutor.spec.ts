@@ -285,11 +285,11 @@ test('tutor grandi partite: chiede il nome, si interrompe a voce e il microfono 
   const cancels = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
   await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('prossima mossa'));
   await expect(page.getByTestId('tutor-feedback')).toHaveText('1.e4.');
-  // «Basta» ferma la spiegazione in corso.
+  // «Zitta» ferma la spiegazione in corso.
   await page.waitForTimeout(100);
   const before = await page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0);
   expect(before).toBeGreaterThan(cancels);
-  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('basta'));
+  await page.evaluate(() => (window as unknown as { __say: (t: string) => void }).__say('zitta'));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __cancels?: number }).__cancels ?? 0)).toBeGreaterThan(before);
   // Una frase qualsiasi mentre parla (non un comando) non lo interrompe.
   await page.getByTestId('tutor-reveal').click();
@@ -435,6 +435,16 @@ test('tutor grandi partite: «basta», «scusa», «aspetta» lo zittiscono e il
   await expect(page.getByTestId('tutor-hold')).toBeVisible();
   await page.getByTestId('tutor-resume').click();
   await expect(page.getByTestId('tutor-hold')).toHaveCount(0);
+
+  // «Basta, non voglio più giocare»: saluto, microfono spento, lezione ferma.
+  await page.waitForTimeout(700);
+  await final('non voglio più giocare');
+  await expect(page.getByTestId('tutor-mic')).toHaveText('Attiva il microfono');
+  await expect(page.getByTestId('tutor-hold')).toContainText('microfono spento');
+  await expect.poll(async () => (await said(page)).at(-1) ?? '').toContain('Spengo il microfono');
+  await page.reload();
+  // Alla prossima apertura il microfono resta spento.
+  await expect(page.getByTestId('tutor-mic')).toHaveText('Attiva il microfono');
 });
 
 test('tutor grandi partite: tutte le richieste a voce funzionano', async ({ page }) => {
@@ -522,12 +532,12 @@ test('tutor grandi partite: storico della lezione, volume e niente interruzioni 
   const before = await cancels();
   await interim('nero muove pedone e7 e5'); // eco
   await interim('il nero muove il pedone da e7');
-  await interim('basta'); // una sola volta: forse è rumore
+  await interim('zitta'); // una sola volta: forse è rumore
   await interim('nero muove il pedone');
   await page.waitForTimeout(300);
   expect(await cancels()).toBe(before);
-  await interim('basta');
-  await interim('basta');
+  await interim('zitta');
+  await interim('zitta');
   await expect.poll(cancels).toBeGreaterThan(before);
 
   // Volume della voce.

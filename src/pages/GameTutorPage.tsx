@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChessBoard, type BoardArrow } from '../components/chess/ChessBoard';
+import { ModelLink } from '../components/assistant/ApiKeyForm';
 import { Button, buttonClass } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
@@ -627,6 +628,14 @@ export function GameTutorPage() {
       setHold(true);
       return;
     }
+    if (command.kind === 'quit') {
+      // «Basta», «non voglio più giocare»…: saluto, microfono spento e lezione ferma finché non si riprende.
+      speechTokenRef.current++;
+      stopListeningRef.current();
+      setHold(true);
+      speak(ph().bye(nameFor('attention')), 'game-tutor');
+      return;
+    }
     setHold(false);
     if (command.kind === 'resume') resume();
     else if (command.kind === 'next') {
@@ -698,6 +707,8 @@ export function GameTutorPage() {
     saveText(MIC_KEY, '');
     setListening(false);
   };
+  const stopListeningRef = useRef(stopListening);
+  stopListeningRef.current = stopListening;
   const startListeningRef = useRef(startListening);
   startListeningRef.current = startListening;
   useEffect(() => {
@@ -973,7 +984,7 @@ export function GameTutorPage() {
           {hold && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl bg-accent-soft px-3 py-2" data-testid="tutor-hold">
               <Icon name="chat" size={18} />
-              <p className="min-w-0 flex-1 text-sm font-semibold">{t.gameTutor.holdText}</p>
+              <p className="min-w-0 flex-1 text-sm font-semibold">{listening ? t.gameTutor.holdText : t.gameTutor.holdMicOff}</p>
               <Button size="sm" icon={<Icon name="play" size={16} />} onClick={resume} data-testid="tutor-resume">
                 {t.gameTutor.resumeLesson}
               </Button>
@@ -1213,7 +1224,7 @@ export function GameTutorPage() {
         {listening && volume > 0.8 && <p className="text-xs text-muted">{t.gameTutor.echoTip}</p>}
         {listening && ScreenAwake.supported() && <p className="text-xs text-muted">{t.gameTutor.awake}</p>}
         {!listeningSupported() && <p className="text-sm text-muted">{t.gameTutor.micUnsupported}</p>}
-        {!apiKey && <p className="text-xs text-muted">{t.gameTutor.noKey}</p>}
+        {!apiKey ? <p className="text-xs text-muted">{t.gameTutor.noKey}</p> : <ModelLink />}
         {micError && (
           <p role="alert" className="text-sm font-semibold text-bad">
             {micError}
