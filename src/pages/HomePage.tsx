@@ -122,6 +122,19 @@ export function HomePage({ profile }: { profile: Profile }) {
         </Card>
       </div>
 
+      <Link to="/gioca" className="block rounded-3xl" data-testid="home-play">
+        <Card className="cm-card-hover flex items-center gap-3 hover:border-accent/50">
+          <span className="rounded-2xl bg-accent-soft p-2.5 text-accent-strong">
+            <Icon name="brain" size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg font-semibold">{t.play.homeCardTitle}</span>
+            <span className="block text-sm text-muted">{t.play.homeCardText}</span>
+          </span>
+          <Icon name="arrowRight" />
+        </Card>
+      </Link>
+
       <Link to="/analizza" className="block rounded-3xl" data-testid="home-analyze">
         <Card className="cm-card-hover flex items-center gap-3 hover:border-accent/50">
           <span className="rounded-2xl bg-accent-soft p-2.5 text-accent-strong">
