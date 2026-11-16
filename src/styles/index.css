@@ -292,3 +292,57 @@ h1, h2, h3 {
     animation: none;
   }
 }
+
+/* Robi, il robot di «Gioca con l'AI»: fluttua, sbatte gli occhi, saluta e parla. */
+@keyframes robot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes robot-shadow {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.82); }
+}
+@keyframes robot-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@keyframes robot-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-16deg); }
+  75% { transform: rotate(12deg); }
+}
+@keyframes robot-talk {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1.25); }
+}
+@keyframes robot-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@keyframes robot-look {
+  0%, 100% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+}
+@keyframes robot-dot {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+.robot { overflow: visible; }
+.robot * { transform-box: fill-box; }
+.robot .robot-float { animation: robot-float 3.2s ease-in-out infinite; }
+.robot .robot-shadow { transform-origin: center; animation: robot-shadow 3.2s ease-in-out infinite; }
+.robot .robot-eyes { transform-origin: center; animation: robot-blink 4.5s ease-in-out infinite; }
+.robot .robot-eyes-think { animation: robot-look 1.6s ease-in-out infinite; }
+.robot .robot-arm { transform-origin: 0% 100%; }
+.robot .robot-arm-wave { animation: robot-wave 0.7s ease-in-out 4; }
+.robot .robot-mouth-talk { transform-origin: center; animation: robot-talk 0.28s ease-in-out infinite; }
+.robot .robot-antenna,
+.robot .robot-core { animation: robot-glow 2.4s ease-in-out infinite; }
+.robot[data-mood='thinking'] .robot-antenna,
+.robot[data-mood='thinking'] .robot-core { animation-duration: 0.6s; }
+.robot .robot-dots circle { animation: robot-dot 1.2s ease-in-out infinite; }
+.robot .robot-dots circle:nth-child(2) { animation-delay: 0.2s; }
+.robot .robot-dots circle:nth-child(3) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .robot * { animation: none !important; }
+}
