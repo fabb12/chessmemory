@@ -37,11 +37,11 @@ const TUTOR_PV = 3;
 /** Pausa prima della mossa dell'AI: una risposta istantanea disorienta. */
 const AI_DELAY_MS = 450;
 const PREFS_KEY = 'cm.play.prefs';
-/** Voce di Robi: un po' più acuta e svelta di quella del sistema. */
+/** Voce di Benot: un po' più acuta e svelta di quella del sistema. */
 const ROBOT_VOICE = 'play-robot';
 const ROBOT_SPEECH = { pitch: 1.3, rate: 1.05 };
 
-/** Una battuta di Robi nel fumetto. */
+/** Una battuta di Benot nel fumetto. */
 interface Said extends RobotLine {
   id: number;
   /** Testo letto ad alta voce, se più ricco di quello del fumetto. */
@@ -50,7 +50,7 @@ interface Said extends RobotLine {
 }
 
 interface SayOptions {
-  /** Sostituisce quello che Robi stava dicendo (e interrompe la voce). */
+  /** Sostituisce quello che Benot stava dicendo (e interrompe la voce). */
   fresh?: boolean;
   spoken?: string;
   testId?: string;
@@ -138,7 +138,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const speakingId = useSpeakingId();
   const tone = useTone();
 
-  /** Robi dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
+  /** Benot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
   const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
     if (!line?.text) return;
     const entry: Said = { ...line, id: ++saidId.current, spoken: options.spoken, testId: options.testId };
@@ -147,13 +147,13 @@ export function PlayPage({ profile }: { profile: Profile }) {
     (options.fresh ? speak : speakNext)(options.spoken ?? line.text, ROBOT_VOICE, ROBOT_SPEECH);
   }, []);
 
-  /** Robi tace: fumetto vuoto e voce ferma. */
+  /** Benot tace: fumetto vuoto e voce ferma. */
   const hush = useCallback(() => {
     setSaid([]);
     stopSpeaking();
   }, []);
 
-  // Uscendo dalla pagina Robi smette di parlare.
+  // Uscendo dalla pagina Benot smette di parlare.
   useEffect(
     () => () => {
       if (currentSpeakingId() === ROBOT_VOICE) stopSpeaking();
@@ -226,7 +226,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     })();
   }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError, say]);
 
-  // Fine partita e motore guasto: Robi lo dice.
+  // Fine partita e motore guasto: Benot lo dice.
   useEffect(() => {
     if (outcome) say(outcomeLine(outcome, getTone()), { fresh: outcome === 'resigned' });
   }, [outcome, say]);
@@ -262,7 +262,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setHint(null);
     setPreview(false);
     if (!tutor) {
-      // Senza tutor Robi reagisce «a caldo» a catture, scacchi, arrocchi.
+      // Senza tutor Benot reagisce «a caldo» a catture, scacchi, arrocchi.
       const reaction = reactToUserMove(fenBefore, move, ply, getTone());
       if (reaction) say(reaction, { fresh: true });
       else hush();
@@ -351,7 +351,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const speaking = speakingId !== null;
   const mood: RobotMood = thinking && !speaking ? 'thinking' : (said.findLast((line) => line.mood !== 'idle')?.mood ?? 'idle');
   const lastSaid = said.at(-1);
-  /** Toccando Robi: tace se sta parlando, altrimenti ripete quello che ha detto. */
+  /** Toccando Benot: tace se sta parlando, altrimenti ripete quello che ha detto. */
   const toggleRobotVoice = () => {
     if (speaking) return stopSpeaking();
     const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length, tone);

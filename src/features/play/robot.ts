@@ -8,7 +8,7 @@ import type { Tone } from '../tutor/tone';
 import { ROBOT_TONES } from './robotTone';
 
 /**
- * Robi, il robot avversario: le sue battute e la sua espressione in risposta a
+ * Benot, il robot avversario: le sue battute e la sua espressione in risposta a
  * quello che succede sulla scacchiera. Solo logica, niente interfaccia.
  */
 
@@ -64,7 +64,7 @@ export function reactToUserMove(fenBefore: string, move: AppliedMove, seed: numb
   return null;
 }
 
-/** Robi annuncia la propria mossa (senza spiegarla: quello lo fa il tutor). */
+/** Benot annuncia la propria mossa (senza spiegarla: quello lo fa il tutor). */
 export function announceOwnMove(move: AppliedMove, seed: number, tone: Tone = 'normal'): RobotLine {
   const parts = [r.iPlay(sanToLocal(move.san))];
   if (move.isCheckmate) return { text: parts[0]!, mood: 'happy' };
@@ -90,7 +90,7 @@ export function engineErrorLine(): RobotLine {
   return { text: r.engineError, mood: 'sad' };
 }
 
-/** Frase mostrata nel fumetto quando Robi non ha detto nulla in questo turno. */
+/** Frase mostrata nel fumetto quando Benot non ha detto nulla in questo turno. */
 export function idleLine(thinking: boolean, seed: number, tone: Tone = 'normal'): string {
   const l = toned(tone);
   return pick(thinking ? (l.thinking ?? r.thinking) : (l.yourTurn ?? r.yourTurn), seed);
