@@ -93,7 +93,7 @@ describe('tutor nella partita contro l’AI', () => {
     const fen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
     const afterAi = 'rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2';
     const note = explainAiMove(fen, 'g8f6', analysis(fen, [[['e7e5'], -30]]), analysis(afterAi, [[['e4e5'], 250]]))!;
-    expect(note.text).toContain('L’AI gioca Cf6.');
+    expect(note.text).toContain('Io gioco Cf6.');
     expect(note.text).toContain('Attacca il pedone in e4');
     expect(note.opportunity).toBe(true);
   });

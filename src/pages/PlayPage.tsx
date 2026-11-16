@@ -1,14 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { ChessBoard, type BoardArrow } from '../components/chess/ChessBoard';
+import { RobotAvatar } from '../components/play/RobotAvatar';
 import { Button } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { getEngine, type Analysis } from '../features/engine/engine';
-import { explainAiMove, explainUserMove, feedbackText, type AiMoveExplanation, type UserMoveFeedback } from '../features/play/coach';
+import { explainAiMove, explainUserMove, feedbackText, type UserMoveFeedback } from '../features/play/coach';
 import { isPlayLevel, pickAiMove, PLAY_LEVEL_IDS, PLAY_LEVELS, suggestedLevel, type PlayLevelId } from '../features/play/levels';
+import {
+  announceOwnMove,
+  engineErrorLine,
+  greeting,
+  hintLine,
+  idleLine,
+  outcomeLine,
+  reactToGrade,
+  reactToUserMove,
+  undoLine,
+  type RobotLine,
+  type RobotMood,
+} from '../features/play/robot';
+import { currentSpeakingId, getVoiceAuto, speak, speakNext, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
 import { applyUci, sideToMove } from '../utils/chess';
@@ -21,6 +36,24 @@ const TUTOR_PV = 3;
 /** Pausa prima della mossa dell'AI: una risposta istantanea disorienta. */
 const AI_DELAY_MS = 450;
 const PREFS_KEY = 'cm.play.prefs';
+/** Voce di Robi: un po' più acuta e svelta di quella del sistema. */
+const ROBOT_VOICE = 'play-robot';
+const ROBOT_SPEECH = { pitch: 1.3, rate: 1.05 };
+
+/** Una battuta di Robi nel fumetto. */
+interface Said extends RobotLine {
+  id: number;
+  /** Testo letto ad alta voce, se più ricco di quello del fumetto. */
+  spoken?: string;
+  testId?: string;
+}
+
+interface SayOptions {
+  /** Sostituisce quello che Robi stava dicendo (e interrompe la voce). */
+  fresh?: boolean;
+  spoken?: string;
+  testId?: string;
+}
 
 type ColorChoice = Side | 'random';
 
@@ -90,7 +123,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const [thinking, setThinking] = useState(false);
   const [judging, setJudging] = useState(false);
   const [engineError, setEngineError] = useState(false);
-  const [aiNote, setAiNote] = useState<AiMoveExplanation | null>(null);
+  const [said, setSaid] = useState<Said[]>([]);
   const [feedback, setFeedback] = useState<(UserMoveFeedback & { fenBefore: string; ply: number }) | null>(null);
   const [grades, setGrades] = useState<Record<number, string>>({});
   const [hint, setHint] = useState<Uci | null>(null);
@@ -100,6 +133,31 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const token = useRef(0);
   const aiPendingFor = useRef<string | null>(null);
   const cache = useRef(new Map<string, Promise<Analysis>>());
+  const saidId = useRef(0);
+  const speakingId = useSpeakingId();
+
+  /** Robi dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
+  const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
+    if (!line?.text) return;
+    const entry: Said = { ...line, id: ++saidId.current, spoken: options.spoken, testId: options.testId };
+    setSaid((current) => (options.fresh ? [entry] : [...current, entry]));
+    if (!getVoiceAuto()) return;
+    (options.fresh ? speak : speakNext)(options.spoken ?? line.text, ROBOT_VOICE, ROBOT_SPEECH);
+  }, []);
+
+  /** Robi tace: fumetto vuoto e voce ferma. */
+  const hush = useCallback(() => {
+    setSaid([]);
+    stopSpeaking();
+  }, []);
+
+  // Uscendo dalla pagina Robi smette di parlare.
+  useEffect(
+    () => () => {
+      if (currentSpeakingId() === ROBOT_VOICE) stopSpeaking();
+    },
+    [],
+  );
 
   const updatePrefs = (patch: Partial<Prefs>) => {
     setPrefs((current) => {
@@ -147,10 +205,14 @@ export function PlayPage({ profile }: { profile: Profile }) {
         if (!move) return;
         setPlies((list) => [...list, { fenBefore: fen, uci: move.uci, san: move.san, color: move.color, fen: move.fen }]);
         setThinking(false);
-        if (!tutor) return;
+        if (!tutor) {
+          say(announceOwnMove(move, plies.length));
+          return;
+        }
         const reply = await analyse(move.fen, TUTOR_DEPTH, TUTOR_PV);
         if (tk !== token.current) return;
-        setAiNote(explainAiMove(fen, move.uci, analysis, reply, previous ? { fenBefore: previous.fenBefore, uci: previous.uci } : undefined));
+        const note = explainAiMove(fen, move.uci, analysis, reply, previous ? { fenBefore: previous.fenBefore, uci: previous.uci } : undefined);
+        if (note) say({ text: note.text, mood: note.opportunity ? 'worried' : 'idle' }, { testId: 'tutor-ai-note' });
       } catch {
         if (tk === token.current) setEngineError(true);
       } finally {
@@ -160,7 +222,15 @@ export function PlayPage({ profile }: { profile: Profile }) {
         }
       }
     })();
-  }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError]);
+  }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError, say]);
+
+  // Fine partita e motore guasto: Robi lo dice.
+  useEffect(() => {
+    if (outcome) say(outcomeLine(outcome), { fresh: outcome === 'resigned' });
+  }, [outcome, say]);
+  useEffect(() => {
+    if (engineError) say(engineErrorLine(), { fresh: true });
+  }, [engineError, say]);
 
   const startGame = () => {
     token.current++;
@@ -172,11 +242,11 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setThinking(false);
     setJudging(false);
     setEngineError(false);
-    setAiNote(null);
     setFeedback(null);
     setGrades({});
     setHint(null);
     setPreview(false);
+    say(greeting(userColor, prefs.tutor), { fresh: true });
   };
 
   const onMove = (uci: Uci) => {
@@ -189,7 +259,14 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setPlies((list) => [...list, { fenBefore, uci: move.uci, san: move.san, color: move.color, fen: move.fen }]);
     setHint(null);
     setPreview(false);
-    if (!tutor) return;
+    if (!tutor) {
+      // Senza tutor Robi reagisce «a caldo» a catture, scacchi, arrocchi.
+      const reaction = reactToUserMove(fenBefore, move, ply);
+      if (reaction) say(reaction, { fresh: true });
+      else hush();
+      return;
+    }
+    hush();
     const tk = token.current;
     setJudging(true);
     setFeedback(null);
@@ -202,6 +279,8 @@ export function PlayPage({ profile }: { profile: Profile }) {
         if (result) {
           setFeedback({ ...result, fenBefore, ply });
           setGrades((g) => ({ ...g, [ply]: result.grade }));
+          const reaction = reactToGrade(result.grade, ply);
+          say(reaction, { spoken: [reaction.text, result.why, result.better].filter(Boolean).join(' ') });
         }
       } catch {
         if (tk === token.current) setEngineError(true);
@@ -228,17 +307,21 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setResigned(false);
     setThinking(false);
     setJudging(false);
-    setAiNote(null);
     setFeedback(null);
     setHint(null);
     setPreview(false);
+    say(undoLine(index), { fresh: true });
   };
 
   const showHint = async () => {
     const tk = token.current;
     try {
       const analysis = await analyse(fen, TUTOR_DEPTH, TUTOR_PV);
-      if (tk === token.current) setHint(analysis.lines[0]?.pv[0] ?? null);
+      if (tk !== token.current) return;
+      const best = analysis.lines[0]?.pv[0] ?? null;
+      setHint(best);
+      const san = best ? applyUci(fen, best)?.san : null;
+      if (san) say(hintLine(sanToLocal(san)), { fresh: true });
     } catch {
       setEngineError(true);
     }
@@ -263,12 +346,25 @@ export function PlayPage({ profile }: { profile: Profile }) {
     { mistakes: 0, blunders: 0 },
   );
 
+  const speaking = speakingId !== null;
+  const mood: RobotMood = thinking && !speaking ? 'thinking' : (said.findLast((line) => line.mood !== 'idle')?.mood ?? 'idle');
+  const lastSaid = said.at(-1);
+  /** Toccando Robi: tace se sta parlando, altrimenti ripete quello che ha detto. */
+  const toggleRobotVoice = () => {
+    if (speaking) return stopSpeaking();
+    const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length);
+    speak(text, ROBOT_VOICE, ROBOT_SPEECH);
+  };
+
   if (!setup) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <header className="animate-rise">
-          <PageTitle>{t.play.title}</PageTitle>
-          <p className="mt-1.5 text-lg text-muted">{t.play.intro}</p>
+        <header className="flex animate-rise items-center gap-4">
+          <RobotAvatar mood="happy" waving className="h-28 w-auto shrink-0 text-fg sm:h-32" />
+          <div className="min-w-0">
+            <PageTitle>{t.play.title}</PageTitle>
+            <p className="mt-1.5 text-lg text-muted">{t.play.intro}</p>
+          </div>
         </header>
 
         <Card className="space-y-6" data-testid="play-setup">
@@ -372,6 +468,37 @@ export function PlayPage({ profile }: { profile: Profile }) {
       </div>
 
       <div className="space-y-4">
+        <div className="flex items-start gap-3" data-testid="robot">
+          <button
+            type="button"
+            onClick={toggleRobotVoice}
+            title={speaking ? t.play.robot.stop : t.play.robot.repeat}
+            aria-label={speaking ? t.play.robot.stop : t.play.robot.repeat}
+            data-testid="robot-button"
+            className="shrink-0 rounded-3xl p-1 text-fg transition-transform hover:scale-105 active:scale-95"
+          >
+            <RobotAvatar
+              mood={mood}
+              speaking={speaking}
+              waving={lastSaid ? lastSaid.mood === 'happy' || lastSaid.mood === 'wow' : false}
+              waveKey={lastSaid?.id}
+              className="h-28 w-auto sm:h-32"
+            />
+          </button>
+          <div className="relative mt-3 min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-line bg-surface p-3 shadow-sm" data-testid="robot-bubble">
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent">{t.play.robot.name}</p>
+            {said.length === 0 ? (
+              <p className="mt-1 text-muted">{idleLine(thinking || judging, plies.length)}</p>
+            ) : (
+              said.map((line) => (
+                <p key={line.id} className="mt-1 animate-rise" data-testid={line.testId}>
+                  {line.text}
+                </p>
+              ))
+            )}
+          </div>
+        </div>
+
         <Card className="space-y-3">
           <TutorToggle on={tutor} onChange={(on) => updatePrefs({ tutor: on })} compact />
           <div className="flex flex-wrap gap-2">
@@ -388,7 +515,10 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 {t.play.resign}
               </Button>
             )}
-            <Button variant={outcome ? 'primary' : 'ghost'} size="sm" onClick={() => setSetup(null)} data-testid="play-new" icon={<Icon name="play" size={18} />}>
+            <Button variant={outcome ? 'primary' : 'ghost'} size="sm" onClick={() => {
+              hush();
+              setSetup(null);
+            }} data-testid="play-new" icon={<Icon name="play" size={18} />}>
               {t.play.newGame}
             </Button>
           </div>
@@ -413,7 +543,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 </p>
                 <p className="flex items-start justify-between gap-2 font-display text-lg font-semibold">
                   {feedback.title}
-                  <SpeakButton text={feedbackText(feedback)} auto />
+                  <SpeakButton text={feedbackText(feedback)} />
                 </p>
                 {feedback.why && (
                   <div>
@@ -437,16 +567,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 )}
               </div>
             )}
-            {aiNote && (
-              <div className="space-y-1 rounded-2xl border border-line bg-surface-2 p-3" data-testid="tutor-ai-note">
-                <p className="flex items-start justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-                  {t.play.aiMove}
-                  <SpeakButton text={aiNote.text} />
-                </p>
-                <p className="text-sm">{aiNote.text}</p>
-              </div>
-            )}
-            {!judging && !feedback && !aiNote && <p className="text-sm text-muted">{t.play.tutorIdle}</p>}
+            {!judging && !feedback && <p className="text-sm text-muted">{t.play.tutorIdle}</p>}
           </Card>
         )}
 
