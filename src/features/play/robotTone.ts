@@ -1,14 +1,14 @@
 import type { Tone } from '../tutor/tone';
 
 /**
- * Le battute di Benot nei diversi toni scelti nelle Impostazioni. Il tono
+ * Le battute di Benbot nei diversi toni scelti nelle Impostazioni. Il tono
  * «normale» usa le frasi del dizionario; gli altri sostituiscono solo le frasi
  * qui elencate (le altre restano quelle normali). Le frasi dicono sempre la
  * stessa cosa: cambia solo il modo.
  */
 export interface RobotToneLines {
   greeting?: (white: boolean) => string;
-  /** Prima della partita, se Benot non sa ancora come ti chiami. */
+  /** Prima della partita, se Benbot non sa ancora come ti chiami. */
   askName?: string;
   /** Saluto quando sa il tuo nome (appena detto o ricordato). */
   greetName?: (name: string, white: boolean, met: boolean) => string;
@@ -28,7 +28,7 @@ const who = (white: boolean) => (white ? 'Tu hai il Bianco e muovi per primo.' :
 
 export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
   master: {
-    greeting: (w) => `Buongiorno, sono Benot. ${who(w)} Giochiamo con calma e chiediamoci sempre il perché di ogni mossa.`,
+    greeting: (w) => `Buongiorno, sono Benbot. ${who(w)} Giochiamo con calma e chiediamoci sempre il perché di ogni mossa.`,
     grade: {
       best: ['Esatto: è la mossa migliore. Ricorda questa idea.', 'Molto bene, è proprio la mossa del maestro.'],
       good: ['Bene, è una mossa sensata.', 'Giusto, segui i principi.'],
@@ -50,8 +50,8 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   formal: {
-    greeting: (w) => `Buongiorno, sono Benot. ${w ? 'Lei ha il Bianco e muove per primo.' : 'Lei ha il Nero, quindi comincio io.'} Le auguro una buona partita.`,
-    askName: 'Buongiorno, sono Benot. Come si chiama?',
+    greeting: (w) => `Buongiorno, sono Benbot. ${w ? 'Lei ha il Bianco e muove per primo.' : 'Lei ha il Nero, quindi comincio io.'} Le auguro una buona partita.`,
+    askName: 'Buongiorno, sono Benbot. Come si chiama?',
     greetName: (name, w, met) =>
       `${met ? `Piacere, ${name}.` : `Buongiorno ${name}, lieto di rivederLa.`} ${w ? 'Lei ha il Bianco e muove per primo.' : 'Lei ha il Nero, quindi comincio io.'} Le auguro una buona partita.`,
     grade: {
@@ -75,7 +75,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   friendly: {
-    greeting: (w) => `Ciao amico! Sono Benot, che bello giocare con te! ${who(w)} Divertiamoci!`,
+    greeting: (w) => `Ciao amico! Sono Benbot, che bello giocare con te! ${who(w)} Divertiamoci!`,
     grade: {
       best: ['Che mossa fantastica!', 'Bravissimo, proprio la migliore!'],
       good: ['Bella mossa, continua così!', 'Ottimo, mi piace!'],
@@ -94,7 +94,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   playful: {
-    greeting: (w) => `Bip bop! Sono Benot, il robot più simpatico della scacchiera! ${who(w)} Che vinca il più furbo… cioè io!`,
+    greeting: (w) => `Bip bop! Sono Benbot, il robot più simpatico della scacchiera! ${who(w)} Che vinca il più furbo… cioè io!`,
     grade: {
       best: ['Accidenti, mi si sono fusi i circuiti: mossa perfetta!', 'Bip! Questa la metto nel mio album dei ricordi!'],
       good: ['Bella mossa! I miei bulloni applaudono.', 'Mi piace, hai stile!'],
@@ -116,7 +116,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   youthful: {
-    greeting: (w) => `Ehi, sono Benot! ${who(w)} Si gioca, let’s go!`,
+    greeting: (w) => `Ehi, sono Benbot! ${who(w)} Si gioca, let’s go!`,
     grade: {
       best: ['Bomba! Mossa top!', 'Spacchi, è proprio la migliore!'],
       good: ['Bella lì!', 'Ci sta, bella mossa!'],
@@ -135,7 +135,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   rude: {
-    greeting: (w) => `Sono Benot. ${who(w)} Muoviamoci, non ho tutto il giorno.`,
+    greeting: (w) => `Sono Benbot. ${who(w)} Muoviamoci, non ho tutto il giorno.`,
     grade: {
       best: ['Giusta. Era ora.', 'Ok, la migliore. Avanti.'],
       good: ['Va bene. Avanti.', 'Ok. Non perdiamo tempo.'],
@@ -154,7 +154,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   unpleasant: {
-    greeting: (w) => `Ah, sei tu. Sono Benot. ${who(w)} Vediamo quanto duri.`,
+    greeting: (w) => `Ah, sei tu. Sono Benbot. ${who(w)} Vediamo quanto duri.`,
     grade: {
       best: ['Mh, la migliore. Fortuna, scommetto.', 'Giusta. Non abituarti.'],
       good: ['Passabile.', 'Ok, non hai sbagliato. Stranamente.'],
@@ -173,7 +173,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   arrogant: {
-    greeting: (w) => `Sono Benot, il robot più forte che incontrerai. ${who(w)} Prova a resistere.`,
+    greeting: (w) => `Sono Benbot, il robot più forte che incontrerai. ${who(w)} Prova a resistere.`,
     grade: {
       best: ['La migliore. Io l’avevo vista prima di te, ovviamente.', 'Giusta: stai imparando da me.'],
       good: ['Discreta. Io avrei fatto meglio.', 'Non male, per un umano.'],
@@ -194,7 +194,7 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
     },
   },
   offensive: {
-    greeting: (w) => `Eccolo, la schiappa di turno! Sono Benot. ${who(w)} Vediamo quanto sei scarso.`,
+    greeting: (w) => `Eccolo, la schiappa di turno! Sono Benbot. ${who(w)} Vediamo quanto sei scarso.`,
     grade: {
       best: ['Miracolo! La schiappa ha trovato la migliore!', 'Incredibile, testone, ne hai azzeccata una!'],
       good: ['Ok, brocco, non male.', 'Anche una capra ogni tanto ci prende.'],

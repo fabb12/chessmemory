@@ -1,5 +1,5 @@
 /**
- * Nome dell'utente, chiesto a voce dal tutor delle partite e da Benot.
+ * Nome dell'utente, chiesto a voce dal tutor delle partite e da Benbot.
  * Resta solo su questo dispositivo (stessa chiave usata dal tutor delle partite).
  */
 const NAME_KEY = 'cm.user.name';

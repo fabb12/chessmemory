@@ -42,11 +42,11 @@ const TUTOR_PV = 3;
 /** Pausa prima della mossa dell'AI: una risposta istantanea disorienta. */
 const AI_DELAY_MS = 450;
 const PREFS_KEY = 'cm.play.prefs';
-/** Voce di Benot: un po' più acuta e svelta di quella del sistema. */
+/** Voce di Benbot: un po' più acuta e svelta di quella del sistema. */
 const ROBOT_VOICE = 'play-robot';
 const ROBOT_SPEECH = { pitch: 1.3, rate: 1.05 };
 
-/** Una battuta di Benot nel fumetto. */
+/** Una battuta di Benbot nel fumetto. */
 interface Said extends RobotLine {
   id: number;
   /** Testo letto ad alta voce, se più ricco di quello del fumetto. */
@@ -55,7 +55,7 @@ interface Said extends RobotLine {
 }
 
 interface SayOptions {
-  /** Sostituisce quello che Benot stava dicendo (e interrompe la voce). */
+  /** Sostituisce quello che Benbot stava dicendo (e interrompe la voce). */
   fresh?: boolean;
   spoken?: string;
   testId?: string;
@@ -134,14 +134,14 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const [grades, setGrades] = useState<Record<number, string>>({});
   const [hint, setHint] = useState<Uci | null>(null);
   const [preview, setPreview] = useState(false);
-  /** Come ti chiami: Benot lo chiede all'inizio e lo ascolta col microfono. */
+  /** Come ti chiami: Benbot lo chiede all'inizio e lo ascolta col microfono. */
   const [name, setName] = useState(loadUserName);
   const [askingName, setAskingName] = useState(false);
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const listenerRef = useRef<VoiceListener | null>(null);
-  /** Frasi dette da Benot mentre chiede il nome: il microfono non deve scambiarle per una risposta. */
+  /** Frasi dette da Benbot mentre chiede il nome: il microfono non deve scambiarle per una risposta. */
   const askedRef = useRef<string[]>([]);
   const retriesRef = useRef(0);
   const setupRef = useRef(setup);
@@ -158,7 +158,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const speakingId = useSpeakingId();
   const tone = useTone();
 
-  /** Benot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
+  /** Benbot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
   const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
     if (!line?.text) return;
     const entry: Said = { ...line, id: ++saidId.current, spoken: options.spoken, testId: options.testId };
@@ -167,13 +167,13 @@ export function PlayPage({ profile }: { profile: Profile }) {
     (options.fresh ? speak : speakNext)(options.spoken ?? line.text, ROBOT_VOICE, ROBOT_SPEECH);
   }, []);
 
-  /** Benot tace: fumetto vuoto e voce ferma. */
+  /** Benbot tace: fumetto vuoto e voce ferma. */
   const hush = useCallback(() => {
     setSaid([]);
     stopSpeaking();
   }, []);
 
-  // Uscendo dalla pagina Benot smette di parlare e il microfono si spegne.
+  // Uscendo dalla pagina Benbot smette di parlare e il microfono si spegne.
   useEffect(
     () => () => {
       listenerRef.current?.stop();
@@ -202,9 +202,9 @@ export function PlayPage({ profile }: { profile: Profile }) {
     [stopMic, say, prefs.tutor],
   );
 
-  /** Quello che il microfono sente mentre Benot aspetta il nome. */
+  /** Quello che il microfono sente mentre Benbot aspetta il nome. */
   const onHeardName = (text: string) => {
-    // L'eco della voce di Benot (il microfono sente l'altoparlante) non è una risposta.
+    // L'eco della voce di Benbot (il microfono sente l'altoparlante) non è una risposta.
     const spoken = [currentSpeechText(), ...askedRef.current];
     if (spoken.some((line) => isEcho(text, line))) return;
     const heard = parseName(text);
@@ -220,7 +220,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const onHeardNameRef = useRef(onHeardName);
   onHeardNameRef.current = onHeardName;
 
-  // Il microfono si accende quando Benot ha finito la domanda (così non sente sé stesso).
+  // Il microfono si accende quando Benbot ha finito la domanda (così non sente sé stesso).
   useEffect(() => {
     if (!askingName || listenerRef.current || micError || retriesRef.current >= 2 || speakingId === ROBOT_VOICE) return;
     if (!listeningSupported()) {
@@ -269,7 +269,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
 
   // Turno dell'AI: Stockfish analizza e la mossa viene scelta secondo il livello.
   useEffect(() => {
-    // Mentre Benot chiede il nome aspetta la risposta prima di muovere.
+    // Mentre Benbot chiede il nome aspetta la risposta prima di muovere.
     if (!setup || outcome || turn === setup.userColor || engineError || askingName) return;
     if (aiPendingFor.current === fen) return;
     aiPendingFor.current = fen;
@@ -310,7 +310,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     })();
   }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError, say, askingName]);
 
-  // Fine partita e motore guasto: Benot lo dice.
+  // Fine partita e motore guasto: Benbot lo dice.
   useEffect(() => {
     if (outcome) say(outcomeLine(outcome, getTone()), { fresh: outcome === 'resigned' });
   }, [outcome, say]);
@@ -364,13 +364,13 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setPlies((list) => [...list, { fenBefore, uci: move.uci, san: move.san, color: move.color, fen: move.fen }]);
     setHint(null);
     setPreview(false);
-    // Muovere mentre Benot aspetta il nome: si gioca, il nome si chiederà un'altra volta.
+    // Muovere mentre Benbot aspetta il nome: si gioca, il nome si chiederà un'altra volta.
     if (askingName) {
       stopMic();
       setAskingName(false);
     }
     if (!tutor) {
-      // Senza tutor Benot reagisce «a caldo» a catture, scacchi, arrocchi.
+      // Senza tutor Benbot reagisce «a caldo» a catture, scacchi, arrocchi.
       const reaction = reactToUserMove(fenBefore, move, ply, getTone());
       if (reaction) say(reaction, { fresh: true });
       else hush();
@@ -459,7 +459,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const speaking = speakingId !== null;
   const mood: RobotMood = thinking && !speaking ? 'thinking' : (said.findLast((line) => line.mood !== 'idle')?.mood ?? 'idle');
   const lastSaid = said.at(-1);
-  /** Toccando Benot: tace se sta parlando, altrimenti ripete quello che ha detto. */
+  /** Toccando Benbot: tace se sta parlando, altrimenti ripete quello che ha detto. */
   const toggleRobotVoice = () => {
     if (speaking) return stopSpeaking();
     const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length, tone);
