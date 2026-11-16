@@ -614,6 +614,8 @@ export interface ExplainInput {
   playerSide: 'w' | 'b' | null;
   /** Risposta breve (2–3 frasi) sulla sola mossa migliore: meno token, adatta alla voce del tutor. */
   brief?: boolean;
+  /** Istruzione sul tono di parlata (vuota = normale). */
+  tone?: string;
 }
 
 const EXPLAIN_SYSTEM = `Sei un istruttore di scacchi che parla a principianti e giocatori intermedi, anche bambini.
@@ -634,7 +636,7 @@ export async function explainPosition(input: ExplainInput): Promise<string> {
     const message = await createMessage(created.client, created.sdk, {
       max_tokens: 16000,
       output_config: { effort: 'low' },
-      system: EXPLAIN_SYSTEM,
+      system: input.tone ? systemWithTone(EXPLAIN_SYSTEM, input.tone) : EXPLAIN_SYSTEM,
       messages: [
         {
           role: 'user',

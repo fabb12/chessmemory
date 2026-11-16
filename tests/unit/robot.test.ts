@@ -52,4 +52,17 @@ describe('Robi, il robot di «Gioca con l’AI»', () => {
     expect(outcomeLine('loss').text).toContain('ho vinto io');
     expect(idleLine(true, 0)).not.toBe(idleLine(false, 0));
   });
+
+  it('parla nel tono scelto nelle Impostazioni, con le frasi normali come riserva', () => {
+    expect(greeting('w', false, 'formal').text).toContain('Lei ha il Bianco');
+    expect(greeting('b', false, 'master').text).toContain('comincio io');
+    expect(reactToGrade('best', 0, 'playful').text).not.toBe(reactToGrade('best', 0).text);
+    expect(reactToGrade('blunder', 0, 'rude').mood).toBe('sad');
+    expect(outcomeLine('win', 'youthful').text).toContain('GG');
+    // Il tono «amichevole» non ridefinisce lo scacco: resta la frase normale.
+    const checkFen = 'rnbqkbnr/ppp2ppp/8/3pp3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3';
+    const check = applyUci(checkFen, 'f1b5')!;
+    expect(reactToUserMove(checkFen, check, 0, 'friendly')!.text).toBe(reactToUserMove(checkFen, check, 0)!.text);
+    expect(idleLine(false, 0, 'formal')).toBe('Tocca a Lei.');
+  });
 });

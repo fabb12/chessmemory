@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
+import { getTone, TONE_PROMPTS } from '../features/tutor/tone';
 import type { Profile } from '../db/schema';
 import { judgeMove, type MoveFeedback } from '../features/analysis/moveCoach';
 import { winningLine } from '../features/analysis/winningLine';
@@ -152,6 +153,7 @@ export function AnalyzePage({ profile }: { profile: Profile }) {
           lines: result.lines.map((line) => formatLine(playLine(fen, line.pv.slice(0, 8)), false)),
           playerSide: myColorRef.current,
           brief: false,
+          tone: TONE_PROMPTS[getTone()],
         });
         if (id === evalId.current) setExplanation({ status: 'done', value: text });
       } catch (error) {
