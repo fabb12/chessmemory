@@ -293,7 +293,7 @@ h1, h2, h3 {
   }
 }
 
-/* Benot, il robot di «Gioca con l'AI»: fluttua, sbatte gli occhi, saluta e parla. */
+/* Benbot, il robot di «Gioca con l'AI»: fluttua, sbatte gli occhi, saluta e parla. */
 @keyframes robot-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }

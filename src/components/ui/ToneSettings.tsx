@@ -5,7 +5,7 @@ import { t } from '../../i18n';
 import { Button } from './Button';
 import { Icon } from './Icon';
 
-/** Tono di parlata di tutte le voci dell'AI (Benot, tutor, spiegazioni di Claude). */
+/** Tono di parlata di tutte le voci dell'AI (Benbot, tutor, spiegazioni di Claude). */
 export function ToneSettings() {
   const tone = useTone();
   return (

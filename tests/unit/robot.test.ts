@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { announceOwnMove, greeting, idleLine, outcomeLine, pick, reactToGrade, reactToUserMove } from '../../src/features/play/robot';
 import { applyUci } from '../../src/utils/chess';
 
-describe('Benot, il robot di «Gioca con l’AI»', () => {
+describe('Benbot, il robot di «Gioca con l’AI»', () => {
   it('sceglie le battute in modo ripetibile e le varia con il seme', () => {
     const list = ['a', 'b', 'c'];
     expect(pick(list, 4)).toBe('b');

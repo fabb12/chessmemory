@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Chess } from 'chess.js';
 import { ChessBoard, type BoardArrow } from '../components/chess/ChessBoard';
 import { RobotAvatar } from '../components/play/RobotAvatar';
@@ -12,8 +12,11 @@ import { explainAiMove, explainUserMove, feedbackText, type UserMoveFeedback } f
 import { isPlayLevel, pickAiMove, PLAY_LEVEL_IDS, PLAY_LEVELS, suggestedLevel, type PlayLevelId } from '../features/play/levels';
 import {
   announceOwnMove,
+  askNameLine,
   engineErrorLine,
+  greetByName,
   greeting,
+  nameRetryLine,
   hintLine,
   idleLine,
   outcomeLine,
@@ -24,7 +27,9 @@ import {
   type RobotMood,
 } from '../features/play/robot';
 import { getTone, useTone } from '../features/tutor/tone';
-import { currentSpeakingId, getVoiceAuto, speak, speakNext, stopSpeaking, useSpeakingId } from '../features/voice/speech';
+import { loadUserName, saveUserName } from '../features/tutor/userName';
+import { isEcho, listeningSupported, parseName, VoiceListener } from '../features/voice/listen';
+import { currentSpeakingId, currentSpeechText, getVoiceAuto, speak, speakNext, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
 import { applyUci, sideToMove } from '../utils/chess';
@@ -37,11 +42,11 @@ const TUTOR_PV = 3;
 /** Pausa prima della mossa dell'AI: una risposta istantanea disorienta. */
 const AI_DELAY_MS = 450;
 const PREFS_KEY = 'cm.play.prefs';
-/** Voce di Benot: un po' più acuta e svelta di quella del sistema. */
+/** Voce di Benbot: un po' più acuta e svelta di quella del sistema. */
 const ROBOT_VOICE = 'play-robot';
 const ROBOT_SPEECH = { pitch: 1.3, rate: 1.05 };
 
-/** Una battuta di Benot nel fumetto. */
+/** Una battuta di Benbot nel fumetto. */
 interface Said extends RobotLine {
   id: number;
   /** Testo letto ad alta voce, se più ricco di quello del fumetto. */
@@ -50,7 +55,7 @@ interface Said extends RobotLine {
 }
 
 interface SayOptions {
-  /** Sostituisce quello che Benot stava dicendo (e interrompe la voce). */
+  /** Sostituisce quello che Benbot stava dicendo (e interrompe la voce). */
   fresh?: boolean;
   spoken?: string;
   testId?: string;
@@ -129,16 +134,31 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const [grades, setGrades] = useState<Record<number, string>>({});
   const [hint, setHint] = useState<Uci | null>(null);
   const [preview, setPreview] = useState(false);
+  /** Come ti chiami: Benbot lo chiede all'inizio e lo ascolta col microfono. */
+  const [name, setName] = useState(loadUserName);
+  const [askingName, setAskingName] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [micError, setMicError] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const listenerRef = useRef<VoiceListener | null>(null);
+  /** Frasi dette da Benbot mentre chiede il nome: il microfono non deve scambiarle per una risposta. */
+  const askedRef = useRef<string[]>([]);
+  const retriesRef = useRef(0);
+  const setupRef = useRef(setup);
+  setupRef.current = setup;
 
   /** Cambia a ogni nuova partita o annullamento: i risultati vecchi vanno scartati. */
   const token = useRef(0);
   const aiPendingFor = useRef<string | null>(null);
+  /** Mosse giocate finora: un commento arrivato dopo una mossa successiva è superato. */
+  const plyCount = useRef(0);
+  plyCount.current = plies.length;
   const cache = useRef(new Map<string, Promise<Analysis>>());
   const saidId = useRef(0);
   const speakingId = useSpeakingId();
   const tone = useTone();
 
-  /** Benot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
+  /** Benbot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
   const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
     if (!line?.text) return;
     const entry: Said = { ...line, id: ++saidId.current, spoken: options.spoken, testId: options.testId };
@@ -147,19 +167,80 @@ export function PlayPage({ profile }: { profile: Profile }) {
     (options.fresh ? speak : speakNext)(options.spoken ?? line.text, ROBOT_VOICE, ROBOT_SPEECH);
   }, []);
 
-  /** Benot tace: fumetto vuoto e voce ferma. */
+  /** Benbot tace: fumetto vuoto e voce ferma. */
   const hush = useCallback(() => {
     setSaid([]);
     stopSpeaking();
   }, []);
 
-  // Uscendo dalla pagina Benot smette di parlare.
+  // Uscendo dalla pagina Benbot smette di parlare e il microfono si spegne.
   useEffect(
     () => () => {
+      listenerRef.current?.stop();
       if (currentSpeakingId() === ROBOT_VOICE) stopSpeaking();
     },
     [],
   );
+
+  const stopMic = useCallback(() => {
+    listenerRef.current?.stop();
+    listenerRef.current = null;
+    setListening(false);
+  }, []);
+
+  /** Fine della domanda sul nome: con il nome (appena detto) o senza (saltata). */
+  const finishName = useCallback(
+    (heard: string | null) => {
+      stopMic();
+      setAskingName(false);
+      setNameDraft('');
+      const current = setupRef.current;
+      if (!current) return;
+      if (heard) setName(saveUserName(heard));
+      say(heard ? greetByName(heard, current.userColor, prefs.tutor, true, getTone()) : greeting(current.userColor, prefs.tutor, getTone()), { fresh: true });
+    },
+    [stopMic, say, prefs.tutor],
+  );
+
+  /** Quello che il microfono sente mentre Benbot aspetta il nome. */
+  const onHeardName = (text: string) => {
+    // L'eco della voce di Benbot (il microfono sente l'altoparlante) non è una risposta.
+    const spoken = [currentSpeechText(), ...askedRef.current];
+    if (spoken.some((line) => isEcho(text, line))) return;
+    const heard = parseName(text);
+    if (heard && heard.toLowerCase() !== t.play.robot.name.toLowerCase()) return finishName(heard);
+    if (currentSpeakingId() === ROBOT_VOICE) return;
+    retriesRef.current++;
+    const retry = nameRetryLine();
+    askedRef.current.push(retry.text);
+    say(retry, { fresh: true });
+    // Dopo due tentativi il microfono si spegne: resta la casella per scriverlo.
+    if (retriesRef.current >= 2) stopMic();
+  };
+  const onHeardNameRef = useRef(onHeardName);
+  onHeardNameRef.current = onHeardName;
+
+  // Il microfono si accende quando Benbot ha finito la domanda (così non sente sé stesso).
+  useEffect(() => {
+    if (!askingName || listenerRef.current || micError || retriesRef.current >= 2 || speakingId === ROBOT_VOICE) return;
+    if (!listeningSupported()) {
+      setMicError(true);
+      return;
+    }
+    const listener = new VoiceListener({
+      onHeard: (text) => onHeardNameRef.current(text),
+      onError: () => {
+        stopMic();
+        setMicError(true);
+      },
+    });
+    if (!listener.start()) {
+      setMicError(true);
+      return;
+    }
+    listenerRef.current = listener;
+    setListening(true);
+  }, [askingName, speakingId, micError, stopMic]);
 
   const updatePrefs = (patch: Partial<Prefs>) => {
     setPrefs((current) => {
@@ -188,7 +269,8 @@ export function PlayPage({ profile }: { profile: Profile }) {
 
   // Turno dell'AI: Stockfish analizza e la mossa viene scelta secondo il livello.
   useEffect(() => {
-    if (!setup || outcome || turn === setup.userColor || engineError) return;
+    // Mentre Benbot chiede il nome aspetta la risposta prima di muovere.
+    if (!setup || outcome || turn === setup.userColor || engineError || askingName) return;
     if (aiPendingFor.current === fen) return;
     aiPendingFor.current = fen;
     const tk = token.current;
@@ -211,8 +293,10 @@ export function PlayPage({ profile }: { profile: Profile }) {
           say(announceOwnMove(move, plies.length, getTone()));
           return;
         }
+        const aiPly = plies.length + 1;
         const reply = await analyse(move.fen, TUTOR_DEPTH, TUTOR_PV);
-        if (tk !== token.current) return;
+        // Se intanto hai già mosso, il commento sulla mossa dell'AI non serve più.
+        if (tk !== token.current || plyCount.current !== aiPly) return;
         const note = explainAiMove(fen, move.uci, analysis, reply, previous ? { fenBefore: previous.fenBefore, uci: previous.uci } : undefined);
         if (note) say({ text: note.text, mood: note.opportunity ? 'worried' : 'idle' }, { testId: 'tutor-ai-note' });
       } catch {
@@ -224,9 +308,9 @@ export function PlayPage({ profile }: { profile: Profile }) {
         }
       }
     })();
-  }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError, say]);
+  }, [setup, outcome, turn, fen, plies, analyse, tutor, engineError, say, askingName]);
 
-  // Fine partita e motore guasto: Benot lo dice.
+  // Fine partita e motore guasto: Benbot lo dice.
   useEffect(() => {
     if (outcome) say(outcomeLine(outcome, getTone()), { fresh: outcome === 'resigned' });
   }, [outcome, say]);
@@ -248,7 +332,26 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setGrades({});
     setHint(null);
     setPreview(false);
-    say(greeting(userColor, prefs.tutor, getTone()), { fresh: true });
+    stopMic();
+    retriesRef.current = 0;
+    setMicError(false);
+    if (name) {
+      setAskingName(false);
+      say(greetByName(name, userColor, prefs.tutor, false, getTone()), { fresh: true });
+      return;
+    }
+    // Non sa ancora come ti chiami: lo chiede e poi accende il microfono.
+    const ask = askNameLine(getTone());
+    askedRef.current = [ask.text];
+    setAskingName(true);
+    say(ask, { fresh: true });
+  };
+
+  /** Il nome scritto nella casella (se il microfono non c'è o non ha capito). */
+  const submitName = (event: FormEvent) => {
+    event.preventDefault();
+    const typed = nameDraft.trim();
+    if (typed) finishName(typed.charAt(0).toUpperCase() + typed.slice(1));
   };
 
   const onMove = (uci: Uci) => {
@@ -261,8 +364,13 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setPlies((list) => [...list, { fenBefore, uci: move.uci, san: move.san, color: move.color, fen: move.fen }]);
     setHint(null);
     setPreview(false);
+    // Muovere mentre Benbot aspetta il nome: si gioca, il nome si chiederà un'altra volta.
+    if (askingName) {
+      stopMic();
+      setAskingName(false);
+    }
     if (!tutor) {
-      // Senza tutor Benot reagisce «a caldo» a catture, scacchi, arrocchi.
+      // Senza tutor Benbot reagisce «a caldo» a catture, scacchi, arrocchi.
       const reaction = reactToUserMove(fenBefore, move, ply, getTone());
       if (reaction) say(reaction, { fresh: true });
       else hush();
@@ -351,7 +459,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const speaking = speakingId !== null;
   const mood: RobotMood = thinking && !speaking ? 'thinking' : (said.findLast((line) => line.mood !== 'idle')?.mood ?? 'idle');
   const lastSaid = said.at(-1);
-  /** Toccando Benot: tace se sta parlando, altrimenti ripete quello che ha detto. */
+  /** Toccando Benbot: tace se sta parlando, altrimenti ripete quello che ha detto. */
   const toggleRobotVoice = () => {
     if (speaking) return stopSpeaking();
     const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length, tone);
@@ -425,6 +533,15 @@ export function PlayPage({ profile }: { profile: Profile }) {
 
           <TutorToggle on={tutor} onChange={(on) => updatePrefs({ tutor: on })} />
 
+          {name && (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-muted" data-testid="play-known-name">
+              {t.play.robot.knownName(name)}
+              <button type="button" className="font-semibold text-accent underline" onClick={() => setName(saveUserName(''))} data-testid="play-change-name">
+                {t.play.robot.changeName}
+              </button>
+            </p>
+          )}
+
           <Button size="lg" block onClick={startGame} data-testid="play-start" icon={<Icon name="play" />}>
             {t.play.start}
           </Button>
@@ -459,9 +576,32 @@ export function PlayPage({ profile }: { profile: Profile }) {
           lastMove={preview ? null : last ? { from: last.uci.slice(0, 2), to: last.uci.slice(2, 4) } : null}
           lastMoveTone={lastTone}
         />
-        <p role="status" aria-live="polite" className="text-center font-semibold" data-testid="play-status">
-          {status}
-        </p>
+        <div className="flex items-center justify-center gap-3">
+          <p role="status" aria-live="polite" className="text-center font-semibold" data-testid="play-status">
+            {status}
+          </p>
+          {!outcome && (
+            <button
+              type="button"
+              onClick={showHint}
+              disabled={!userTurn || thinking || engineError}
+              title={t.play.hint}
+              aria-label={t.play.hint}
+              aria-pressed={Boolean(hint && userTurn)}
+              data-testid="play-hint"
+              className={`inline-flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+                hint && userTurn ? 'border-warn bg-warn-soft text-warn' : 'border-line bg-surface text-fg hover:border-warn hover:text-warn'
+              }`}
+            >
+              <Icon name="bulb" size={22} />
+            </button>
+          )}
+        </div>
+        {hint && userTurn && (
+          <p className="text-center text-sm" data-testid="play-hint-text">
+            {t.play.hintText(sanToLocal(applyUci(fen, hint)?.san ?? hint))}
+          </p>
+        )}
         {outcome && outcome !== 'resigned' && tutor && (
           <p className="text-center text-sm text-muted" data-testid="play-summary">
             {t.play.summary(counts.mistakes, counts.blunders)}
@@ -498,17 +638,47 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 </p>
               ))
             )}
+            {askingName && (
+              <form onSubmit={submitName} className="mt-3 space-y-2 border-t border-line pt-3" data-testid="play-name">
+                {listening && (
+                  <p className="flex items-center gap-2 text-sm font-semibold text-accent" data-testid="play-name-listening">
+                    <span className="relative inline-flex size-8 items-center justify-center rounded-full bg-accent text-on-accent">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" aria-hidden="true" />
+                      <Icon name="mic" size={18} />
+                    </span>
+                    {t.play.robot.listening}
+                  </p>
+                )}
+                {micError && <p className="text-xs text-muted">{t.play.robot.micDenied}</p>}
+                <div className="flex gap-2">
+                  <label className="sr-only" htmlFor="play-name-input">
+                    {t.play.robot.nameLabel}
+                  </label>
+                  <input
+                    id="play-name-input"
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    placeholder={t.play.robot.namePlaceholder}
+                    autoComplete="given-name"
+                    maxLength={40}
+                    data-testid="play-name-input"
+                    className="min-h-10 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-sm"
+                  />
+                  <Button type="submit" size="sm" disabled={!nameDraft.trim()} data-testid="play-name-ok">
+                    {t.play.robot.nameOk}
+                  </Button>
+                </div>
+                <button type="button" onClick={() => finishName(null)} className="text-xs font-semibold text-muted underline" data-testid="play-name-skip">
+                  {t.play.robot.nameSkip}
+                </button>
+              </form>
+            )}
           </div>
         </div>
 
         <Card className="space-y-3">
           <TutorToggle on={tutor} onChange={(on) => updatePrefs({ tutor: on })} compact />
           <div className="flex flex-wrap gap-2">
-            {tutor && (
-              <Button variant="secondary" size="sm" onClick={showHint} disabled={!userTurn || thinking} data-testid="play-hint" icon={<Icon name="bulb" size={18} />}>
-                {t.play.hint}
-              </Button>
-            )}
             <Button variant="secondary" size="sm" onClick={undo} disabled={!plies.some((p) => p.color === setup.userColor)} data-testid="play-undo" icon={<Icon name="undo" size={18} />}>
               {t.play.undo}
             </Button>
@@ -519,16 +689,13 @@ export function PlayPage({ profile }: { profile: Profile }) {
             )}
             <Button variant={outcome ? 'primary' : 'ghost'} size="sm" onClick={() => {
               hush();
+              stopMic();
+              setAskingName(false);
               setSetup(null);
             }} data-testid="play-new" icon={<Icon name="play" size={18} />}>
               {t.play.newGame}
             </Button>
           </div>
-          {hint && userTurn && (
-            <p className="text-sm" data-testid="play-hint-text">
-              {t.play.hintText(sanToLocal(applyUci(fen, hint)?.san ?? hint))}
-            </p>
-          )}
         </Card>
 
         {tutor && (

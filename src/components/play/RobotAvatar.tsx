@@ -146,7 +146,7 @@ function Mouth({ mood, speaking }: { mood: RobotMood; speaking: boolean }) {
 }
 
 /**
- * Benot: robottino dalla testa grande e dalla faccia-schermo con occhi
+ * Benbot: robottino dalla testa grande e dalla faccia-schermo con occhi
  * enormi. Disegno piatto e semplice (contorno unico, pochi colori) così che
  * le espressioni si leggano bene anche in piccolo. Fluttua, sbatte gli occhi,
  * saluta e parla.

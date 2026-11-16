@@ -8,7 +8,7 @@ import type { Tone } from '../tutor/tone';
 import { ROBOT_TONES } from './robotTone';
 
 /**
- * Benot, il robot avversario: le sue battute e la sua espressione in risposta a
+ * Benbot, il robot avversario: le sue battute e la sua espressione in risposta a
  * quello che succede sulla scacchiera. Solo logica, niente interfaccia.
  */
 
@@ -35,6 +35,22 @@ function articled(piece: string): string {
 
 export function greeting(userColor: Side, tutor: boolean, tone: Tone = 'normal'): RobotLine {
   return { text: [(toned(tone).greeting ?? r.greeting)(userColor === 'w'), tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
+}
+
+/** Benbot si presenta e chiede come ti chiami. */
+export function askNameLine(tone: Tone = 'normal'): RobotLine {
+  return { text: toned(tone).askName ?? r.askName, mood: 'happy' };
+}
+
+/** Saluto con il tuo nome: `met` = te lo sei appena presentato, altrimenti se lo ricordava. */
+export function greetByName(name: string, userColor: Side, tutor: boolean, met: boolean, tone: Tone = 'normal'): RobotLine {
+  const line = (toned(tone).greetName ?? r.greetName)(name, userColor === 'w', met);
+  return { text: [line, tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
+}
+
+/** Non ha capito il nome: lo richiede (o propone di scriverlo). */
+export function nameRetryLine(): RobotLine {
+  return { text: r.nameRetry, mood: 'worried' };
 }
 
 const GRADE_MOOD: Record<MoveGrade, RobotMood> = { best: 'wow', good: 'happy', inaccuracy: 'worried', mistake: 'worried', blunder: 'sad' };
@@ -64,7 +80,7 @@ export function reactToUserMove(fenBefore: string, move: AppliedMove, seed: numb
   return null;
 }
 
-/** Benot annuncia la propria mossa (senza spiegarla: quello lo fa il tutor). */
+/** Benbot annuncia la propria mossa (senza spiegarla: quello lo fa il tutor). */
 export function announceOwnMove(move: AppliedMove, seed: number, tone: Tone = 'normal'): RobotLine {
   const parts = [r.iPlay(sanToLocal(move.san))];
   if (move.isCheckmate) return { text: parts[0]!, mood: 'happy' };
@@ -90,7 +106,7 @@ export function engineErrorLine(): RobotLine {
   return { text: r.engineError, mood: 'sad' };
 }
 
-/** Frase mostrata nel fumetto quando Benot non ha detto nulla in questo turno. */
+/** Frase mostrata nel fumetto quando Benbot non ha detto nulla in questo turno. */
 export function idleLine(thinking: boolean, seed: number, tone: Tone = 'normal'): string {
   const l = toned(tone);
   return pick(thinking ? (l.thinking ?? r.thinking) : (l.yourTurn ?? r.yourTurn), seed);
