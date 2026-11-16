@@ -23,6 +23,7 @@ import {
   type RobotLine,
   type RobotMood,
 } from '../features/play/robot';
+import { getTone, useTone } from '../features/tutor/tone';
 import { currentSpeakingId, getVoiceAuto, speak, speakNext, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
@@ -135,6 +136,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const cache = useRef(new Map<string, Promise<Analysis>>());
   const saidId = useRef(0);
   const speakingId = useSpeakingId();
+  const tone = useTone();
 
   /** Robi dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
   const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
@@ -206,7 +208,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
         setPlies((list) => [...list, { fenBefore: fen, uci: move.uci, san: move.san, color: move.color, fen: move.fen }]);
         setThinking(false);
         if (!tutor) {
-          say(announceOwnMove(move, plies.length));
+          say(announceOwnMove(move, plies.length, getTone()));
           return;
         }
         const reply = await analyse(move.fen, TUTOR_DEPTH, TUTOR_PV);
@@ -226,7 +228,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
 
   // Fine partita e motore guasto: Robi lo dice.
   useEffect(() => {
-    if (outcome) say(outcomeLine(outcome), { fresh: outcome === 'resigned' });
+    if (outcome) say(outcomeLine(outcome, getTone()), { fresh: outcome === 'resigned' });
   }, [outcome, say]);
   useEffect(() => {
     if (engineError) say(engineErrorLine(), { fresh: true });
@@ -246,7 +248,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setGrades({});
     setHint(null);
     setPreview(false);
-    say(greeting(userColor, prefs.tutor), { fresh: true });
+    say(greeting(userColor, prefs.tutor, getTone()), { fresh: true });
   };
 
   const onMove = (uci: Uci) => {
@@ -261,7 +263,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setPreview(false);
     if (!tutor) {
       // Senza tutor Robi reagisce «a caldo» a catture, scacchi, arrocchi.
-      const reaction = reactToUserMove(fenBefore, move, ply);
+      const reaction = reactToUserMove(fenBefore, move, ply, getTone());
       if (reaction) say(reaction, { fresh: true });
       else hush();
       return;
@@ -279,7 +281,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
         if (result) {
           setFeedback({ ...result, fenBefore, ply });
           setGrades((g) => ({ ...g, [ply]: result.grade }));
-          const reaction = reactToGrade(result.grade, ply);
+          const reaction = reactToGrade(result.grade, ply, getTone());
           say(reaction, { spoken: [reaction.text, result.why, result.better].filter(Boolean).join(' ') });
         }
       } catch {
@@ -310,7 +312,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
     setFeedback(null);
     setHint(null);
     setPreview(false);
-    say(undoLine(index), { fresh: true });
+    say(undoLine(index, getTone()), { fresh: true });
   };
 
   const showHint = async () => {
@@ -321,7 +323,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
       const best = analysis.lines[0]?.pv[0] ?? null;
       setHint(best);
       const san = best ? applyUci(fen, best)?.san : null;
-      if (san) say(hintLine(sanToLocal(san)), { fresh: true });
+      if (san) say(hintLine(sanToLocal(san), getTone()), { fresh: true });
     } catch {
       setEngineError(true);
     }
@@ -352,7 +354,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   /** Toccando Robi: tace se sta parlando, altrimenti ripete quello che ha detto. */
   const toggleRobotVoice = () => {
     if (speaking) return stopSpeaking();
-    const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length);
+    const text = said.length ? said.map((line) => line.spoken ?? line.text).join(' ') : idleLine(thinking, plies.length, tone);
     speak(text, ROBOT_VOICE, ROBOT_SPEECH);
   };
 
@@ -488,7 +490,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
           <div className="relative mt-3 min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-line bg-surface p-3 shadow-sm" data-testid="robot-bubble">
             <p className="text-xs font-semibold uppercase tracking-wide text-accent">{t.play.robot.name}</p>
             {said.length === 0 ? (
-              <p className="mt-1 text-muted">{idleLine(thinking || judging, plies.length)}</p>
+              <p className="mt-1 text-muted">{idleLine(thinking || judging, plies.length, tone)}</p>
             ) : (
               said.map((line) => (
                 <p key={line.id} className="mt-1 animate-rise" data-testid={line.testId}>

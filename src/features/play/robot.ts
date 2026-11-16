@@ -4,6 +4,8 @@ import type { AppliedMove } from '../../utils/chess';
 import { pieceAt } from '../../utils/chess';
 import { sanToLocal } from '../../utils/notation';
 import type { MoveGrade } from '../analysis/moveCoach';
+import type { Tone } from '../tutor/tone';
+import { ROBOT_TONES } from './robotTone';
 
 /**
  * Robi, il robot avversario: le sue battute e la sua espressione in risposta a
@@ -19,6 +21,9 @@ export interface RobotLine {
 
 const r = t.play.robot;
 
+/** Le battute nel tono scelto: quelle che il tono non ridefinisce restano normali. */
+const toned = (tone: Tone) => ROBOT_TONES[tone] ?? {};
+
 /** Sceglie una battuta in modo ripetibile: lo stesso `seed` dà la stessa frase. */
 export function pick(list: readonly string[], seed: number): string {
   return list[Math.abs(Math.trunc(seed)) % list.length] ?? '';
@@ -28,56 +33,57 @@ function articled(piece: string): string {
   return piece === 'alfiere' ? `l’${piece}` : piece === 'pedone' || piece === 'cavallo' || piece === 're' ? `il ${piece}` : `la ${piece}`;
 }
 
-export function greeting(userColor: Side, tutor: boolean): RobotLine {
-  return { text: [r.greeting(userColor === 'w'), tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
+export function greeting(userColor: Side, tutor: boolean, tone: Tone = 'normal'): RobotLine {
+  return { text: [(toned(tone).greeting ?? r.greeting)(userColor === 'w'), tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
 }
 
 const GRADE_MOOD: Record<MoveGrade, RobotMood> = { best: 'wow', good: 'happy', inaccuracy: 'worried', mistake: 'worried', blunder: 'sad' };
 
 /** Commento al giudizio del tutor sulla tua mossa. */
-export function reactToGrade(grade: MoveGrade, seed: number): RobotLine {
-  return { text: pick(r.grade[grade] ?? [], seed), mood: GRADE_MOOD[grade] ?? 'idle' };
+export function reactToGrade(grade: MoveGrade, seed: number, tone: Tone = 'normal'): RobotLine {
+  return { text: pick(toned(tone).grade?.[grade] ?? r.grade[grade] ?? [], seed), mood: GRADE_MOOD[grade] ?? 'idle' };
 }
 
 /**
  * Reazione «a caldo» alla tua mossa, senza analisi: catture, scacchi, arrocco,
  * promozione. Null se la mossa non ha nulla di speciale.
  */
-export function reactToUserMove(fenBefore: string, move: AppliedMove, seed: number): RobotLine | null {
+export function reactToUserMove(fenBefore: string, move: AppliedMove, seed: number, tone: Tone = 'normal'): RobotLine | null {
+  const l = toned(tone);
   if (move.isCheckmate) return null; // ne parla la battuta di fine partita
   if (move.isCapture) {
     const square = move.isEnPassant ? `${move.to[0]}${move.from[1]}` : move.to;
     const captured = pieceAt(fenBefore, square);
-    if (captured?.type === 'q') return { text: pick(r.lostQueen, seed), mood: 'sad' };
+    if (captured?.type === 'q') return { text: pick(l.lostQueen ?? r.lostQueen, seed), mood: 'sad' };
     const name = captured ? articled(t.pieces[captured.type]) : 'un pezzo';
-    return { text: pick(r.lostPiece(name), seed), mood: captured?.type === 'p' ? 'worried' : 'sad' };
+    return { text: pick((l.lostPiece ?? r.lostPiece)(name), seed), mood: captured?.type === 'p' ? 'worried' : 'sad' };
   }
-  if (move.isCheck) return { text: pick(r.inCheck, seed), mood: 'worried' };
+  if (move.isCheck) return { text: pick(l.inCheck ?? r.inCheck, seed), mood: 'worried' };
   if (move.isPromotion) return { text: pick(r.promoted, seed), mood: 'wow' };
   if (move.isCastle) return { text: pick(r.castled, seed), mood: 'happy' };
   return null;
 }
 
 /** Robi annuncia la propria mossa (senza spiegarla: quello lo fa il tutor). */
-export function announceOwnMove(move: AppliedMove, seed: number): RobotLine {
+export function announceOwnMove(move: AppliedMove, seed: number, tone: Tone = 'normal'): RobotLine {
   const parts = [r.iPlay(sanToLocal(move.san))];
   if (move.isCheckmate) return { text: parts[0]!, mood: 'happy' };
   if (move.isCheck) parts.push(pick(r.iCheck, seed));
-  else if (move.isCapture) parts.push(pick(r.iCapture, seed));
+  else if (move.isCapture) parts.push(pick(toned(tone).iCapture ?? r.iCapture, seed));
   return { text: parts.join(' '), mood: move.isCheck || move.isCapture ? 'happy' : 'idle' };
 }
 
-export function outcomeLine(outcome: 'win' | 'loss' | 'draw' | 'resigned'): RobotLine {
+export function outcomeLine(outcome: 'win' | 'loss' | 'draw' | 'resigned', tone: Tone = 'normal'): RobotLine {
   const mood: RobotMood = outcome === 'win' ? 'wow' : outcome === 'loss' ? 'happy' : outcome === 'draw' ? 'idle' : 'sad';
-  return { text: r.outcome[outcome] ?? '', mood };
+  return { text: toned(tone).outcome?.[outcome] ?? r.outcome[outcome] ?? '', mood };
 }
 
-export function hintLine(move: string): RobotLine {
-  return { text: r.hint(move), mood: 'happy' };
+export function hintLine(move: string, tone: Tone = 'normal'): RobotLine {
+  return { text: (toned(tone).hint ?? r.hint)(move), mood: 'happy' };
 }
 
-export function undoLine(seed: number): RobotLine {
-  return { text: pick(r.undo, seed), mood: 'idle' };
+export function undoLine(seed: number, tone: Tone = 'normal'): RobotLine {
+  return { text: pick(toned(tone).undo ?? r.undo, seed), mood: 'idle' };
 }
 
 export function engineErrorLine(): RobotLine {
@@ -85,6 +91,7 @@ export function engineErrorLine(): RobotLine {
 }
 
 /** Frase mostrata nel fumetto quando Robi non ha detto nulla in questo turno. */
-export function idleLine(thinking: boolean, seed: number): string {
-  return pick(thinking ? r.thinking : r.yourTurn, seed);
+export function idleLine(thinking: boolean, seed: number, tone: Tone = 'normal'): string {
+  const l = toned(tone);
+  return pick(thinking ? (l.thinking ?? r.thinking) : (l.yourTurn ?? r.yourTurn), seed);
 }

@@ -1,9 +1,10 @@
 import { ApiKeyForm, ModelSettings } from '../components/assistant/ApiKeyForm';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
+import { ToneSettings } from '../components/ui/ToneSettings';
 import { VoiceSettings } from '../components/ui/VoiceSettings';
 import { t } from '../i18n';
 
-/** Impostazioni dell'app: modello di Claude (con la lettura rapida), chiave API e voce. */
+/** Impostazioni dell'app: modello di Claude (con la lettura rapida), chiave API, tono dell'AI e voce. */
 export function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4" data-testid="settings-page">
@@ -23,6 +24,12 @@ export function SettingsPage() {
         <div className="mt-3">
           <ApiKeyForm />
         </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t.settings.toneSection}</SectionTitle>
+        <p className="mt-1 mb-3 text-sm text-muted">{t.settings.toneNote}</p>
+        <ToneSettings />
       </Card>
 
       <Card>

@@ -323,6 +323,10 @@ h1, h2, h3 {
   0%, 100% { transform: translateX(-2px); }
   50% { transform: translateX(2px); }
 }
+@keyframes robot-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
 @keyframes robot-dot {
   0%, 100% { opacity: 0.2; }
   50% { opacity: 1; }
@@ -340,6 +344,10 @@ h1, h2, h3 {
 .robot .robot-core { animation: robot-glow 2.4s ease-in-out infinite; }
 .robot[data-mood='thinking'] .robot-antenna,
 .robot[data-mood='thinking'] .robot-core { animation-duration: 0.6s; }
+.robot .robot-sparkles > * { transform-origin: center; animation: robot-twinkle 2.8s ease-in-out infinite; }
+.robot .robot-sparkles > :nth-child(2) { animation-delay: 0.9s; }
+.robot .robot-sparkles > :nth-child(3) { animation-delay: 1.6s; }
+.robot .robot-sparkles > :nth-child(4) { animation-delay: 2.2s; }
 .robot .robot-dots circle { animation: robot-dot 1.2s ease-in-out infinite; }
 .robot .robot-dots circle:nth-child(2) { animation-delay: 0.2s; }
 .robot .robot-dots circle:nth-child(3) { animation-delay: 0.4s; }
