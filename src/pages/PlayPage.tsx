@@ -133,6 +133,9 @@ export function PlayPage({ profile }: { profile: Profile }) {
   /** Cambia a ogni nuova partita o annullamento: i risultati vecchi vanno scartati. */
   const token = useRef(0);
   const aiPendingFor = useRef<string | null>(null);
+  /** Mosse giocate finora: un commento arrivato dopo una mossa successiva è superato. */
+  const plyCount = useRef(0);
+  plyCount.current = plies.length;
   const cache = useRef(new Map<string, Promise<Analysis>>());
   const saidId = useRef(0);
   const speakingId = useSpeakingId();
@@ -211,8 +214,10 @@ export function PlayPage({ profile }: { profile: Profile }) {
           say(announceOwnMove(move, plies.length, getTone()));
           return;
         }
+        const aiPly = plies.length + 1;
         const reply = await analyse(move.fen, TUTOR_DEPTH, TUTOR_PV);
-        if (tk !== token.current) return;
+        // Se intanto hai già mosso, il commento sulla mossa dell'AI non serve più.
+        if (tk !== token.current || plyCount.current !== aiPly) return;
         const note = explainAiMove(fen, move.uci, analysis, reply, previous ? { fenBefore: previous.fenBefore, uci: previous.uci } : undefined);
         if (note) say({ text: note.text, mood: note.opportunity ? 'worried' : 'idle' }, { testId: 'tutor-ai-note' });
       } catch {
@@ -459,9 +464,32 @@ export function PlayPage({ profile }: { profile: Profile }) {
           lastMove={preview ? null : last ? { from: last.uci.slice(0, 2), to: last.uci.slice(2, 4) } : null}
           lastMoveTone={lastTone}
         />
-        <p role="status" aria-live="polite" className="text-center font-semibold" data-testid="play-status">
-          {status}
-        </p>
+        <div className="flex items-center justify-center gap-3">
+          <p role="status" aria-live="polite" className="text-center font-semibold" data-testid="play-status">
+            {status}
+          </p>
+          {!outcome && (
+            <button
+              type="button"
+              onClick={showHint}
+              disabled={!userTurn || thinking || engineError}
+              title={t.play.hint}
+              aria-label={t.play.hint}
+              aria-pressed={Boolean(hint && userTurn)}
+              data-testid="play-hint"
+              className={`inline-flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors disabled:opacity-40 ${
+                hint && userTurn ? 'border-warn bg-warn-soft text-warn' : 'border-line bg-surface text-fg hover:border-warn hover:text-warn'
+              }`}
+            >
+              <Icon name="bulb" size={22} />
+            </button>
+          )}
+        </div>
+        {hint && userTurn && (
+          <p className="text-center text-sm" data-testid="play-hint-text">
+            {t.play.hintText(sanToLocal(applyUci(fen, hint)?.san ?? hint))}
+          </p>
+        )}
         {outcome && outcome !== 'resigned' && tutor && (
           <p className="text-center text-sm text-muted" data-testid="play-summary">
             {t.play.summary(counts.mistakes, counts.blunders)}
@@ -504,11 +532,6 @@ export function PlayPage({ profile }: { profile: Profile }) {
         <Card className="space-y-3">
           <TutorToggle on={tutor} onChange={(on) => updatePrefs({ tutor: on })} compact />
           <div className="flex flex-wrap gap-2">
-            {tutor && (
-              <Button variant="secondary" size="sm" onClick={showHint} disabled={!userTurn || thinking} data-testid="play-hint" icon={<Icon name="bulb" size={18} />}>
-                {t.play.hint}
-              </Button>
-            )}
             <Button variant="secondary" size="sm" onClick={undo} disabled={!plies.some((p) => p.color === setup.userColor)} data-testid="play-undo" icon={<Icon name="undo" size={18} />}>
               {t.play.undo}
             </Button>
@@ -524,11 +547,6 @@ export function PlayPage({ profile }: { profile: Profile }) {
               {t.play.newGame}
             </Button>
           </div>
-          {hint && userTurn && (
-            <p className="text-sm" data-testid="play-hint-text">
-              {t.play.hintText(sanToLocal(applyUci(fen, hint)?.san ?? hint))}
-            </p>
-          )}
         </Card>
 
         {tutor && (

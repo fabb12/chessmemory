@@ -37,4 +37,6 @@ test('con il Nero e il tutor spento l’AI muove per prima', async ({ page }) =>
   // Anche senza tutor Benot annuncia la sua mossa.
   await expect(page.getByTestId('robot-bubble')).toContainText('Io gioco');
   await expect(page.getByTestId('chessboard')).toHaveAttribute('data-fen', / b /);
-});
+  // La lampadina accanto alla scacchiera dà il suggerimento anche senza tutor.
+  await page.getByTestId('play-hint').click();
+  await expect(page.getByTestId('play-hint-text')).toContainText('Prova a considerare', { timeout: 60_000 });});
