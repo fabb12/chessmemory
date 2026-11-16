@@ -18,6 +18,7 @@ const BLUE = '#2f6fd6';
 const BLUE_DARK = '#1f4fa3';
 const VISOR = '#101a30';
 const GLOW = '#55e6e0';
+const BACKDROP = '#a9cdee';
 
 /** Occhi secondo l'umore (dentro la visiera). */
 function Eyes({ mood }: { mood: RobotMood }) {
@@ -106,49 +107,51 @@ export function RobotAvatar({ mood, speaking = false, waving = false, waveKey, c
       data-speaking={speaking ? 'true' : 'false'}
       className={`robot ${className}`}
     >
-      <ellipse className="robot-shadow" cx="60" cy="143" rx="26" ry="4.5" fill="currentColor" opacity="0.18" />
+      <circle cx="60" cy="78" r="59" fill={BACKDROP} />
+      <ellipse className="robot-shadow" cx="60" cy="143" rx="24" ry="4" fill={BLUE_DARK} opacity="0.3" />
       <g className="robot-float">
-        {/* antenna */}
-        <path d="M60 14 v-8" stroke={SHELL_SHADE} strokeWidth="3" strokeLinecap="round" />
-        <circle className="robot-antenna" cx="60" cy="5" r="3.6" fill={GLOW} />
-
-        {/* braccio sinistro (a riposo) */}
+        {/* braccio sinistro (a riposo, un po' aperto) */}
         <g>
-          <path d="M40 92 q-13 4 -13 17" fill="none" stroke={SHELL} strokeWidth="8" strokeLinecap="round" />
-          <path d="M40 92 q-13 4 -13 17" fill="none" stroke={SHELL_SHADE} strokeWidth="8" strokeLinecap="round" opacity="0.35" />
-          <circle cx="27" cy="111" r="5.5" fill={VISOR} />
+          <path d="M41 87 L31 97" stroke={SHELL} strokeWidth="8" strokeLinecap="round" />
+          <path d="M30 99 L25 108" stroke={SHELL} strokeWidth="7" strokeLinecap="round" />
+          <circle cx="30.5" cy="98" r="4.2" fill={BLUE} />
+          <circle cx="23.5" cy="111" r="5.2" fill={VISOR} />
         </g>
 
-        {/* braccio destro: saluta */}
-        <g key={waveKey} className={waving ? 'robot-arm robot-arm-wave' : 'robot-arm'}>
-          <path d="M80 92 q14 -2 17 -15" fill="none" stroke={SHELL} strokeWidth="8" strokeLinecap="round" />
-          <path d="M80 92 q14 -2 17 -15" fill="none" stroke={SHELL_SHADE} strokeWidth="8" strokeLinecap="round" opacity="0.35" />
-          <circle cx="98" cy="75" r="5.5" fill={VISOR} />
-          <path d="M95 71 l-2 -5 M99 70 l0 -5 M102 72 l3 -4" stroke={VISOR} strokeWidth="2.6" strokeLinecap="round" />
+        {/* braccio destro: alzato, saluta con la mano aperta */}
+        <g className={waving ? 'robot-arm robot-arm-wave' : 'robot-arm'} key={waveKey}>
+          <path d="M79 87 L90 85" stroke={SHELL} strokeWidth="8" strokeLinecap="round" />
+          <path d="M92 83 L98 72" stroke={SHELL} strokeWidth="7" strokeLinecap="round" />
+          <circle cx="91" cy="84.5" r="4.2" fill={BLUE} />
+          <circle cx="100" cy="67" r="5.4" fill={VISOR} />
+          <path d="M96.5 63.5 l-2.5 -5 M100 62 l0 -6 M103.5 63.5 l3 -5 M105 67 l5 -2" stroke={VISOR} strokeWidth="2.8" strokeLinecap="round" />
         </g>
 
-        {/* gambe */}
-        <rect x="45" y="118" width="11" height="13" rx="4.5" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.2" />
-        <rect x="64" y="118" width="11" height="13" rx="4.5" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.2" />
-        <rect x="45" y="127" width="11" height="5" rx="2.5" fill={BLUE} />
-        <rect x="64" y="127" width="11" height="5" rx="2.5" fill={BLUE} />
+        {/* gambe corte con ginocchio blu */}
+        <rect x="46" y="113" width="10" height="11" rx="4" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1" />
+        <rect x="64" y="113" width="10" height="11" rx="4" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1" />
+        <rect x="45.5" y="121" width="11" height="5" rx="2.5" fill={BLUE} />
+        <rect x="63.5" y="121" width="11" height="5" rx="2.5" fill={BLUE} />
+        <path d="M45 133 q0 -8 6 -8 t6 8 z" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1" />
+        <path d="M63 133 q0 -8 6 -8 t6 8 z" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1" />
 
-        {/* corpo */}
-        <path d="M41 86 q0 -8 9 -8 h20 q9 0 9 8 v20 q0 15 -19 15 t-19 -15 z" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.5" />
-        <circle cx="40" cy="89" r="6" fill={BLUE} />
-        <circle cx="80" cy="89" r="6" fill={BLUE} />
-        <path d="M44 109 q16 6 32 0" fill="none" stroke={VISOR} strokeWidth="2" strokeLinecap="round" />
-        <circle cx="60" cy="97" r="6.5" fill={VISOR} />
-        <circle className="robot-core" cx="60" cy="97" r="3.4" fill={GLOW} />
+        {/* collo e corpo */}
+        <rect x="51" y="70" width="18" height="10" rx="4" fill={BLUE} />
+        <path d="M43 86 q0 -9 9 -9 h16 q9 0 9 9 v15 q0 16 -17 16 t-17 -16 z" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.5" />
+        <circle cx="41.5" cy="87" r="6" fill={BLUE} />
+        <circle cx="78.5" cy="87" r="6" fill={BLUE} />
+        <path d="M45.5 106 q14.5 5 29 0" fill="none" stroke={VISOR} strokeWidth="2.2" strokeLinecap="round" />
+        <circle cx="60" cy="94" r="7" fill={VISOR} />
+        <path className="robot-core" d="M60 89.5 q4.2 4.6 4.2 7 a4.2 4.2 0 0 1 -8.4 0 q0 -2.4 4.2 -7 z" fill={GLOW} />
 
-        {/* testa */}
-        <rect x="16" y="33" width="12" height="26" rx="6" fill={BLUE} />
-        <rect x="92" y="33" width="12" height="26" rx="6" fill={BLUE} />
-        <rect x="19" y="38" width="5" height="16" rx="2.5" fill={BLUE_DARK} />
-        <rect x="96" y="38" width="5" height="16" rx="2.5" fill={BLUE_DARK} />
-        <rect x="22" y="13" width="76" height="64" rx="27" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.5" />
-        <path d="M45 14.5 h30 q-2 9 -15 9 t-15 -9 z" fill={BLUE} />
-        <rect x="32" y="28" width="56" height="39" rx="15" fill={VISOR} />
+        {/* testa: larga e tonda, con grandi cuffie blu e calotta blu */}
+        <circle cx="19" cy="42" r="11.5" fill={BLUE} />
+        <circle cx="101" cy="42" r="11.5" fill={BLUE} />
+        <circle cx="15.5" cy="42" r="6" fill={BLUE_DARK} />
+        <circle cx="104.5" cy="42" r="6" fill={BLUE_DARK} />
+        <rect x="18" y="9" width="84" height="64" rx="27" fill={SHELL} stroke={SHELL_SHADE} strokeWidth="1.5" />
+        <path d="M43 10 q17 -2.5 34 0 q-2 9 -17 9 t-17 -9 z" fill={BLUE} />
+        <rect x="28" y="24" width="64" height="41" rx="16" fill={VISOR} />
         <g className={mood === 'thinking' ? 'robot-eyes robot-eyes-think' : 'robot-eyes'}>
           <Eyes mood={mood} />
         </g>
