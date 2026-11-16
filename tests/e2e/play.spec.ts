@@ -8,8 +8,8 @@ test('gioca con l’AI al livello scelto, con il tutor che giudica la mossa e sp
   await expect(page.getByTestId('play-tutor-toggle')).toHaveAttribute('aria-checked', 'true');
   await page.getByTestId('play-start').click();
   await expect(page.getByTestId('play-level-badge')).toContainText('Principiante');
-  // Robi, il robot, saluta all'inizio della partita.
-  await expect(page.getByTestId('robot-bubble')).toContainText('Io sono Robi');
+  // Benot, il robot, saluta all'inizio della partita.
+  await expect(page.getByTestId('robot-bubble')).toContainText('Io sono Benot');
   await expect(page.getByTestId('robot').locator('svg.robot')).toHaveAttribute('data-mood', 'happy');
 
   const click = async (square: string) => page.locator(`[data-square="${square}"]`).first().click();
@@ -34,7 +34,7 @@ test('con il Nero e il tutor spento l’AI muove per prima', async ({ page }) =>
   await page.getByTestId('play-start').click();
   await expect(page.getByTestId('play-status')).toHaveText('Tocca a te.', { timeout: 60_000 });
   await expect(page.getByTestId('tutor-panel')).toHaveCount(0);
-  // Anche senza tutor Robi annuncia la sua mossa.
+  // Anche senza tutor Benot annuncia la sua mossa.
   await expect(page.getByTestId('robot-bubble')).toContainText('Io gioco');
   await expect(page.getByTestId('chessboard')).toHaveAttribute('data-fen', / b /);
 });
