@@ -37,6 +37,22 @@ export function greeting(userColor: Side, tutor: boolean, tone: Tone = 'normal')
   return { text: [(toned(tone).greeting ?? r.greeting)(userColor === 'w'), tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
 }
 
+/** Benot si presenta e chiede come ti chiami. */
+export function askNameLine(tone: Tone = 'normal'): RobotLine {
+  return { text: toned(tone).askName ?? r.askName, mood: 'happy' };
+}
+
+/** Saluto con il tuo nome: `met` = te lo sei appena presentato, altrimenti se lo ricordava. */
+export function greetByName(name: string, userColor: Side, tutor: boolean, met: boolean, tone: Tone = 'normal'): RobotLine {
+  const line = (toned(tone).greetName ?? r.greetName)(name, userColor === 'w', met);
+  return { text: [line, tutor ? r.tutorOnNote : ''].filter(Boolean).join(' '), mood: 'happy' };
+}
+
+/** Non ha capito il nome: lo richiede (o propone di scriverlo). */
+export function nameRetryLine(): RobotLine {
+  return { text: r.nameRetry, mood: 'worried' };
+}
+
 const GRADE_MOOD: Record<MoveGrade, RobotMood> = { best: 'wow', good: 'happy', inaccuracy: 'worried', mistake: 'worried', blunder: 'sad' };
 
 /** Commento al giudizio del tutor sulla tua mossa. */

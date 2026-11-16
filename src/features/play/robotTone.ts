@@ -8,6 +8,10 @@ import type { Tone } from '../tutor/tone';
  */
 export interface RobotToneLines {
   greeting?: (white: boolean) => string;
+  /** Prima della partita, se Benot non sa ancora come ti chiami. */
+  askName?: string;
+  /** Saluto quando sa il tuo nome (appena detto o ricordato). */
+  greetName?: (name: string, white: boolean, met: boolean) => string;
   grade?: Partial<Record<'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder', string[]>>;
   lostPiece?: (piece: string) => string[];
   lostQueen?: string[];
@@ -47,6 +51,9 @@ export const ROBOT_TONES: Partial<Record<Tone, RobotToneLines>> = {
   },
   formal: {
     greeting: (w) => `Buongiorno, sono Benot. ${w ? 'Lei ha il Bianco e muove per primo.' : 'Lei ha il Nero, quindi comincio io.'} Le auguro una buona partita.`,
+    askName: 'Buongiorno, sono Benot. Come si chiama?',
+    greetName: (name, w, met) =>
+      `${met ? `Piacere, ${name}.` : `Buongiorno ${name}, lieto di rivederLa.`} ${w ? 'Lei ha il Bianco e muove per primo.' : 'Lei ha il Nero, quindi comincio io.'} Le auguro una buona partita.`,
     grade: {
       best: ['Eccellente, la mossa migliore.', 'Complimenti, mossa perfetta.'],
       good: ['Buona mossa.', 'Corretto.'],

@@ -952,6 +952,18 @@ export const it = {
       greeting: (white: boolean) =>
         white ? 'Ciao! Io sono Benot. Tu hai il Bianco: muovi tu per primo. Buona partita!' : 'Ciao! Io sono Benot. Tu hai il Nero, quindi comincio io. Buona partita!',
       tutorOnNote: 'Ti spiego le mosse mentre giochiamo.',
+      askName: 'Ciao! Io sono Benot. E tu come ti chiami?',
+      greetName: (name: string, white: boolean, met: boolean) =>
+        `${met ? `Piacere, ${name}!` : `Ciao ${name}, che bello rivederti!`} ${white ? 'Tu hai il Bianco: muovi tu per primo.' : 'Tu hai il Nero, quindi comincio io.'} Buona partita!`,
+      nameRetry: 'Scusa, non ho capito. Mi ripeti il tuo nome? Oppure scrivilo qui sotto.',
+      listening: 'Ti ascolto…',
+      nameLabel: 'Il tuo nome',
+      namePlaceholder: 'Scrivi il tuo nome',
+      nameOk: 'Ok',
+      nameSkip: 'Salta',
+      micDenied: 'Microfono non disponibile: scrivi il tuo nome.',
+      knownName: (name: string) => `Benot ti chiama ${name}.`,
+      changeName: 'Cambia nome',
       thinking: ['Hmm, fammi pensare…', 'Vediamo un po’…', 'Bip bip… sto calcolando…', 'Interessante! Ci penso un attimo…'],
       yourTurn: ['Tocca a te!', 'A te la mossa.', 'Vediamo cosa giochi!'],
       grade: {
