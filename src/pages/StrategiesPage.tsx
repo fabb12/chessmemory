@@ -1,7 +1,10 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, PageTitle, SectionTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
+import { SearchField } from '../components/ui/SearchField';
 import { conceptsByCategory, getConceptExercises } from '../data/exercises';
+import { searchConcepts } from '../features/learning/search';
 import { isConsolidated, isDue, type StoredCard } from '../features/memory/scheduler';
 import { useCards, useNow } from '../hooks/useData';
 import { t } from '../i18n';
@@ -36,12 +39,18 @@ export function StrategiesPage() {
   const cards = useCards();
   const now = useNow();
   const cardMap = new Map((cards ?? []).map((c) => [c.conceptId, c]));
+  const [query, setQuery] = useState('');
+  const found = useMemo(() => (query.trim() ? new Set(searchConcepts(query).map((c) => c.id)) : null), [query]);
+  const visible = (category: (typeof CATEGORIES)[number]) =>
+    conceptsByCategory(category).filter((c) => !found || found.has(c.id));
 
   return (
     <div className="space-y-8">
       <header>
         <PageTitle>{t.strategies.title}</PageTitle>
       </header>
+      <SearchField value={query} onChange={setQuery} label={t.strategies.search} placeholder={t.path.searchPlaceholder} testId="strategy-search" />
+      {found?.size === 0 && <p className="text-muted" data-testid="strategy-no-results">{t.strategies.noResults}</p>}
       <Link to="/partite" className="block rounded-3xl" data-testid="games-link">
         <Card className="cm-card-hover flex items-center gap-3 hover:border-accent/50">
           <span className="rounded-2xl bg-accent-soft p-2.5 text-accent-strong">
@@ -54,11 +63,11 @@ export function StrategiesPage() {
           <Icon name="arrowRight" />
         </Card>
       </Link>
-      {CATEGORIES.map((category) => (
+      {CATEGORIES.filter((category) => visible(category).length > 0).map((category) => (
         <section key={category} aria-labelledby={`cat-${category}`}>
           <SectionTitle id={`cat-${category}`} className="flex items-center gap-3 after:h-px after:flex-1 after:bg-line">{t.categoriesLong[category]}</SectionTitle>
           <ul className="mt-3 grid gap-3 md:grid-cols-2">
-            {conceptsByCategory(category).map((concept) => (
+            {visible(category).map((concept) => (
               <li key={concept.id}>
                 <Link to={`/strategie/${concept.id}`} className="block h-full rounded-3xl" data-testid={`concept-link-${concept.id}`}>
                   <Card className="cm-card-hover h-full hover:border-accent/50">

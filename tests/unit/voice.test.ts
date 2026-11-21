@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getVoiceEnabled, setVoiceEnabled, speak, speakNext, spokenChess, stopSpeaking } from '../../src/features/voice/speech';
+import { getVoiceEnabled, setVoiceEnabled, speak, speakNext, speechChunks, spokenChess, stopSpeaking } from '../../src/features/voice/speech';
 
 describe('lettura ad alta voce delle mosse', () => {
   it('legge pezzi, catture, scacchi e numeri di mossa', () => {
@@ -16,6 +16,20 @@ describe('lettura ad alta voce delle mosse', () => {
   it('lascia invariato il testo normale e le case isolate', () => {
     expect(spokenChess('Il pedone in «e4» controlla d5.')).toBe('Il pedone in e4 controlla d5.');
     expect(spokenChess('Re e donna')).toBe('Re e donna');
+  });
+});
+
+describe('letture lunghe divise in frasi', () => {
+  it('spezza alle fine frase e unisce i pezzi troppo corti', () => {
+    const text = 'Questo è il famoso sacrificio greco. L’alfiere si dà in h7 con scacco e strappa al re il pedone. Ok! Poi il cavallo salta in g5: il re resta solo.';
+    const chunks = speechChunks(text);
+    expect(chunks.join(' ')).toBe(text);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks.slice(0, -1)) expect(c.length).toBeGreaterThanOrEqual(40);
+  });
+
+  it('non spezza le mosse in notazione', () => {
+    expect(speechChunks('1.Axh7+ Rxh7 2.Cg5+ e il Nero è in difficoltà.')).toEqual(['1.Axh7+ Rxh7 2.Cg5+ e il Nero è in difficoltà.']);
   });
 });
 
@@ -58,15 +72,18 @@ describe('voce attivabile e disattivabile', () => {
   it('avvisa quando l’introduzione è stata letta tutta, non se viene interrotta', () => {
     const onEnd = vi.fn();
     type Utt = { onend?: () => void };
-    speak('Perché funziona: ...', 'lesson', { onEnd });
+    speak('Questa è la prima frase, abbastanza lunga da stare da sola. E questa è la seconda frase.', 'lesson', { onEnd });
+    expect(synth.speak).toHaveBeenCalledTimes(2);
     speakNext('Adesso guarda la scacchiera.', 'lesson');
-    const intro = synth.speak.mock.calls[0]![0] as Utt;
-    intro.onend?.();
+    const [first, last] = synth.speak.mock.calls.map((c) => c[0] as Utt);
+    first!.onend?.();
+    expect(onEnd).not.toHaveBeenCalled();
+    last!.onend?.();
     expect(onEnd).toHaveBeenCalledTimes(1);
 
     const stopped = vi.fn();
     speak('Un’altra introduzione.', 'lesson', { onEnd: stopped });
-    const second = synth.speak.mock.calls[2]![0] as Utt;
+    const second = synth.speak.mock.calls[synth.speak.mock.calls.length - 1]![0] as Utt;
     stopSpeaking();
     second.onend?.();
     expect(stopped).not.toHaveBeenCalled();
