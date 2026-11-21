@@ -51,8 +51,29 @@ const notify = () => listeners.forEach((l) => l());
 
 function italianVoice(): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
-  return voices.find((v) => v.lang === 'it-IT' && v.localService) ?? voices.find((v) => v.lang.toLowerCase().startsWith('it'));
+  return (
+    voices.find((v) => v.lang.replace('_', '-') === 'it-IT' && v.localService) ??
+    voices.find((v) => v.lang.toLowerCase().startsWith('it'))
+  );
 }
+
+/**
+ * Voce da usare: quella italiana; se il dispositivo non ne ha, quella predefinita.
+ * Chiedere «it-IT» senza una voce italiana installata, su alcuni telefoni, non produce alcun suono.
+ */
+function chooseVoice(): SpeechSynthesisVoice | undefined {
+  const voices = window.speechSynthesis.getVoices();
+  return italianVoice() ?? voices.find((v) => v.default) ?? voices[0];
+}
+
+/** Ultimo errore segnalato dalla sintesi vocale (per la diagnosi nelle impostazioni). */
+let lastError: string | null = null;
+
+/**
+ * Frasi in coda tenute in memoria finché non finiscono: in Chrome, se il garbage
+ * collector le elimina, la lettura si interrompe e la fine non viene mai segnalata.
+ */
+const alive = new Set<SpeechSynthesisUtterance>();
 
 /** Cresce a ogni interruzione: le frasi di una lettura interrotta non avvisano più `onEnd`. */
 let speechGeneration = 0;
@@ -105,9 +126,10 @@ function setBlocked(value: boolean): void {
 
 function utter(text: string, id: string, options: SpeakOptions, last: boolean): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(spokenChess(text));
-  utterance.lang = 'it-IT';
-  const voice = italianVoice();
+  const voice = chooseVoice();
+  utterance.lang = voice && !voice.lang.toLowerCase().startsWith('it') ? voice.lang : 'it-IT';
   if (voice) utterance.voice = voice;
+  alive.add(utterance);
   const opts = { ...defaultOptions, ...options };
   utterance.rate = Math.max(0.5, Math.min(2, getVoiceRate() * (opts.rate ?? 1)));
   utterance.pitch = opts.pitch ?? 1;
@@ -115,6 +137,7 @@ function utter(text: string, id: string, options: SpeakOptions, last: boolean): 
   // Solo l'ultima frase in coda chiude il «sta parlando»: quella interrotta da cancel()
   // segnala la sua fine più tardi e non deve far credere che la nuova sia finita.
   const done = () => {
+    alive.delete(utterance);
     if (lastUtterance !== utterance) return;
     lastUtterance = null;
     currentText = '';
@@ -124,13 +147,20 @@ function utter(text: string, id: string, options: SpeakOptions, last: boolean): 
     }
   };
   const generation = speechGeneration;
-  utterance.onstart = () => setBlocked(false);
+  utterance.onstart = () => {
+    lastError = null;
+    setBlocked(false);
+  };
   utterance.onend = () => {
     // Una frase interrotta (nuova lettura o «Ferma») non conta come finita.
     if (last && generation === speechGeneration) options.onEnd?.();
     done();
   };
   utterance.onerror = (event?: { error?: string }) => {
+    if (event?.error && event.error !== 'interrupted' && event.error !== 'canceled') {
+      lastError = event.error;
+      notify();
+    }
     if (event?.error === 'not-allowed') setBlocked(true);
     // Senza il resto della lettura, chi aspetta la fine (es. l'animazione) non resta bloccato.
     if (last && generation === speechGeneration && event?.error !== 'interrupted' && event?.error !== 'canceled') options.onEnd?.();
@@ -157,13 +187,35 @@ function enqueue(text: string, id: string, options: SpeakOptions): void {
 /** Legge il testo; `id` identifica chi parla (per mostrare «Ferma» sul pulsante giusto). */
 export function speak(text: string, id = 'default', options: SpeakOptions = {}): void {
   if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
-  window.speechSynthesis.cancel();
+  const synth = window.speechSynthesis;
+  const busy = synth.speaking || synth.pending;
+  synth.cancel();
   speechGeneration++;
+  const generation = speechGeneration;
   currentText = '';
+  lastUtterance = null;
   speakingId = id;
   notify();
-  enqueue(text, id, options);
+  if (!busy) {
+    deferred = null;
+    return enqueue(text, id, options);
+  }
+  // Chrome ignora in silenzio una lettura avviata subito dopo cancel(): si aspetta un istante.
+  const waiting: Deferred[] = [{ text, options }];
+  deferred = waiting;
+  window.setTimeout(() => {
+    if (deferred === waiting) deferred = null;
+    if (generation !== speechGeneration || speakingId !== id) return;
+    for (const item of waiting) enqueue(item.text, id, item.options);
+  }, 80);
 }
+
+interface Deferred {
+  text: string;
+  options: SpeakOptions;
+}
+/** Letture in attesa dopo un cancel(): `speakNext` le accoda qui invece di ricominciare. */
+let deferred: Deferred[] | null = null;
 
 /**
  * Accoda una frase senza interrompere quella in corso (per leggere una risposta
@@ -171,8 +223,51 @@ export function speak(text: string, id = 'default', options: SpeakOptions = {}):
  */
 export function speakNext(text: string, id = 'default', options: SpeakOptions = {}): void {
   if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
+  if (speakingId === id && deferred) {
+    deferred.push({ text, options });
+    return;
+  }
   if (speakingId !== id || !lastUtterance) return speak(text, id, options);
   enqueue(text, id, options);
+}
+
+export interface SpeechStatus {
+  /** Voci installate sul dispositivo (0 = la sintesi vocale non può parlare). */
+  voices: number;
+  /** Nome della voce italiana usata, o null se manca. */
+  italian: string | null;
+  /** Ultimo errore della sintesi vocale, o null. */
+  error: string | null;
+}
+
+let statusCache: SpeechStatus = { voices: 0, italian: null, error: null };
+
+function readStatus(): SpeechStatus {
+  if (!speechSupported()) return statusCache;
+  const voices = window.speechSynthesis.getVoices().length;
+  const italian = italianVoice()?.name ?? null;
+  if (voices !== statusCache.voices || italian !== statusCache.italian || lastError !== statusCache.error) {
+    statusCache = { voices, italian, error: lastError };
+  }
+  return statusCache;
+}
+
+/** Stato della voce sul dispositivo, per capire perché non si sente nulla. */
+export function useSpeechStatus(): SpeechStatus {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      // Le voci arrivano in ritardo (Chrome le carica dopo l'apertura della pagina).
+      const synth = speechSupported() ? window.speechSynthesis : null;
+      synth?.addEventListener?.('voiceschanged', l);
+      return () => {
+        listeners.delete(l);
+        synth?.removeEventListener?.('voiceschanged', l);
+      };
+    },
+    readStatus,
+    () => statusCache,
+  );
 }
 
 /** Il browser ha bloccato la lettura automatica: serve un tocco (es. su «Ascolta»). */
@@ -256,6 +351,7 @@ export function stopSpeaking(): void {
   if (!speechSupported()) return;
   lastUtterance = null;
   currentText = '';
+  deferred = null;
   speechGeneration++;
   window.speechSynthesis.cancel();
   speakingId = null;

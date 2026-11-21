@@ -7,6 +7,7 @@ import {
   useVoiceAuto,
   useVoiceEnabled,
   useVoiceRate,
+  useSpeechStatus,
 } from '../../features/voice/speech';
 import { t } from '../../i18n';
 import { Button } from './Button';
@@ -23,6 +24,7 @@ export function VoiceSettings() {
   const enabled = useVoiceEnabled();
   const auto = useVoiceAuto();
   const rate = useVoiceRate();
+  const status = useSpeechStatus();
 
   if (!speechSupported()) return <p className="text-muted">{t.voice.unsupported}</p>;
 
@@ -74,6 +76,18 @@ export function VoiceSettings() {
       <Button variant="secondary" icon={<Icon name="speaker" size={16} />} onClick={() => speak(t.voice.testText, 'voice-test')}>
         {t.voice.test}
       </Button>
+      <div className="rounded-2xl border border-line bg-surface-2 p-3 text-sm" data-testid="voice-diagnosis" aria-live="polite">
+        <p className="font-semibold">{t.voice.diagnosis}</p>
+        <p className="mt-1">
+          {status.voices === 0 ? t.voice.noVoices : status.italian ? t.voice.voiceFound(status.italian) : t.voice.noItalian}
+        </p>
+        {status.error && (
+          <p className="mt-1 text-warn" data-testid="voice-error">
+            {t.voice.errorLabel(t.voice.errors[status.error] ?? status.error)}
+          </p>
+        )}
+        <p className="mt-1 text-muted">{t.voice.checklist}</p>
+      </div>
       </fieldset>
     </div>
   );

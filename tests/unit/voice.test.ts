@@ -69,6 +69,22 @@ describe('voce attivabile e disattivabile', () => {
     expect(synth.speak).toHaveBeenCalledTimes(1);
   });
 
+  it('dopo aver interrotto un’altra lettura riparte con un attimo di ritardo, senza perdere il seguito', () => {
+    vi.useFakeTimers();
+    try {
+      (synth as { speaking?: boolean }).speaking = true;
+      speak('Introduzione della lezione, letta per prima.', 'lesson');
+      speakNext('Adesso guarda la scacchiera.', 'lesson');
+      expect(synth.speak).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(100);
+      const texts = synth.speak.mock.calls.map((c) => (c[0] as { text: string }).text);
+      expect(texts).toEqual(['Introduzione della lezione, letta per prima.', 'Adesso guarda la scacchiera.']);
+    } finally {
+      (synth as { speaking?: boolean }).speaking = false;
+      vi.useRealTimers();
+    }
+  });
+
   it('avvisa quando l’introduzione è stata letta tutta, non se viene interrotta', () => {
     const onEnd = vi.fn();
     type Utt = { onend?: () => void };
