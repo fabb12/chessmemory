@@ -315,6 +315,16 @@ export const CONCEPTS: readonly Concept[] = [
       'Due alfieri che incrociano le loro diagonali davanti al re coprono tutte le case di fuga. Se un pedone ripara il re, un sacrificio lo devia e apre la diagonale decisiva.',
     taskPrompt: 'Sacrifica per aprire le diagonali e dai matto.',
   },
+  {
+    id: 'greek-gift',
+    title: 'Il sacrificio d’alfiere in h7',
+    category: 'tactics',
+    difficulty: 5,
+    summary: 'Il «sacrificio greco»: l’alfiere si dà in h7 con scacco, poi cavallo e donna assaltano il re rimasto senza riparo.',
+    principle:
+      'Il sacrificio Axh7+ funziona quando l’alfiere punta h7, il cavallo può saltare in g5 con scacco, la donna arriva subito sulla colonna h o in g4 e nessun cavallo nero può difendere da f6. Prima di sacrificare, controlla ogni risposta del re.',
+    taskPrompt: 'Trova il sacrificio che apre il re avversario.',
+  },
 
   // ───────────── Finali ─────────────
   {
