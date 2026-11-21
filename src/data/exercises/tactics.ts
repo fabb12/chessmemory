@@ -524,4 +524,67 @@ export const TACTIC_EXERCISES: readonly Exercise[] = [
     transferExerciseId: 'boden-mate-a',
     expect: 'checkmate',
   },
+  {
+    id: 'smothered-mate-a',
+    title: 'La donna in g8, il cavallo in f7',
+    category: 'tactics',
+    difficulty: 4,
+    conceptId: 'smothered-mate',
+    fen: 'r6k/pp4pp/7N/8/2Q5/8/PP4PP/6K1 w - - 0 1',
+    sideToMove: 'w',
+    solution: [{ move: 'c4g8', reply: 'a8g8' }, { move: 'h6f7' }],
+    goal: 'La donna si sacrifica in g8: il re non può prenderla perché la difende il cavallo, così la torre è costretta a catturare e chiude l’ultima casa del re.',
+    watchOut: 'Il re nero è già murato dai pedoni g7 e h7: gli resta libera soltanto g8.',
+    explanation:
+      '1.Dg8+!! Txg8 2.Cf7#. Perché funziona: il cavallo h6 protegge g8, quindi il re non può catturare la donna e la torre deve farlo. Ora g8, g7 e h7 sono occupate da pezzi neri e il cavallo dà scacco da f7: il re è «affogato» dai suoi stessi pezzi.',
+    hints: [
+      'Conta le case libere attorno al re nero: ne resta una sola.',
+      'Come puoi costringere un pezzo nero ad occupare proprio quella casa?',
+    ],
+    question: {
+      prompt: 'Perché il re nero non può catturare la donna in g8?',
+      options: [
+        { id: 'a', text: 'Perché è sotto scacco dalla torre bianca.' },
+        { id: 'b', text: 'Perché la casa g8 è difesa dal cavallo in h6.' },
+        { id: 'c', text: 'Perché il re non può muoversi in diagonale.' },
+      ],
+      correctOptionId: 'b',
+    },
+    transferExerciseId: 'smothered-mate-b',
+    expect: 'checkmate',
+  },
+  {
+    id: 'smothered-mate-b',
+    title: 'Il matto affogato completo',
+    category: 'tactics',
+    difficulty: 4,
+    conceptId: 'smothered-mate',
+    fen: '4r2k/pp4pp/8/6N1/8/1Q6/PP4PP/5RK1 w - - 0 1',
+    sideToMove: 'w',
+    solution: [
+      { move: 'g5f7', reply: 'h8g8' },
+      { move: 'f7h6', reply: 'g8h8' },
+      { move: 'b3g8', reply: 'e8g8' },
+      { move: 'h6f7' },
+    ],
+    goal: 'Il cavallo e la donna danno scacco a turno: prima il re va in g8, poi uno scacco doppio lo rimanda nell’angolo, infine il sacrificio in g8 attira la torre.',
+    watchOut: 'Ogni mossa è uno scacco e ogni risposta è obbligata: la torre f1 toglie al re le case f7 e f8.',
+    explanation:
+      '1.Cf7+ Rg8 2.Ch6++ Rh8 3.Dg8+!! Txg8 4.Cf7#. Perché funziona: Ch6 è uno scacco doppio (cavallo e donna b3), quindi il re deve muoversi e torna in h8. Poi la donna si sacrifica in g8, protetta dal cavallo: la torre cattura e il re resta murato in h8 da torre e pedoni. Il cavallo torna in f7 e dà matto.',
+    hints: [
+      'Comincia con uno scacco di cavallo: il re ha una sola risposta.',
+      'Quando il cavallo si sposta da f7, la donna in b3 scopre uno scacco sulla diagonale verso g8.',
+    ],
+    question: {
+      prompt: 'Perché dopo 2.Ch6++ il re nero deve tornare in h8?',
+      options: [
+        { id: 'a', text: 'Perché è uno scacco doppio: non si può né catturare né interporre, solo muovere il re.' },
+        { id: 'b', text: 'Perché il cavallo in h6 può essere catturato dal pedone g7.' },
+        { id: 'c', text: 'Perché in h8 il re è al sicuro per sempre.' },
+      ],
+      correctOptionId: 'a',
+    },
+    transferExerciseId: 'smothered-mate-a',
+    expect: 'checkmate',
+  },
 ];
