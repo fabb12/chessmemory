@@ -6,6 +6,7 @@ import { STRATEGY_EXERCISES } from './strategy';
 import { CALCULATION_EXERCISES } from './calculation';
 import { OPENING_PLAN_EXERCISES } from './openingPlans';
 import { ENDGAME_EXERCISES } from './endgames';
+import { CONCEPT_INTROS } from './intros';
 
 /**
  * Libreria didattica (lingua: italiano).
@@ -50,6 +51,11 @@ export function getConcept(id: string): Concept {
   const c = conceptById.get(id);
   if (!c) throw new Error(`Concetto sconosciuto: ${id}`);
   return c;
+}
+
+/** Introduzione colloquiale della lezione, da dire a voce prima di mostrare la mossa. */
+export function conceptIntro(conceptId: string): string {
+  return CONCEPT_INTROS[conceptId] ?? '';
 }
 
 export function getConceptExercises(conceptId: string): readonly Exercise[] {

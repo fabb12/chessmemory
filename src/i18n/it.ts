@@ -179,6 +179,9 @@ export const it = {
     freeTitle: 'Allenamento libero',
   },
   observe: {
+    intro: 'Perché e come funziona',
+    toBoard: 'Adesso guarda la scacchiera.',
+    watchOutSpoken: 'Occhio però:',
     piece: 'Il pezzo',
     goal: 'L’obiettivo',
     principle: 'Il principio',
