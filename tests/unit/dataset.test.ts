@@ -1,6 +1,7 @@
 import { Chess } from 'chess.js';
 import { describe, expect, it } from 'vitest';
-import { CONCEPTS, EXERCISES, getConceptExercises } from '../../src/data/exercises';
+import { CONCEPTS, EXERCISES, conceptIntro, getConceptExercises } from '../../src/data/exercises';
+import { CONCEPT_INTROS } from '../../src/data/exercises/intros';
 import { CATEGORIES } from '../../src/types';
 import { allLegalUci, applyUci, isUci, isValidFen, sideToMove, solutionLine } from '../../src/utils/chess';
 
@@ -37,6 +38,16 @@ describe('dataset didattico', () => {
       expect(concept.principle.length).toBeGreaterThan(20);
       expect(concept.taskPrompt.length).toBeGreaterThan(5);
     }
+  });
+
+  it('ogni lezione ha un’introduzione colloquiale da dire a voce', () => {
+    for (const concept of CONCEPTS) {
+      const intro = conceptIntro(concept.id);
+      expect(intro.length, concept.id).toBeGreaterThan(120);
+      expect(intro.split(/[.!?]\s/).length, `${concept.id}: almeno due frasi`).toBeGreaterThanOrEqual(2);
+    }
+    // Nessuna introduzione orfana (id scritto male o lezione rimossa).
+    for (const id of Object.keys(CONCEPT_INTROS)) expect(CONCEPTS.some((c) => c.id === id), id).toBe(true);
   });
 
   it('non contiene posizioni duplicate', () => {

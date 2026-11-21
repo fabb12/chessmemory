@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getVoiceEnabled, setVoiceEnabled, speak, spokenChess } from '../../src/features/voice/speech';
+import { getVoiceEnabled, setVoiceEnabled, speak, speakNext, spokenChess, stopSpeaking } from '../../src/features/voice/speech';
 
 describe('lettura ad alta voce delle mosse', () => {
   it('legge pezzi, catture, scacchi e numeri di mossa', () => {
@@ -53,6 +53,23 @@ describe('voce attivabile e disattivabile', () => {
     expect(localStorage.getItem('cm.voice.enabled')).toBe('on');
     speak('Ciao.');
     expect(synth.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it('avvisa quando l’introduzione è stata letta tutta, non se viene interrotta', () => {
+    const onEnd = vi.fn();
+    type Utt = { onend?: () => void };
+    speak('Perché funziona: ...', 'lesson', { onEnd });
+    speakNext('Adesso guarda la scacchiera.', 'lesson');
+    const intro = synth.speak.mock.calls[0]![0] as Utt;
+    intro.onend?.();
+    expect(onEnd).toHaveBeenCalledTimes(1);
+
+    const stopped = vi.fn();
+    speak('Un’altra introduzione.', 'lesson', { onEnd: stopped });
+    const second = synth.speak.mock.calls[2]![0] as Utt;
+    stopSpeaking();
+    second.onend?.();
+    expect(stopped).not.toHaveBeenCalled();
   });
 });
 

@@ -54,6 +54,9 @@ function italianVoice(): SpeechSynthesisVoice | undefined {
   return voices.find((v) => v.lang === 'it-IT' && v.localService) ?? voices.find((v) => v.lang.toLowerCase().startsWith('it'));
 }
 
+/** Cresce a ogni interruzione: le frasi di una lettura interrotta non avvisano più `onEnd`. */
+let speechGeneration = 0;
+
 /** Ultima frase in coda: solo la sua fine chiude il «sta parlando». */
 let lastUtterance: SpeechSynthesisUtterance | null = null;
 
@@ -64,6 +67,8 @@ export interface SpeakOptions {
   pitch?: number;
   /** false = non avvisa `onSpoken` (chi parla registra lui il testo completo). */
   log?: boolean;
+  /** Chiamata quando questa frase finisce di essere letta (non se viene interrotta). */
+  onEnd?: () => void;
 }
 
 let defaultOptions: SpeakOptions = {};
@@ -93,7 +98,12 @@ function utter(text: string, id: string, options: SpeakOptions): SpeechSynthesis
       notify();
     }
   };
-  utterance.onend = done;
+  const generation = speechGeneration;
+  utterance.onend = () => {
+    // Una frase interrotta (nuova lettura o «Ferma») non conta come finita.
+    if (generation === speechGeneration) options.onEnd?.();
+    done();
+  };
   utterance.onerror = done;
   return utterance;
 }
@@ -103,6 +113,7 @@ export function speak(text: string, id = 'default', options: SpeakOptions = {}):
   if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
+  speechGeneration++;
   const utterance = utter(text, id, options);
   lastUtterance = utterance;
   currentText = utterance.text;
@@ -173,6 +184,7 @@ export function stopSpeaking(): void {
   if (!speechSupported()) return;
   lastUtterance = null;
   currentText = '';
+  speechGeneration++;
   window.speechSynthesis.cancel();
   speakingId = null;
   notify();

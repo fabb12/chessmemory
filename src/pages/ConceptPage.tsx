@@ -6,7 +6,7 @@ import { Card, PageTitle } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
-import { findConcept, getConceptExercises } from '../data/exercises';
+import { conceptIntro, findConcept, getConceptExercises } from '../data/exercises';
 import { useCards, useNow } from '../hooks/useData';
 import { formatRelativeDay, t } from '../i18n';
 import { resolveOrientation } from '../utils/orientation';
@@ -33,6 +33,7 @@ export function ConceptPage({ profile }: { profile: Profile }) {
 
   const card = cards?.find((c) => c.conceptId === concept.id);
   const exercise = exercises[selected] ?? exercises[0];
+  const intro = conceptIntro(concept.id);
 
   return (
     <div className="space-y-4">
@@ -50,6 +51,16 @@ export function ConceptPage({ profile }: { profile: Profile }) {
         </p>
         <p className="mt-2">{concept.summary}</p>
       </header>
+
+      {intro && (
+        <Card className="border-l-4 border-l-gold" data-testid="concept-intro">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold">{t.observe.intro}</h2>
+            <SpeakButton key={concept.id} text={intro} auto delay={700} />
+          </div>
+          <p className="mt-2 leading-relaxed">{intro}</p>
+        </Card>
+      )}
 
       <Card>
         {card ? (
