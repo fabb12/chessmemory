@@ -1,10 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PATH_LEVELS, passedLessons, pathState } from '../../features/learning/path';
+import { searchConcepts } from '../../features/learning/search';
 import { useAttempts } from '../../hooks/useData';
 import { t } from '../../i18n';
-import { Button } from '../ui/Button';
+import type { Concept } from '../../types';
+import { Button, buttonClass } from '../ui/Button';
 import { Card, SectionTitle } from '../ui/Card';
 import { Icon } from '../ui/Icon';
+import { SearchField } from '../ui/SearchField';
 
 interface LessonPathProps {
   onStart: (conceptId: string) => void;
@@ -17,8 +21,47 @@ interface LessonPathProps {
 export function LessonPath({ onStart }: LessonPathProps) {
   const attempts = useAttempts();
   const state = useMemo(() => pathState(passedLessons(attempts ?? [])), [attempts]);
+  const [query, setQuery] = useState('');
+  const results = useMemo(() => (query.trim() ? searchConcepts(query) : null), [query]);
   if (!attempts) return null;
   const position = new Map(PATH_LEVELS.flatMap((l) => l.lessons).map((c, i) => [c.id, i + 1]));
+
+  const row = (lesson: Concept, showLevel = false) => {
+    const status = state.status.get(lesson.id) ?? 'locked';
+    return (
+      <li key={lesson.id} className="flex min-h-14 items-center gap-3 px-3 py-2" data-testid={`path-lesson-${lesson.id}`} data-status={status}>
+        <span
+          className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
+            status === 'done' ? 'bg-ok-soft text-ok' : status === 'current' ? 'bg-accent text-on-accent' : 'bg-surface-2 text-muted'
+          }`}
+          aria-label={status === 'done' ? t.path.done : status === 'current' ? t.path.current : t.path.locked}
+        >
+          <Icon name={status === 'done' ? 'check' : status === 'current' ? 'play' : 'lock'} size={16} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block font-medium ${status === 'locked' ? 'text-muted' : ''}`}>
+            {position.get(lesson.id)}. {lesson.title}
+          </span>
+          <span className="block text-xs text-muted">
+            {showLevel ? `${t.path.levelTitle(lesson.difficulty, t.level.names[lesson.difficulty])} · ` : ''}
+            {t.categories[lesson.category]}
+          </span>
+        </span>
+        {status !== 'locked' ? (
+          <Button variant={status === 'current' ? 'primary' : 'ghost'} size="sm" onClick={() => onStart(lesson.id)}>
+            {status === 'current' ? t.path.start : t.path.redo}
+          </Button>
+        ) : (
+          showLevel && (
+            // Una lezione ancora bloccata si può comunque leggere e provare dalla sua pagina.
+            <Link to={`/strategie/${lesson.id}`} className={buttonClass('ghost', 'sm')} data-testid={`path-explore-${lesson.id}`}>
+              {t.path.explore}
+            </Link>
+          )
+        )}
+      </li>
+    );
+  };
 
   return (
     <Card className="space-y-4" data-testid="lesson-path">
@@ -55,48 +98,34 @@ export function LessonPath({ onStart }: LessonPathProps) {
         </p>
       )}
 
-      <div className="space-y-2">
-        {PATH_LEVELS.map(({ level, lessons }) => {
-          const done = lessons.filter((c) => state.status.get(c.id) === 'done').length;
-          const open = lessons.some((c) => state.status.get(c.id) === 'current');
-          return (
-            <details key={level} open={open} className="rounded-xl border border-line bg-surface" data-testid={`path-level-${level}`}>
-              <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-2 px-3 font-semibold">
-                <span>{t.path.levelTitle(level, t.level.names[level])}</span>
-                <span className={`text-sm tabular-nums ${done === lessons.length ? 'text-ok' : 'text-muted'}`}>{t.path.levelCount(done, lessons.length)}</span>
-              </summary>
-              <ol className="divide-y divide-line border-t border-line">
-                {lessons.map((lesson) => {
-                  const status = state.status.get(lesson.id) ?? 'locked';
-                  return (
-                    <li key={lesson.id} className="flex min-h-14 items-center gap-3 px-3 py-2" data-testid={`path-lesson-${lesson.id}`} data-status={status}>
-                      <span
-                        className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
-                          status === 'done' ? 'bg-ok-soft text-ok' : status === 'current' ? 'bg-accent text-on-accent' : 'bg-surface-2 text-muted'
-                        }`}
-                        aria-label={status === 'done' ? t.path.done : status === 'current' ? t.path.current : t.path.locked}
-                      >
-                        <Icon name={status === 'done' ? 'check' : status === 'current' ? 'play' : 'lock'} size={16} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={`block font-medium ${status === 'locked' ? 'text-muted' : ''}`}>
-                          {position.get(lesson.id)}. {lesson.title}
-                        </span>
-                        <span className="block text-xs text-muted">{t.categories[lesson.category]}</span>
-                      </span>
-                      {status !== 'locked' && (
-                        <Button variant={status === 'current' ? 'primary' : 'ghost'} size="sm" onClick={() => onStart(lesson.id)}>
-                          {status === 'current' ? t.path.start : t.path.redo}
-                        </Button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </details>
-          );
-        })}
-      </div>
+      <SearchField value={query} onChange={setQuery} label={t.path.search} placeholder={t.path.searchPlaceholder} testId="lesson-search" />
+
+      {results ? (
+        <div data-testid="lesson-search-results">
+          <p className="text-sm text-muted" aria-live="polite">
+            {results.length ? t.path.results(results.length) : t.path.noResults}
+          </p>
+          {results.length > 0 && <ol className="mt-2 divide-y divide-line rounded-xl border border-line bg-surface">{results.map((lesson) => row(lesson, true))}</ol>}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {PATH_LEVELS.map(({ level, lessons }) => {
+            const done = lessons.filter((c) => state.status.get(c.id) === 'done').length;
+            const open = lessons.some((c) => state.status.get(c.id) === 'current');
+            return (
+              <details key={level} open={open} className="rounded-xl border border-line bg-surface" data-testid={`path-level-${level}`}>
+                <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-2 px-3 font-semibold">
+                  <span>{t.path.levelTitle(level, t.level.names[level])}</span>
+                  <span className={`text-sm tabular-nums ${done === lessons.length ? 'text-ok' : 'text-muted'}`}>{t.path.levelCount(done, lessons.length)}</span>
+                </summary>
+                <ol className="divide-y divide-line border-t border-line">
+                  {lessons.map((lesson) => row(lesson))}
+                </ol>
+              </details>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }

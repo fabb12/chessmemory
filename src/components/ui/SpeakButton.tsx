@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
-import { currentSpeakingId, speak, speakNext, speechSupported, stopSpeaking, useSpeakingId, useVoiceAuto, useVoiceEnabled } from '../../features/voice/speech';
+import { currentSpeakingId, speak, speakNext, speechSupported, useSpeechBlocked, stopSpeaking, useSpeakingId, useVoiceAuto, useVoiceEnabled } from '../../features/voice/speech';
 import { t } from '../../i18n';
 import { Icon } from './Icon';
 
@@ -24,6 +24,8 @@ export function SpeakButton({ text, auto = false, delay = 300, className = '', i
   const autoOn = useVoiceAuto();
   const speaking = speakingId === id;
   const supported = speechSupported();
+  // Lettura automatica rifiutata dal browser: il pulsante invita a toccarlo.
+  const blocked = useSpeechBlocked() && auto && !speaking;
   const introEnd = useRef(onIntroEnd);
   introEnd.current = onIntroEnd;
 
@@ -54,10 +56,13 @@ export function SpeakButton({ text, auto = false, delay = 300, className = '', i
       onClick={() => (speaking ? stopSpeaking() : say())}
       aria-pressed={speaking}
       data-testid="speak-button"
-      className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-fg ${className}`}
+      data-blocked={blocked || undefined}
+      className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-2.5 text-sm font-semibold hover:bg-surface-2 hover:text-fg ${
+        blocked ? 'animate-pulse border-accent bg-accent-soft text-accent-strong' : 'border-line bg-surface text-muted'
+      } ${className}`}
     >
       <Icon name={speaking ? 'stop' : 'speaker'} size={16} />
-      {speaking ? t.voice.stop : t.voice.listen}
+      {speaking ? t.voice.stop : blocked ? t.voice.tapToListen : t.voice.listen}
     </button>
   );
 }

@@ -78,7 +78,32 @@ export function setSpeakDefaults(options: SpeakOptions): void {
   defaultOptions = options;
 }
 
-function utter(text: string, id: string, options: SpeakOptions): SpeechSynthesisUtterance {
+/**
+ * Spezza un testo lungo in frasi da leggere una dopo l'altra. Alcuni browser
+ * (Chrome con le voci di Google, per esempio) smettono di parlare dopo circa
+ * 15 secondi di una sola lettura: a frasi la voce arriva fino in fondo.
+ */
+export function speechChunks(text: string, min = 40): string[] {
+  const parts = text.split(/(?<=[.!?…;:])\s+/).map((p) => p.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const part of parts) {
+    const prev = out[out.length - 1];
+    if (prev !== undefined && prev.length < min) out[out.length - 1] = `${prev} ${part}`;
+    else out.push(part);
+  }
+  return out;
+}
+
+/** true se il browser ha rifiutato di parlare senza un tocco dell'utente (iPhone, Safari, Chrome). */
+let blocked = false;
+
+function setBlocked(value: boolean): void {
+  if (blocked === value) return;
+  blocked = value;
+  notify();
+}
+
+function utter(text: string, id: string, options: SpeakOptions, last: boolean): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(spokenChess(text));
   utterance.lang = 'it-IT';
   const voice = italianVoice();
@@ -99,28 +124,45 @@ function utter(text: string, id: string, options: SpeakOptions): SpeechSynthesis
     }
   };
   const generation = speechGeneration;
+  utterance.onstart = () => setBlocked(false);
   utterance.onend = () => {
     // Una frase interrotta (nuova lettura o «Ferma») non conta come finita.
-    if (generation === speechGeneration) options.onEnd?.();
+    if (last && generation === speechGeneration) options.onEnd?.();
     done();
   };
-  utterance.onerror = done;
+  utterance.onerror = (event?: { error?: string }) => {
+    if (event?.error === 'not-allowed') setBlocked(true);
+    // Senza il resto della lettura, chi aspetta la fine (es. l'animazione) non resta bloccato.
+    if (last && generation === speechGeneration && event?.error !== 'interrupted' && event?.error !== 'canceled') options.onEnd?.();
+    done();
+  };
   return utterance;
+}
+
+/** Accoda il testo frase per frase; `onEnd` arriva alla fine dell'ultima. */
+function enqueue(text: string, id: string, options: SpeakOptions): void {
+  const synth = window.speechSynthesis;
+  const chunks = speechChunks(text);
+  chunks.forEach((chunk, i) => {
+    const utterance = utter(chunk, id, options, i === chunks.length - 1);
+    lastUtterance = utterance;
+    currentText = `${currentText} ${utterance.text}`.trim();
+    synth.speak(utterance);
+  });
+  // Chrome a volte resta «in pausa» dopo un cancel(): la lettura non partirebbe mai.
+  synth.resume?.();
+  if (options.log !== false) spokenListeners.forEach((l) => l(text, id));
 }
 
 /** Legge il testo; `id` identifica chi parla (per mostrare «Ferma» sul pulsante giusto). */
 export function speak(text: string, id = 'default', options: SpeakOptions = {}): void {
   if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
-  const synth = window.speechSynthesis;
-  synth.cancel();
+  window.speechSynthesis.cancel();
   speechGeneration++;
-  const utterance = utter(text, id, options);
-  lastUtterance = utterance;
-  currentText = utterance.text;
+  currentText = '';
   speakingId = id;
   notify();
-  synth.speak(utterance);
-  if (options.log !== false) spokenListeners.forEach((l) => l(text, id));
+  enqueue(text, id, options);
 }
 
 /**
@@ -130,12 +172,42 @@ export function speak(text: string, id = 'default', options: SpeakOptions = {}):
 export function speakNext(text: string, id = 'default', options: SpeakOptions = {}): void {
   if (!speechSupported() || !getVoiceEnabled() || !text.trim()) return;
   if (speakingId !== id || !lastUtterance) return speak(text, id, options);
-  const utterance = utter(text, id, options);
-  lastUtterance = utterance;
-  currentText = `${currentText} ${utterance.text}`.trim();
-  window.speechSynthesis.speak(utterance);
-  if (options.log !== false) spokenListeners.forEach((l) => l(text, id));
+  enqueue(text, id, options);
 }
+
+/** Il browser ha bloccato la lettura automatica: serve un tocco (es. su «Ascolta»). */
+export function useSpeechBlocked(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => blocked,
+    () => false,
+  );
+}
+
+/**
+ * Al primo tocco o tasto sblocca la voce: iPhone e Safari permettono di parlare
+ * da soli (letture automatiche) solo dopo una prima lettura avviata da un gesto.
+ */
+function installUnlock(): void {
+  if (typeof window === 'undefined' || !speechSupported()) return;
+  const unlock = () => {
+    window.removeEventListener('pointerdown', unlock, true);
+    window.removeEventListener('keydown', unlock, true);
+    const synth = window.speechSynthesis;
+    synth.resume?.();
+    if (!synth.speaking && !synth.pending) {
+      const silent = new SpeechSynthesisUtterance(' ');
+      silent.volume = 0;
+      synth.speak(silent);
+    }
+  };
+  window.addEventListener('pointerdown', unlock, true);
+  window.addEventListener('keydown', unlock, true);
+}
+installUnlock();
 
 /**
  * Divide in frasi un testo che arriva a pezzi: `push` riceve il testo arrivato

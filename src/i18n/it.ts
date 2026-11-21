@@ -177,6 +177,11 @@ export const it = {
     backToPath: 'Torna al percorso',
     takeaway: 'Da ricordare',
     freeTitle: 'Allenamento libero',
+    search: 'Cerca una lezione',
+    searchPlaceholder: 'Cerca: matto, cavallo, finale, apertura…',
+    results: (n: number) => (n === 1 ? '1 lezione trovata' : `${n} lezioni trovate`),
+    noResults: 'Nessuna lezione trovata. Prova con un’altra parola.',
+    explore: 'Scopri',
   },
   observe: {
     intro: 'Perché e come funziona',
@@ -291,6 +296,7 @@ export const it = {
     ratingLabels: { 1: 'Da rivedere', 2: 'Incerto', 3: 'Buono', 4: 'Sicuro' } as Record<number, string>,
   },
   voice: {
+    tapToListen: 'Tocca per ascoltare',
     listen: 'Ascolta',
     stop: 'Ferma',
     settingsTitle: 'Voce',
@@ -655,6 +661,8 @@ export const it = {
     transferValue: (ok: number, total: number) => (total === 0 ? 'Non ancora provato' : `${ok} su ${total} riusciti`),
     notStudied: 'Non hai ancora studiato questo concetto.',
     notFound: 'Concetto non trovato.',
+    search: 'Cerca una strategia',
+    noResults: 'Nessuna strategia trovata. Prova con un’altra parola.',
   },
   dna: {
     title: 'I tuoi progressi',
