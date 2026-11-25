@@ -734,6 +734,66 @@ Seguito della partita: ${input.continuation || '(fine della partita)'}`,
   }
 }
 
+export interface PlayMoveInput {
+  /** Posizione PRIMA della mossa. */
+  fen: string;
+  /** Chi ha mosso: l'allievo oppure l'avversario AI. */
+  who: 'user' | 'ai';
+  /** Mossa giocata, in notazione italiana con i nomi veri delle case. */
+  move: string;
+  /** Giudizio calcolato (ottima, buona, imprecisione, errore, svarione), solo per le mosse dell'allievo. */
+  grade?: string;
+  /** Valutazioni di Stockfish dopo la mossa giocata e dopo la migliore (dal punto di vista di chi ha mosso). */
+  playedEval?: string;
+  bestEval?: string;
+  /** Mossa migliore secondo Stockfish e miglior risposta dell'avversario alla mossa giocata. */
+  best?: string;
+  reply?: string;
+  /** Spiegazione calcolata sul dispositivo: base fattuale, da riformulare senza contraddirla. */
+  draft?: string;
+  /** Mosse giocate finora, in notazione italiana. */
+  history?: string;
+  tone?: string;
+}
+
+const PLAY_SYSTEM = `Sei un istruttore di scacchi che affianca un allievo (principiante o intermedio) mentre gioca una partita contro un avversario AI.
+Ricevi una mossa appena giocata, l'analisi di Stockfish (corretta: non contraddirla e non inventare varianti) e una bozza di spiegazione.
+Se la mossa è dell'AI: spiega in 2 frasi brevi perché l'ha giocata e che cosa minaccia, così l'allievo sa a che cosa stare attento.
+Se è dell'allievo: di' in 1 frase se la mossa è buona o no e perché; se non è la migliore indica la mossa migliore e la sua idea; chiudi con un consiglio pratico per la prossima mossa.
+Al massimo 55 parole in tutto, senza elenchi né titoli, senza premesse. Se la mossa è dell'AI non svelare la mossa migliore dell'allievo.
+Usa la notazione italiana (R, D, T, A, C). Il testo verrà letto ad alta voce: niente simboli strani.`;
+
+/** Motivo e consigli su una mossa di «Gioca con l'AI», generati da Claude a partire dall'analisi di Stockfish. */
+export async function explainPlayMove(input: PlayMoveInput): Promise<string> {
+  let sdk: typeof Anthropic | null = null;
+  try {
+    const created = await createClient();
+    sdk = created.sdk;
+    const lines = [
+      `Posizione prima della mossa (FEN): ${input.fen}`,
+      input.who === 'ai' ? `Mossa dell'avversario AI: ${input.move}` : `Mossa dell'allievo: ${input.move}${input.grade ? ` (giudizio: ${input.grade})` : ''}`,
+      input.playedEval ? `Valutazione Stockfish dopo la mossa: ${input.playedEval}${input.bestEval ? `; con la mossa migliore: ${input.bestEval}` : ''} (dal punto di vista di chi ha mosso)` : '',
+      input.best ? `Mossa migliore secondo Stockfish: ${input.best}` : '',
+      input.reply ? `Migliore risposta dell'avversario: ${input.reply}` : '',
+      input.history ? `Partita finora: ${input.history}` : '',
+      input.draft ? `Bozza calcolata (fatti verificati): ${input.draft}` : '',
+    ].filter(Boolean);
+    const message = await createMessage(created.client, created.sdk, {
+      max_tokens: 4000,
+      output_config: { effort: 'low' },
+      system: systemWithTone(PLAY_SYSTEM, input.tone),
+      messages: [{ role: 'user', content: lines.join('\n') }],
+    });
+    recordUsage('explanation', message);
+    if (message.stop_reason === 'refusal') throw new AssistantError('refusal');
+    const text = textOf(message);
+    if (!text) throw new AssistantError('unreadable');
+    return text;
+  } catch (error) {
+    throw mapError(error, sdk);
+  }
+}
+
 export interface DeviationInput {
   fen: string;
   /** Mossa giocata dall'utente e mossa del maestro, in notazione italiana. */

@@ -8,7 +8,8 @@ import { Icon } from '../components/ui/Icon';
 import { SpeakButton } from '../components/ui/SpeakButton';
 import type { Profile } from '../db/schema';
 import { getEngine, type Analysis } from '../features/engine/engine';
-import { explainAiMove, explainUserMove, feedbackText, type UserMoveFeedback } from '../features/play/coach';
+import { explainPlayMove, useApiKey } from '../features/assistant/claude';
+import { aiMoveInput, explainAiMove, explainUserMove, feedbackText, userMoveInput, type UserMoveFeedback } from '../features/play/coach';
 import { isPlayLevel, pickAiMove, PLAY_LEVEL_IDS, PLAY_LEVELS, suggestedLevel, type PlayLevelId } from '../features/play/levels';
 import {
   announceOwnMove,
@@ -26,14 +27,15 @@ import {
   type RobotLine,
   type RobotMood,
 } from '../features/play/robot';
-import { getTone, useTone } from '../features/tutor/tone';
+import { getTone, TONE_PROMPTS, useTone } from '../features/tutor/tone';
 import { loadUserName, saveUserName } from '../features/tutor/userName';
 import { isEcho, listeningSupported, parseName, VoiceListener } from '../features/voice/listen';
 import { currentSpeakingId, currentSpeechText, getVoiceAuto, speak, speakNext, stopSpeaking, useSpeakingId } from '../features/voice/speech';
 import { t } from '../i18n';
 import type { Side, Uci } from '../types';
 import { applyUci, sideToMove } from '../utils/chess';
-import { sanToLocal } from '../utils/notation';
+import { formatLine, localSquares, sanToLocal } from '../utils/notation';
+import { playLine } from '../components/mistakes/LineViewer';
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 /** Profondità delle analisi del tutor (giudizio delle mosse). */
@@ -130,7 +132,7 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const [judging, setJudging] = useState(false);
   const [engineError, setEngineError] = useState(false);
   const [said, setSaid] = useState<Said[]>([]);
-  const [feedback, setFeedback] = useState<(UserMoveFeedback & { fenBefore: string; ply: number }) | null>(null);
+  const [feedback, setFeedback] = useState<(UserMoveFeedback & { fenBefore: string; ply: number; ai?: string }) | null>(null);
   const [grades, setGrades] = useState<Record<number, string>>({});
   const [hint, setHint] = useState<Uci | null>(null);
   const [preview, setPreview] = useState(false);
@@ -157,6 +159,11 @@ export function PlayPage({ profile }: { profile: Profile }) {
   const saidId = useRef(0);
   const speakingId = useSpeakingId();
   const tone = useTone();
+  const apiKey = useApiKey();
+  const apiKeyRef = useRef(apiKey);
+  apiKeyRef.current = apiKey;
+  /** Le mosse giocate finora (nomi veri delle case), per dare a Claude il contesto. */
+  const historyOf = (list: readonly Ply[]) => formatLine(playLine(START_FEN, list.map((p) => p.uci)).slice(-16), false);
 
   /** Benbot dice una battuta: compare nel fumetto e, con la lettura automatica, la pronuncia. */
   const say = useCallback((line: RobotLine | null, options: SayOptions = {}) => {
@@ -298,7 +305,21 @@ export function PlayPage({ profile }: { profile: Profile }) {
         // Se intanto hai già mosso, il commento sulla mossa dell'AI non serve più.
         if (tk !== token.current || plyCount.current !== aiPly) return;
         const note = explainAiMove(fen, move.uci, analysis, reply, previous ? { fenBefore: previous.fenBefore, uci: previous.uci } : undefined);
-        if (note) say({ text: note.text, mood: note.opportunity ? 'worried' : 'idle' }, { testId: 'tutor-ai-note' });
+        if (note) {
+          const mood = note.opportunity ? 'worried' : 'idle';
+          const input = apiKeyRef.current ? aiMoveInput(fen, move.uci, note.text, historyOf([...plies, { fenBefore: fen, uci: move.uci, san: move.san, color: move.color, fen: move.fen }])) : null;
+          let text = note.text;
+          if (input) {
+            try {
+              const reply = await explainPlayMove({ ...input, tone: TONE_PROMPTS[getTone()] });
+              text = `${t.play.coach.aiPlayed(sanToLocal(move.san))} ${localSquares(reply)}`;
+            } catch {
+              // senza risposta di Claude resta la spiegazione calcolata sul dispositivo
+            }
+            if (tk !== token.current || plyCount.current !== aiPly) return;
+          }
+          say({ text, mood }, { testId: 'tutor-ai-note' });
+        }
       } catch {
         if (tk === token.current) setEngineError(true);
       } finally {
@@ -390,6 +411,18 @@ export function PlayPage({ profile }: { profile: Profile }) {
           setFeedback({ ...result, fenBefore, ply });
           setGrades((g) => ({ ...g, [ply]: result.grade }));
           const reaction = reactToGrade(result.grade, ply, getTone());
+          const input = apiKeyRef.current ? userMoveInput(fenBefore, move.uci, result, before, after, historyOf(plies)) : null;
+          if (input) {
+            try {
+              const reply = localSquares(await explainPlayMove({ ...input, tone: TONE_PROMPTS[getTone()] }));
+              if (tk !== token.current) return;
+              setFeedback((f) => (f && f.ply === ply ? { ...f, ai: reply } : f));
+              say(reaction, { spoken: `${reaction.text} ${reply}` });
+              return;
+            } catch {
+              if (tk !== token.current) return;
+            }
+          }
           say(reaction, { spoken: [reaction.text, result.why, result.better].filter(Boolean).join(' ') });
         }
       } catch {
@@ -712,9 +745,14 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 </p>
                 <p className="flex items-start justify-between gap-2 font-display text-lg font-semibold">
                   {feedback.title}
-                  <SpeakButton text={feedbackText(feedback)} />
+                  <SpeakButton text={feedback.ai ? `${feedback.title} ${feedback.ai}` : feedbackText(feedback)} />
                 </p>
-                {feedback.why && (
+                {feedback.ai && (
+                  <p className="text-sm" data-testid="tutor-ai-reply">
+                    {feedback.ai}
+                  </p>
+                )}
+                {!feedback.ai && feedback.why && (
                   <div>
                     <p className="text-sm font-semibold">{!feedback.better ? t.play.whyGood : feedback.grade === 'inaccuracy' ? t.play.whyNotBest : t.play.whyWrong}</p>
                     <p className="text-sm" data-testid="tutor-why">{feedback.why}</p>
@@ -722,8 +760,12 @@ export function PlayPage({ profile }: { profile: Profile }) {
                 )}
                 {feedback.better && (
                   <div>
-                    <p className="text-sm font-semibold">{t.play.betterWas}</p>
-                    <p className="text-sm" data-testid="tutor-better">{feedback.better}</p>
+                    {!feedback.ai && (
+                      <>
+                        <p className="text-sm font-semibold">{t.play.betterWas}</p>
+                        <p className="text-sm" data-testid="tutor-better">{feedback.better}</p>
+                      </>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button variant="secondary" size="sm" onClick={() => setPreview((v) => !v)} aria-pressed={preview} data-testid="tutor-show-better" icon={<Icon name="eye" size={18} />}>
                         {t.play.showBetter}

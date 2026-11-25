@@ -8,6 +8,8 @@ import { gradeLastMove } from '../analysis/tutor';
 import type { MoveGrade } from '../analysis/moveCoach';
 import type { GameMove } from '../games/pgn';
 import { reasonOf } from '../tutor/moveReason';
+import { formatScore } from '../engine/uci';
+import type { PlayMoveInput } from '../assistant/claude';
 
 /**
  * Le spiegazioni della modalità tutor nella partita contro l'AI, costruite
@@ -180,4 +182,44 @@ export function explainUserMove(fenBefore: string, uci: Uci, before: Analysis, a
 /** Testo da leggere ad alta voce o da mostrare tutto insieme. */
 export function feedbackText(f: UserMoveFeedback): string {
   return [f.title, f.why, f.better].filter(Boolean).join(' ');
+}
+
+/** Valutazione dal punto di vista di `mover` («+0,80» = vantaggio per chi ha mosso). */
+const evalOf = (a: Analysis | undefined, mover: 'w' | 'b') => {
+  const line = a?.lines[0];
+  if (!line) return undefined;
+  const sign = a!.fen.split(' ')[1] === mover ? 1 : -1;
+  return formatScore({ ...line.score, value: line.score.value * sign }, true);
+};
+
+/** Con i nomi veri delle case (come nella FEN): la risposta di Claude si rinomina dopo con localSquares. */
+function realSan(fen: string, uci: Uci | null | undefined): string | undefined {
+  const m = uci ? applyUci(fen, uci) : null;
+  return m ? sanToLocal(m.san, false) : undefined;
+}
+
+/** Contesto per Claude sulla mossa dell'AI. */
+export function aiMoveInput(fenBefore: string, uci: Uci, local: string, history: string): PlayMoveInput | null {
+  const move = applyUci(fenBefore, uci);
+  if (!move) return null;
+  return { fen: fenBefore, who: 'ai', move: sanToLocal(move.san, false), draft: local, history };
+}
+
+/** Contesto per Claude sulla tua mossa: giudizio e analisi di Stockfish. */
+export function userMoveInput(fenBefore: string, uci: Uci, f: UserMoveFeedback, before: Analysis, after: Analysis, history: string): PlayMoveInput | null {
+  const move = applyUci(fenBefore, uci);
+  if (!move) return null;
+  const mover = move.color;
+  return {
+    fen: fenBefore,
+    who: 'user',
+    move: sanToLocal(move.san, false),
+    grade: f.title,
+    playedEval: evalOf(after, mover),
+    bestEval: evalOf(before, mover),
+    best: realSan(fenBefore, f.bestUci),
+    reply: f.grade === 'best' || f.grade === 'good' ? undefined : realSan(after.fen, f.refutationUci),
+    draft: [f.why, f.better].filter(Boolean).join(' '),
+    history,
+  };
 }
